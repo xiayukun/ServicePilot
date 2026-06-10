@@ -6,7 +6,7 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-感谢 [linux.do](https://linux.do/) 佬友们大力支持。
+感谢 linux.do 佬友们大力支持。
 
 ServicePilot 是一个 **托盘优先、AI 友好、面向本地开发项目的 Windows 服务启动器**。它把多个项目里的前端、后端、脚本步骤、环境变量切换和日志查看收进一个托盘菜单，同时提供可被 AI/脚本稳定调用的 CLI。
 
