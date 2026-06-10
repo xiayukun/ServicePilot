@@ -84,6 +84,7 @@ public partial class ServiceConfigDialog : Window
         ScriptTypeLabel.Text = LocalizationService.Current.T("ScriptType");
         UseVariableCheck.Content = LocalizationService.Current.T("UseVariable");
         RunOnStartCheck.Content = LocalizationService.Current.T("RunOnStart");
+        OpenLogOnRunCheck.Content = LocalizationService.Current.T("OpenLogOnRun");
         ScriptContentLabel.Text = LocalizationService.Current.T("ScriptContent");
         AutoStartCheck.Content = LocalizationService.Current.T("AutoStartService");
         SaveTemplateButton.Content = LocalizationService.Current.T("SaveAsTemplate");
@@ -147,7 +148,8 @@ public partial class ServiceConfigDialog : Window
         if (dialog.ShowDialog() != true || dialog.SelectedTemplate == null)
             return;
 
-        NameBox.Text = dialog.SelectedTemplate.Name;
+        if (string.IsNullOrWhiteSpace(NameBox.Text))
+            NameBox.Text = dialog.SelectedTemplate.Name;
         _serviceVariablesText = string.Join(Environment.NewLine, dialog.SelectedTemplate.PresetVariables);
         _variablesStep = null;
         VariablesBox.Text = _serviceVariablesText;
@@ -180,6 +182,7 @@ public partial class ServiceConfigDialog : Window
         ScriptTypeCombo.SelectedIndex = (int)_selectedStep.ScriptType;
         UseVariableCheck.IsChecked = _selectedStep.UseVariable;
         RunOnStartCheck.IsChecked = _selectedStep.RunOnStart;
+        OpenLogOnRunCheck.IsChecked = _selectedStep.OpenLogOnRun;
         ScriptEditor.Text = _selectedStep.Content;
         SetScriptHighlighting(ScriptEditor, _selectedStep.ScriptType);
         _loadingStep = false;
@@ -197,6 +200,7 @@ public partial class ServiceConfigDialog : Window
         _selectedStep.ScriptType = ScriptTypeCombo.SelectedIndex >= 0 ? (ScriptType)ScriptTypeCombo.SelectedIndex : ScriptType.Batch;
         _selectedStep.UseVariable = UseVariableCheck.IsChecked ?? true;
         _selectedStep.RunOnStart = RunOnStartCheck.IsChecked ?? true;
+        _selectedStep.OpenLogOnRun = OpenLogOnRunCheck.IsChecked ?? false;
         _selectedStep.Content = ScriptEditor.Text ?? string.Empty;
         RefreshStepDisplayLabels();
     }
@@ -354,6 +358,7 @@ public partial class ServiceConfigDialog : Window
             ScriptType = source.ScriptType,
             UseVariable = source.UseVariable,
             RunOnStart = source.RunOnStart,
+            OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
             Order = source.Order

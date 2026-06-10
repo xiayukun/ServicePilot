@@ -17,6 +17,7 @@ public class ScriptStep
     public ScriptType ScriptType { get; set; } = ScriptType.Batch;
     public bool UseVariable { get; set; } = true;
     public bool RunOnStart { get; set; } = true;
+    public bool OpenLogOnRun { get; set; }
     public List<string> StepVariables { get; set; } = new();
     public string Content { get; set; } = string.Empty;
     public int Order { get; set; }

@@ -112,7 +112,7 @@ public class ServiceCommandProcessor
 
         SERVICE, STEP, and TEMPLATE can be a name or id. STEP can also be its numeric order.
         Script types: Batch, PowerShell, Python, Node.
-        --step accepts Name|Type|command, Name|Type|UseVariable|command, or Name|Type|UseVariable|RunOnStart|command.
+        --step accepts Name|Type|command, Name|Type|UseVariable|command, Name|Type|UseVariable|RunOnStart|command, or Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command.
         --variable injects SERVICEPILOT_VARIABLE and replaces {{variable}} / {{变量}} in scripts.
         Start, stop, restart, step run, logs, and shutdown require the tray instance to be running.
         """;
@@ -523,7 +523,7 @@ public class ServiceCommandProcessor
             .Select(s =>
             {
                 var label = s.RunOnStart ? $"{startupNumber++}. {s.Name}" : s.Name;
-                return $"{label} type={s.ScriptType} useVariable={s.UseVariable} runOnStart={s.RunOnStart}";
+                return $"{label} type={s.ScriptType} useVariable={s.UseVariable} runOnStart={s.RunOnStart} openLogOnRun={s.OpenLogOnRun}";
             });
         var presets = service.PresetVariables.Count == 0 ? "(none)" : string.Join(", ", service.PresetVariables);
         return CommandResponse.Ok(
@@ -646,6 +646,7 @@ public class ServiceCommandProcessor
                 step.ScriptType,
                 step.UseVariable,
                 step.RunOnStart,
+                step.OpenLogOnRun,
                 step.StepVariables,
                 step.Order,
                 DisplayOrder = step.RunOnStart
@@ -947,10 +948,6 @@ public class ServiceCommandProcessor
         if (service == null)
             return CommandResponse.Error($"找不到服务: {serviceSelector}", 2);
 
-        if (_appConfig.Services.Any(s => s.Id != service.Id &&
-                                         string.Equals(s.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
-            return CommandResponse.Error($"应用模板会造成服务重名: {template.Name}", 2);
-
         var updated = ScriptDefinitionService.ApplyTemplateToService(service, template);
         await UpdateConfigAsync(updated);
         return CommandResponse.Ok($"已应用模板 {template.Name} 到服务 {updated.Name}");
@@ -1112,8 +1109,8 @@ public class ServiceCommandProcessor
 
         foreach (var raw in rawSteps)
         {
-            var parts = raw.Split('|', 5);
-            if (parts.Length is not (3 or 4 or 5))
+            var parts = raw.Split('|', 6);
+            if (parts.Length is not (3 or 4 or 5 or 6))
                 continue;
 
             if (!Enum.TryParse<ScriptType>(parts[1], ignoreCase: true, out var type))
@@ -1125,7 +1122,8 @@ public class ServiceCommandProcessor
                 ScriptType = type,
                 UseVariable = parts.Length < 4 || !bool.TryParse(parts[2], out var useVariable) || useVariable,
                 RunOnStart = parts.Length < 5 || !bool.TryParse(parts[3], out var runOnStart) || runOnStart,
-                Content = parts.Length == 5 ? parts[4] : parts.Length == 4 ? parts[3] : parts[2],
+                OpenLogOnRun = parts.Length >= 6 && bool.TryParse(parts[4], out var openLogOnRun) && openLogOnRun,
+                Content = parts.Length == 6 ? parts[5] : parts.Length == 5 ? parts[4] : parts.Length == 4 ? parts[3] : parts[2],
                 Order = result.Count
             });
         }
@@ -1139,6 +1137,7 @@ public class ServiceCommandProcessor
                 ScriptType = ReadScriptType(args),
                 UseVariable = ReadBoolOption(args, "--use-variable") ?? true,
                 RunOnStart = ReadBoolOption(args, "--run-on-start") ?? true,
+                OpenLogOnRun = ReadBoolOption(args, "--open-log-on-run") ?? false,
                 Content = content,
                 Order = 0
             });
@@ -1274,6 +1273,7 @@ public class ServiceCommandProcessor
             step.Name,
             step.UseVariable,
             step.RunOnStart,
+            step.OpenLogOnRun,
             step.StepVariables,
             step.Order,
             DisplayOrder = step.RunOnStart
@@ -1346,7 +1346,7 @@ public class ServiceCommandProcessor
             var stepVariables = !step.RunOnStart && step.StepVariables.Count > 0
                 ? $" stepVariables={step.StepVariables.Count}"
                 : string.Empty;
-            yield return $"{label} ({step.Id}) type={step.ScriptType} useVariable={step.UseVariable} runOnStart={step.RunOnStart}{stepVariables}";
+            yield return $"{label} ({step.Id}) type={step.ScriptType} useVariable={step.UseVariable} runOnStart={step.RunOnStart} openLogOnRun={step.OpenLogOnRun}{stepVariables}";
         }
     }
 

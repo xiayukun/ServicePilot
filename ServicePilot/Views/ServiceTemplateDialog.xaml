@@ -93,6 +93,11 @@
                                   Margin="12,0,0,3"
                                   Checked="RunOnStartCheck_Changed"
                                   Unchecked="RunOnStartCheck_Changed"/>
+                        <CheckBox x:Name="OpenLogOnRunCheck"
+                                  Content="弹出日志"
+                                  Foreground="#BBFFFFFF"
+                                  VerticalAlignment="Bottom"
+                                  Margin="12,0,0,3"/>
                     </WrapPanel>
                     <TextBlock x:Name="ScriptContentLabel" Grid.Row="1" Text="脚本内容" Foreground="#BBFFFFFF" FontSize="11" Margin="0,0,0,4"/>
                     <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="2"

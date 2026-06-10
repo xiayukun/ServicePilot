@@ -82,14 +82,18 @@ Service model:
 - `ServiceConfig.PresetVariables` stores optional strings selectable at start/restart/step-run time.
 - `ScriptStep.UseVariable` controls whether the selected service variable applies to that step. Old configs default to `true`; when `false`, the step does not receive `SERVICEPILOT_VARIABLE`, does not replace variable placeholders, and execute-step menus run it directly without a variable submenu.
 - `ScriptStep.RunOnStart` controls whether normal service startup runs the step. Old configs default to `true`; when `false`, the step is skipped during normal startup but remains manually runnable from execute-step menus.
+- `ScriptStep.OpenLogOnRun` controls whether the service log window opens automatically when that step enters `Running`. It is optional and defaults to `false` for old configs.
 - `ScriptStep.StepVariables` stores per-step variables for `RunOnStart=false` manual steps. Startup steps use `ServiceConfig.PresetVariables`; manual-only steps use their own `StepVariables`.
 - `ScriptStep.Order` remains a zero-based persisted execution order. UI display is separate: startup steps are numbered from `1` within the `启动执行` group, while `不启动执行` steps show no number.
 - `PresetVariableUsageStore` stores last-use ordering in `variable-usage-cache.json` under the same directory as config. It tracks both preset/step variable ordering and recent service usage. It is a cache, not source-of-truth configuration.
 - `ServiceTemplate` stores a full service template except working directory: name, description, script steps, preset variables, and timestamps.
 - `AppConfig.ServiceTemplates` stores user-managed full service templates.
+- Applying a service template preserves the target service name when it is already non-empty. The template name is used only for an empty target name; steps and preset variables are still replaced.
 - `AppConfig.Settings.Language` stores the UI language preference: `auto`, `zh-CN`, or `en-US`. Missing or unknown values are treated as `auto`.
 - `AppConfig.Settings.BuiltInTemplatesSeeded` records whether first-run built-in templates have already been added.
 - `ServiceTemplateService.CreateBuiltInTemplates()` is the single place to change the editable default developer template. No-argument tray startup seeds it once when `BuiltInTemplatesSeeded=false`; deleting it later should not cause it to be recreated every launch.
+- The current built-in `默认开发动作模板` is a 20-step generic developer toolbox: Git pull, safe/force branch checkout with rough `1.0.0`/`2.0.0` branch variables, safe/force tag checkout, npm install/build, and common app openers including Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman.
+- Steps that open GUI apps or terminals must not use plain `Start-Process` from a normal PowerShell child process. ServicePilot assigns processes to a kill-on-close Job Object, so direct child apps can be closed when the step ends. Use the detached `.lnk` + `explorer.exe` pattern from `ServiceTemplateService.DetachedOpenHeader()` / existing working services; Explorer folder opens may use COM `Shell.Application.Open`.
 - `ServiceStartOptions.Variable` carries one selected preset variable for a run.
 - `ServiceStartOptions.OnlyStepId` runs only one selected step.
 - `ServiceRuntimeState.StepStates` stores in-memory per-step runtime state. It is not persisted to config.
@@ -103,6 +107,7 @@ Execution path:
 - Executor cleanup in `ProcessManager` must only remove the executor/cancellation token instance it created, so short completed steps can be run again immediately without losing the new executor.
 - `ScriptExecutor` runs ordered steps whose `RunOnStart` is `true`, or a single selected step when `OnlyStepId` is set.
 - `ScriptExecutor.StepStateChanged` updates step states: `NotRun`, `Running`, `Succeeded`, `Failed`, `Skipped`, and `Cancelled`.
+- `App.OnProcessStepStateChanged` rebuilds the tray menu and opens the log window for a step whose persisted `OpenLogOnRun` is `true`.
 - Single-step execution uses a separate runtime path and is allowed while the service is running unless that same step is already `Running`.
 - When a single step is executed while the service is otherwise stopped, `ProcessManager.RunStep` promotes the service to `Running` for the duration of that step, then `CompleteIdleServiceState` moves it to `Completed`, `StartFailed`, or `Stopped` after all main and standalone executors are gone.
 - `CompleteIdleServiceState` must ignore stale step failures from before the current run by using `ServiceRuntimeState.StartTime` as the relevance boundary. This prevents old manual-step failures from poisoning later successful step runs.
@@ -141,7 +146,7 @@ Tray and dialogs:
 - Tray service menus and execute-step menus should not prefix every item with verbose state text. Use colored status dots only for attention-worthy states: green for running/starting, red for failed/error, orange for stopping/cancelled. Stopped/not-run/succeeded items normally have no dot; detailed state can remain in tooltip text.
 - Execute step menus group steps into `启动执行` and `不启动执行`. Startup steps use service preset variables; manual-only steps use `ScriptStep.StepVariables` and the usage-cache key is the step id. Manual-only steps with `UseVariable=true` still show a variable submenu with `新增` even when the step variable list is empty. Steps with `UseVariable=false` run directly. A step with `Running` state is disabled, but other steps remain executable even while the service is running.
 - Service add/edit dialog: `Views\ServiceConfigDialog.xaml(.cs)`. It supports applying one full service template, saving an edited service draft as a template, editing steps, and editing preset variables.
-- Service and template step editors include `使用变量` and `启动执行` checkboxes next to script type. The left variable box shows service `预设变量` for startup steps and switches to per-step `手动执行变量` for manual-only steps.
+- Service and template step editors include `使用变量`, `启动执行`, and `弹出日志` checkboxes next to script type. The left variable box shows service `预设变量` for startup steps and switches to per-step `手动执行变量` for manual-only steps.
 - Service manager: `Views\ServiceManagerWindow.xaml(.cs)` supports service add/edit/delete/start/execute-step/stop/restart/logs/save-as-template. Start/restart use variable menus when presets exist. Its service grid binds to a sorted snapshot from `PresetVariableUsageStore.SortServices`, so the most recently used service is shown at the top without mutating `ServiceConfig.SortOrder`.
 - `ServiceManagerWindow` buttons must be enabled from the selected row's live `RuntimeState`: start only for stopped/error/start-failed/completed, stop for running/starting/stopping or running steps, and restart except while starting/stopping.
 - WPF `MenuItem.Header` treats underscores as access-key markers. When displaying user data such as variables or step labels in service manager or log-window context menus, wrap the string in a `TextBlock` rather than assigning it directly as `Header`.
@@ -195,7 +200,7 @@ ServicePilot.exe template create --template auto|node|dotnet|python --dir DIR [-
 ServicePilot.exe shutdown
 ```
 
-`SERVICE`, `STEP`, and `TEMPLATE` can be names or GUIDs. `STEP` can also be numeric: `1..N` selects the startup-step display number, while `0` remains a legacy internal-order escape hatch. Script types are `Batch`, `PowerShell`, `Python`, and `Node`. CLI step specs can be `Name|Type|command`, `Name|Type|UseVariable|command`, or `Name|Type|UseVariable|RunOnStart|command`; omitted booleans default to `true`. `step list --json` and `status --json` expose both persisted `Order` and display-oriented metadata. `start all` has been removed and should not be reintroduced unless the user explicitly asks.
+`SERVICE`, `STEP`, and `TEMPLATE` can be names or GUIDs. `STEP` can also be numeric: `1..N` selects the startup-step display number, while `0` remains a legacy internal-order escape hatch. Script types are `Batch`, `PowerShell`, `Python`, and `Node`. CLI step specs can be `Name|Type|command`, `Name|Type|UseVariable|command`, `Name|Type|UseVariable|RunOnStart|command`, or `Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command`; omitted booleans default to `true` except `OpenLogOnRun`, which defaults to `false`. `--content` commands can set `--open-log-on-run`. `step list --json` and `status --json` expose both persisted `Order` and display-oriented metadata, including `OpenLogOnRun`. `start all` has been removed and should not be reintroduced unless the user explicitly asks.
 
 ## Safety Rules
 

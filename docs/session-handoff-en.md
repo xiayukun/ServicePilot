@@ -321,6 +321,40 @@ When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands skip the global tray command
 - Fixed underscores being hidden in WPF service-manager and log-window menus. User variables and step labels must be wrapped in `TextBlock` for `MenuItem.Header` instead of assigning raw user-data strings.
 - Verified: `rtk dotnet build ServicePilot.sln`.
 
+## 2026-06-10 Local Project Services And Default Template Update
+
+- Added/updated two maintenance services in the real `%APPDATA%\ServicePilot\config.json` after backing it up as `config.json.bak-20260610031027`; opener-argument cleanup later created `config.json.bak-20260610031510-openers`:
+  - `LinkShelf`: working directory `C:\git\其他\LinkShelf`, startup step opens `dist\LinkShelf.exe`; manual steps include `dotnet build`, publish to `dist`, `check --json`, `recommended --json`, and common tool openers.
+  - `ServicePilot`: working directory `C:\git\其他\ServicePilot`, startup step opens `dist\ServicePilot.exe`; manual steps include `dotnet build`, publish to `dist`, `ai-help`, `doctor --json`, `config-path`, and common tool openers.
+- No service-specific templates were created for these two services.
+- Replaced the runtime `默认开发动作模板` with a 20-step generic developer-action template: Git pull, safe/force branch checkout, safe/force tag checkout, npm install/build, plus openers for Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman.
+- Default branch variables use rough version families: `main`, `master`, `develop`, `dev`, `release/1.0.0`, `release/2.0.0`, `feature/1.0.0`, `feature/2.0.0`, `hotfix/1.0.0`, `hotfix/2.0.0`. Tag variables are `v1.0.0`, `v1.1.0`, `v2.0.0`, `1.0.0`, and `2.0.0`.
+- `ServiceTemplateService.CreateBuiltInTemplates()` now matches that built-in default template, so future first-run seeding and the current real config are aligned.
+- Windows Terminal opener commands use `wt -d <dir>`, and Git Bash opener commands use `git-bash --cd=<dir>`; both fixes are synced to the real config and built-in default-template code.
+- Verified: `rtk dotnet build ServicePilot.sln`, `rtk dotnet restore ServicePilot/ServicePilot.csproj -r win-x64`, `rtk dotnet publish ServicePilot/ServicePilot.csproj -c Release -r win-x64 --self-contained false -o dist`, and real-config `doctor --json` passes.
+
+## 2026-06-10 Tool-Opener Script Fix
+
+- The user reported that `打开：...` steps in the new `LinkShelf`, `ServicePilot`, and default-template entries did not open anything, while older `web` / `h5` services still worked.
+- Root cause: the new scripts used plain `Start-Process` from the PowerShell child process. ServicePilot assigns step processes to a kill-on-close Job Object, so directly spawned GUI apps can be closed when the step ends.
+- Fix: real-config `LinkShelf`, `ServicePilot`, `默认开发动作模板`, and the derived `web3默认开发动作模板` service now use the detached `.lnk` + `explorer.exe` opener pattern. Backups were created as `config.json.bak-20260610032703-detached-openers` and `config.json.bak-20260610033011-default-template-derived`.
+- `ServiceTemplateService.CreateBuiltInTemplates()` now generates openers through `DetachedOpenHeader()` / `Invoke-DetachedOpen`. Future GUI app, terminal, or exe openers must use this detached shortcut pattern rather than plain `Start-Process`; folder-only Explorer opens can use COM `Shell.Application.Open`.
+- Verified through the running tray instance:
+  - `LinkShelf / 打开：项目目录` logged `Opened Explorer: C:\git\其他\LinkShelf`.
+  - `LinkShelf / 打开：dist\LinkShelf.exe` created a new `LinkShelf.exe` process, which was closed after validation.
+  - `LinkShelf / 打开：CMD 当前目录` created a new `cmd.exe` process, which was closed after validation.
+  - `ServicePilot / 打开：dist\ServicePilot.exe` created a new `ServicePilot.exe` process, which was closed after validation.
+
+## 2026-06-10 Template Apply And Step Log Popup Update
+
+- Added `ScriptStep.OpenLogOnRun`; service/template editors now show an `Open log` checkbox after `Run on start`.
+- When a step enters `Running` and `OpenLogOnRun=true`, `App.OnProcessStepStateChanged` opens or activates that service's log window.
+- `ScriptDefinitionService.CloneStep()`, service/template editor clones, and CLI JSON output now preserve `OpenLogOnRun`.
+- CLI `--step` supports a sixth field: `Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command`; `--content` mode can use `--open-log-on-run`.
+- Applying a template no longer overwrites the target service name when it is already non-empty. The template name is only used when the target name is empty; steps and preset variables are still replaced.
+- README / README-en and the full user guides now explain that anything the command line can do can usually be wrapped as a ServicePilot step, that first startup seeds the default developer-action template, and that AI agents should inspect `ai-help`, `doctor --json`, and `status --json` before generating services/templates.
+- `AGENTS.md` was updated with the new field, runtime log-popup behavior, template-name preservation, and CLI spec.
+
 ## Next Useful Checks
 
 - Rebuild after any further edits.

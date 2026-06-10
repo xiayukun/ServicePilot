@@ -72,6 +72,7 @@ public partial class ServiceTemplateDialog : Window
         ScriptTypeLabel.Text = LocalizationService.Current.T("ScriptType");
         UseVariableCheck.Content = LocalizationService.Current.T("UseVariable");
         RunOnStartCheck.Content = LocalizationService.Current.T("RunOnStart");
+        OpenLogOnRunCheck.Content = LocalizationService.Current.T("OpenLogOnRun");
         ScriptContentLabel.Text = LocalizationService.Current.T("ScriptContent");
         CancelButton.Content = LocalizationService.Current.T("Cancel");
         SaveButton.Content = LocalizationService.Current.T("Save");
@@ -134,6 +135,7 @@ public partial class ServiceTemplateDialog : Window
         ScriptTypeCombo.SelectedIndex = (int)_selectedStep.ScriptType;
         UseVariableCheck.IsChecked = _selectedStep.UseVariable;
         RunOnStartCheck.IsChecked = _selectedStep.RunOnStart;
+        OpenLogOnRunCheck.IsChecked = _selectedStep.OpenLogOnRun;
         ScriptEditor.Text = _selectedStep.Content;
         _loadingStep = false;
         ShowVariablesForCurrentStep();
@@ -148,6 +150,7 @@ public partial class ServiceTemplateDialog : Window
         _selectedStep.ScriptType = ScriptTypeCombo.SelectedIndex >= 0 ? (ScriptType)ScriptTypeCombo.SelectedIndex : ScriptType.Batch;
         _selectedStep.UseVariable = UseVariableCheck.IsChecked ?? true;
         _selectedStep.RunOnStart = RunOnStartCheck.IsChecked ?? true;
+        _selectedStep.OpenLogOnRun = OpenLogOnRunCheck.IsChecked ?? false;
         _selectedStep.Content = ScriptEditor.Text ?? string.Empty;
         RefreshStepDisplayLabels();
     }

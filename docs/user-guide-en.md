@@ -4,6 +4,8 @@
 
 ServicePilot is a tray-first Windows manager for local development services. It centralizes startup commands, utility scripts, environment switching, and logs across multiple project folders, while exposing one queryable CLI for AI agents and automation scripts.
 
+It is not only for "starting services". Anything the command line can do can usually be wrapped as a step or template: edit config files, switch backend URLs, pull or checkout Git refs, install dependencies, open IDEs or terminals, and run build/debug commands. A good AI workflow is to read `ai-help`, `doctor --json`, `list --json`, and `status --json` first, then generate services or templates from the current facts.
+
 ## Basic Workflow
 
 1. Launch `ServicePilot.exe`.
@@ -23,6 +25,7 @@ Each service contains:
 - **Script steps**: ordered Batch, PowerShell, Python, or Node.js scripts.
 - **Preset variables**: one string per line for start, restart, and startup-step execution.
 - **Step variables**: variables owned by manual-only steps.
+- **Open log**: automatically open the current service log window when the step starts.
 - **Autostart**: optional startup when ServicePilot launches.
 
 Normal startup only runs steps with `Run on start` enabled. Disabled startup steps appear in a separate manual group and can be run as utility actions.
@@ -56,9 +59,9 @@ A template is a full service without a working directory:
 - Script steps
 - Preset variables
 
-Applying a template replaces the target service name, steps, and preset variables while keeping the target working directory, service id, autostart setting, and display order.
+Applying a template replaces the target service steps and preset variables while keeping the target working directory, service id, autostart setting, and display order. If the current service already has a name, the name is preserved; the template name is only used when the current name is empty.
 
-On first tray startup, ServicePilot creates an editable default developer-action template for common actions such as opening tools, Git operations, dependency installation, and startup commands. If the user deletes it, ServicePilot does not recreate it on every launch.
+On first tray startup, ServicePilot creates an editable default developer-action template for common actions such as opening tools, Git operations, dependency installation, and startup commands. The current default template includes Git pull, safe/force branch checkout, safe/force tag checkout, npm install/build, and openers for Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman. If the user deletes it, ServicePilot does not recreate it on every launch.
 
 ## Log Window
 
@@ -135,6 +138,7 @@ CLI step specs:
 Name|Type|command
 Name|Type|UseVariable|command
 Name|Type|UseVariable|RunOnStart|command
+Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command
 ```
 
 Example:

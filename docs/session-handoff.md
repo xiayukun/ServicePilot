@@ -321,6 +321,40 @@ CLI 处理器里凡是会保存配置的命令必须保持 async 贯通，不要
 - 修复 WPF 管理服务窗口和日志窗口菜单吞掉下划线的问题：用户变量和步骤标题必须用 `TextBlock` 作为 `MenuItem.Header`，不要直接把用户数据字符串赋给 Header。
 - 已验证：`rtk dotnet build ServicePilot.sln`。
 
+## 2026-06-10 本机项目服务和默认模板更新
+
+- 已在真实 `%APPDATA%\ServicePilot\config.json` 中新增/更新两个维护服务，修改前备份为 `config.json.bak-20260610031027`，后续修正打开工具参数前又备份为 `config.json.bak-20260610031510-openers`：
+  - `LinkShelf`：工作目录 `C:\git\其他\LinkShelf`，启动执行步骤为打开 `dist\LinkShelf.exe`；手动步骤包含 `dotnet build`、发布到 `dist`、`check --json`、`recommended --json` 和常用工具打开入口。
+  - `ServicePilot`：工作目录 `C:\git\其他\ServicePilot`，启动执行步骤为打开 `dist\ServicePilot.exe`；手动步骤包含 `dotnet build`、发布到 `dist`、`ai-help`、`doctor --json`、`config-path` 和常用工具打开入口。
+- 这两个服务不创建对应模板。
+- 已把运行配置中的 `默认开发动作模板` 替换为 20 步通用开发动作模板：Git 拉取、安全/强制切换分支、安全/强制切换 Tag、npm install/build，以及资源管理器、CMD、PowerShell、Windows Terminal、Git Bash、VS Code、Cursor、Visual Studio、IntelliJ IDEA、WebStorm、Rider、Notepad++、Postman 打开入口。
+- 默认模板的分支变量使用粗略版本系列：`main`、`master`、`develop`、`dev`、`release/1.0.0`、`release/2.0.0`、`feature/1.0.0`、`feature/2.0.0`、`hotfix/1.0.0`、`hotfix/2.0.0`。Tag 变量为 `v1.0.0`、`v1.1.0`、`v2.0.0`、`1.0.0`、`2.0.0`。
+- `ServiceTemplateService.CreateBuiltInTemplates()` 已同步改为同一套内置默认模板内容，后续首启种子和当前真实配置一致。
+- Windows Terminal 打开命令使用 `wt -d <dir>`，Git Bash 打开命令使用 `git-bash --cd=<dir>`；这两处已同步到真实配置和内置默认模板代码。
+- 已验证：`rtk dotnet build ServicePilot.sln`、`rtk dotnet restore ServicePilot/ServicePilot.csproj -r win-x64`、`rtk dotnet publish ServicePilot/ServicePilot.csproj -c Release -r win-x64 --self-contained false -o dist`、真实配置 `doctor --json` 通过。
+
+## 2026-06-10 打开工具脚本修复
+
+- 用户反馈新加的 `LinkShelf`、`ServicePilot` 服务和新默认模板里的 `打开：...` 步骤打不开，而旧的 `web`、`h5` 等服务可以。
+- 根因：新脚本直接在 PowerShell 子进程里 `Start-Process`，但 ServicePilot 会把运行步骤的进程放入 kill-on-close Job Object；步骤结束时直拉的子进程可能被一起关闭。
+- 修复：真实配置里的 `LinkShelf`、`ServicePilot`、`默认开发动作模板`，以及从默认模板应用出来的 `web3默认开发动作模板`，都已改为 `.lnk + explorer.exe` 的脱离式打开方式。修改前备份为 `config.json.bak-20260610032703-detached-openers` 和 `config.json.bak-20260610033011-default-template-derived`。
+- `ServiceTemplateService.CreateBuiltInTemplates()` 已同步改用 `DetachedOpenHeader()` / `Invoke-DetachedOpen` 生成首启默认模板。以后凡是打开 GUI 程序、终端或 exe，不要写普通 `Start-Process`；要用临时快捷方式交给 `explorer.exe` 打开。只打开文件夹时可用 COM `Shell.Application.Open`。
+- 已实际验证：
+  - 通过运行中托盘实例执行 `LinkShelf / 打开：项目目录`，日志显示 `Opened Explorer: C:\git\其他\LinkShelf`。
+  - 执行 `LinkShelf / 打开：dist\LinkShelf.exe`，出现新的 `LinkShelf.exe` 进程，验证后已关闭。
+  - 执行 `LinkShelf / 打开：CMD 当前目录`，出现新的 `cmd.exe` 进程，验证后已关闭。
+  - 执行 `ServicePilot / 打开：dist\ServicePilot.exe`，出现新的 `ServicePilot.exe` 进程，验证后已关闭。
+
+## 2026-06-10 模板应用和步骤弹日志更新
+
+- `ScriptStep` 新增 `OpenLogOnRun`，服务/模板编辑器在 `启动执行` 后新增 `弹出日志` 复选框。
+- 当步骤进入 `Running` 且 `OpenLogOnRun=true` 时，`App.OnProcessStepStateChanged` 会自动打开或激活该服务日志窗口。
+- `ScriptDefinitionService.CloneStep()`、服务/模板编辑器克隆、CLI JSON 输出都保留 `OpenLogOnRun`。
+- CLI `--step` 新增第 6 段：`Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command`；`--content` 形式可用 `--open-log-on-run`。
+- 应用模板时，如果目标服务已有名称，不再覆盖名称；只有名称为空时才使用模板名称。步骤和预设变量仍会按模板替换。
+- README / README-en 和完整用户指南已补充：命令行能做的事通常都能包装成 ServicePilot 步骤；首次启动内置默认开发动作模板；推荐 AI 先读取 `ai-help`、`doctor --json`、`status --json` 再生成服务和模板。
+- `AGENTS.md` 已同步记录新字段、运行时弹日志、模板应用名称保留和 CLI 规格。
+
 ## 后续有用检查
 
 - 后续任何修改后重新构建。

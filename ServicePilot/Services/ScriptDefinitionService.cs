@@ -15,6 +15,7 @@ public static class ScriptDefinitionService
             ScriptType = source.ScriptType,
             UseVariable = source.UseVariable,
             RunOnStart = source.RunOnStart,
+            OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
             Order = source.Order
@@ -64,7 +65,7 @@ public static class ScriptDefinitionService
         return new ServiceConfig
         {
             Id = target.Id,
-            Name = template.Name,
+            Name = string.IsNullOrWhiteSpace(target.Name) ? template.Name : target.Name,
             WorkingDirectory = target.WorkingDirectory,
             AutoStart = target.AutoStart,
             SortOrder = target.SortOrder,

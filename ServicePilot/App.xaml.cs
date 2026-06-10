@@ -79,7 +79,7 @@ public partial class App : Application
             _processManager.LoadConfigs(_appConfig.Services);
             _processManager.ServiceOutput += OnServiceOutput;
             _processManager.ServiceStateChanged += (_, _) => Dispatcher.BeginInvoke(RebuildTrayMenu);
-            _processManager.StepStateChanged += (_, _) => Dispatcher.BeginInvoke(RebuildTrayMenu);
+            _processManager.StepStateChanged += OnProcessStepStateChanged;
 
             _mainViewModel = new MainViewModel(_processManager, _configService, _appConfig);
             _mainViewModel.AddServiceRequested += OnAddServiceRequested;
@@ -290,6 +290,32 @@ public partial class App : Application
         oldMenu?.Dispose();
         _trayIcon.Text = ShortTrayText(GetTrayStatusText());
         UpdateTrayIconBadge();
+    }
+
+    private void OnProcessStepStateChanged(Guid serviceId, StepRuntimeState stepState)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            RebuildTrayMenu();
+            OpenLogWindowForStepIfRequested(serviceId, stepState);
+        });
+    }
+
+    private void OpenLogWindowForStepIfRequested(Guid serviceId, StepRuntimeState stepState)
+    {
+        if (_isExiting ||
+            stepState.State != StepRunState.Running ||
+            _mainViewModel == null)
+        {
+            return;
+        }
+
+        var service = _mainViewModel.Services.FirstOrDefault(vm => vm.Config.Id == serviceId);
+        var step = service?.Config.ScriptSteps.FirstOrDefault(item => item.Id == stepState.StepId);
+        if (service == null || step is not { OpenLogOnRun: true })
+            return;
+
+        OnViewLogRequested(service);
     }
 
     private IReadOnlyList<ServiceItemViewModel> GetSortedServicesForDisplay()
