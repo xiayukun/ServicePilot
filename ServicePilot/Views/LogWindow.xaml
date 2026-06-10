@@ -1,0 +1,136 @@
+<Window x:Class="ServicePilot.Views.LogWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:ServicePilot.Converters"
+        Title="日志" Height="560" Width="1040"
+        WindowStartupLocation="CenterScreen"
+        Background="#FF1E1E2E">
+
+    <Window.Resources>
+        <converters:LogLevelColorConverter x:Key="LogLevelColor"/>
+        <Style x:Key="LogActionButtonStyle" TargetType="{x:Type Button}">
+            <Setter Property="Foreground" Value="#EEFFFFFF"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="#FF111111"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 工具栏 -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock x:Name="TitleText" Text="日志" Foreground="#EEFFFFFF"
+                       FontSize="14" FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis"
+                       TextWrapping="NoWrap"
+                       MaxWidth="260"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                        DockPanel.Dock="Right">
+                <Button x:Name="StartButton" Content="启动" Width="48" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#336BFF95"
+                        BorderBrush="#556BFF95"
+                        Click="Start_Click"
+                        Margin="0,0,6,0"/>
+                <Button x:Name="RunStepButton" Content="执行步骤" Width="82" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#3359C9FF"
+                        BorderBrush="#5559C9FF"
+                        Click="RunStep_Click"
+                        Margin="0,0,6,0"/>
+                <Button x:Name="StopButton" Content="停止" Width="48" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#33FF6B6B"
+                        BorderBrush="#55FF6B6B"
+                        Click="Stop_Click"
+                        Margin="0,0,6,0"/>
+                <Button x:Name="RestartButton" Content="重启" Width="58" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#33FFD166"
+                        BorderBrush="#55FFD166"
+                        Click="Restart_Click"
+                        Margin="0,0,10,0"/>
+                <TextBox x:Name="SearchBox" Width="150" Height="26"
+                         ToolTip="搜索日志"
+                         Background="#22FFFFFF"
+                         Foreground="#EEFFFFFF"
+                         BorderBrush="#55FFFFFF"
+                         TextChanged="SearchBox_TextChanged"
+                         KeyDown="SearchBox_KeyDown"
+                         Margin="0,0,4,0"/>
+                <Button x:Name="FindPreviousButton" Content="上" Width="44" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#44FFFFFF"
+                        BorderBrush="#55FFFFFF"
+                        Click="FindPrevious_Click"
+                        Margin="0,0,4,0"/>
+                <Button x:Name="FindNextButton" Content="下" Width="44" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#44FFFFFF"
+                        BorderBrush="#55FFFFFF"
+                        Click="FindNext_Click"
+                        Margin="0,0,4,0"/>
+                <TextBlock x:Name="SearchStatusText" Width="42"
+                           Foreground="#99FFFFFF"
+                           FontSize="11"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0"/>
+                <CheckBox x:Name="AutoScrollCheck" Content="自动滚动" IsChecked="True"
+                          Foreground="#BBFFFFFF" FontSize="12"
+                          VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <Button x:Name="EditButton" Content="编辑" Width="58" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#44FFFFFF"
+                        BorderBrush="#55FFFFFF"
+                        Click="Edit_Click"
+                        Margin="0,0,6,0"/>
+                <Button x:Name="ClearButton" Content="清空" Width="58" Height="26"
+                        Style="{StaticResource LogActionButtonStyle}"
+                        Background="#44FFFFFF"
+                        BorderBrush="#55FFFFFF"
+                        Click="Clear_Click"/>
+            </StackPanel>
+        </DockPanel>
+
+        <!-- 日志列表 -->
+        <ListBox x:Name="LogList" Grid.Row="1"
+                 Background="#33FFFFFF" BorderBrush="#55FFFFFF"
+                 FontFamily="Consolas" FontSize="12"
+                 SelectionMode="Extended"
+                 PreviewKeyDown="LogList_PreviewKeyDown"
+                 VirtualizingPanel.IsVirtualizing="True"
+                 VirtualizingPanel.VirtualizationMode="Recycling"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+            <ListBox.ContextMenu>
+                <ContextMenu>
+                    <MenuItem x:Name="CopySelectedMenuItem" Header="复制选中" Click="CopySelected_Click"/>
+                    <MenuItem x:Name="CopyAllMenuItem" Header="复制全部" Click="CopyAll_Click"/>
+                </ContextMenu>
+            </ListBox.ContextMenu>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Timestamp, StringFormat='{}{0:HH:mm:ss}'}"
+                                   Foreground="#77FFFFFF" Margin="0,0,6,0"/>
+                        <TextBlock Text="{Binding Level, StringFormat='[{0}]'}"
+                                   Foreground="{Binding Level, Converter={StaticResource LogLevelColor}}"
+                                   Margin="0,0,6,0" Width="60"/>
+                        <TextBlock Text="{Binding Message}"
+                                   Foreground="{Binding Level, Converter={StaticResource LogLevelColor}}"
+                                   TextWrapping="NoWrap"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</Window>

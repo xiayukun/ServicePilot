@@ -1,0 +1,38 @@
+<Window x:Class="ServicePilot.Views.PresetVariableInputDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新增变量" Height="150" Width="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        Background="#FF1E1E2E">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock x:Name="PromptText" Text="输入本次使用的变量"
+                   Foreground="#EEFFFFFF"
+                   FontWeight="SemiBold"/>
+        <TextBox x:Name="VariableBox"
+                 Grid.Row="1"
+                 Margin="0,10,0,12"
+                 Height="28"
+                 VerticalContentAlignment="Center"/>
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button x:Name="OkButton" Content="确定"
+                    Width="72"
+                    Height="28"
+                    Margin="0,0,8,0"
+                    IsDefault="True"
+                    Click="Ok_Click"/>
+            <Button x:Name="CancelButton" Content="取消"
+                    Width="72"
+                    Height="28"
+                    IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>

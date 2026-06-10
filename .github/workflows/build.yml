@@ -1,0 +1,60 @@
+name: build
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - v*
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\ServicePilot\ServicePilot.csproj
+
+      - name: Build
+        run: dotnet build .\ServicePilot\ServicePilot.csproj -c Release --no-restore
+
+      - name: Publish single file
+        run: >
+          dotnet publish .\ServicePilot\ServicePilot.csproj
+          -t:Rebuild
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:EnableCompressionInSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:DebugType=None
+          -p:DebugSymbols=false
+          -o .\dist
+
+      - name: CLI smoke test
+        shell: pwsh
+        run: |
+          $env:SERVICEPILOT_CONFIG_DIR = Join-Path $env:RUNNER_TEMP "servicepilot-ci"
+          .\dist\ServicePilot.exe ai-help
+          .\dist\ServicePilot.exe doctor --json
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ServicePilot-win-x64
+          path: .\dist\ServicePilot.exe
+          if-no-files-found: error
