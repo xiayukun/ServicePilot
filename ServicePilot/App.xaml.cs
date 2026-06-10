@@ -71,6 +71,7 @@ public partial class App : Application
             _configService = new ConfigService();
             _appConfig = await _configService.LoadAsync();
             _appConfig.Settings ??= new AppSettings();
+            await EnsureBuiltInTemplatesSeededAsync();
             LocalizationService.Current.Configure(_appConfig.Settings.Language);
             _variableUsageStore = new PresetVariableUsageStore(_configService.ConfigDirectory);
 
@@ -136,6 +137,24 @@ public partial class App : Application
                 LocalizationService.Current.T("ServicePilotErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
             args.SetObserved();
         };
+    }
+
+    private async Task EnsureBuiltInTemplatesSeededAsync()
+    {
+        if (_appConfig.Settings.BuiltInTemplatesSeeded)
+            return;
+
+        foreach (var template in ServiceTemplateService.CreateBuiltInTemplates())
+        {
+            var exists = _appConfig.ServiceTemplates.Any(existing =>
+                existing.Id == template.Id ||
+                string.Equals(existing.Name, template.Name, StringComparison.OrdinalIgnoreCase));
+            if (!exists)
+                _appConfig.ServiceTemplates.Add(template);
+        }
+
+        _appConfig.Settings.BuiltInTemplatesSeeded = true;
+        await _configService.SaveAsync(_appConfig);
     }
 
     private void CreateTrayIcon()

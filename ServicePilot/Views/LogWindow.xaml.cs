@@ -240,7 +240,7 @@ public partial class LogWindow : Window
         };
         foreach (var variable in variables)
         {
-            var variableItem = new MenuItem { Header = variable };
+            var variableItem = new MenuItem { Header = CreatePlainHeader(variable) };
             variableItem.Click += async (_, _) =>
             {
                 await _rememberVariableForStepAsync(_service.Config, step, variable, false);
@@ -262,7 +262,7 @@ public partial class LogWindow : Window
     private static object CreateStatusHeader(string text, System.Windows.Media.Brush? dotBrush)
     {
         if (dotBrush == null)
-            return text;
+            return CreatePlainHeader(text);
 
         var panel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
         panel.Children.Add(new System.Windows.Shapes.Ellipse
@@ -273,7 +273,7 @@ public partial class LogWindow : Window
             Margin = new Thickness(0, 0, 7, 0),
             VerticalAlignment = VerticalAlignment.Center
         });
-        panel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        panel.Children.Add(CreatePlainHeader(text));
         return panel;
     }
 
@@ -285,6 +285,12 @@ public partial class LogWindow : Window
         _ => null
     };
 
+    private static TextBlock CreatePlainHeader(string text) => new()
+    {
+        Text = text,
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
     private bool ShowVariableMenu(object sender, Func<string?, Task> runAsync)
     {
         var variables = GetSortedPresetVariables();
@@ -294,7 +300,7 @@ public partial class LogWindow : Window
         var menu = new ContextMenu();
         foreach (var variable in variables)
         {
-            var item = new MenuItem { Header = variable };
+            var item = new MenuItem { Header = CreatePlainHeader(variable) };
             item.Click += async (_, _) =>
             {
                 await _rememberPresetVariableAsync(_service.Config, variable, false);

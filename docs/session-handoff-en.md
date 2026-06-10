@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-06-09
+Last updated: 2026-06-10
 
 ## Current State
 
@@ -307,6 +307,18 @@ When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands skip the global tray command
 - The service manager window now binds to a sorted snapshot from `PresetVariableUsageStore.SortServices` instead of binding directly to the raw service collection, and refreshes try to keep the current service selected.
 - Start, stop, restart, run-step, view logs, edit, delete, save-as-template, and tray-routed CLI start/stop/restart/run-step/log commands refresh recent service usage.
 - This ordering only affects display and cache state. It does not mutate `ServiceConfig.SortOrder` or reorder service definitions in `config.json`.
+- Verified: `rtk dotnet build ServicePilot.sln`.
+
+## 2026-06-10 README, Config Migration, And Default Template Update
+
+- README / README-en are now concise landing pages: positioning, download, hero image, inline screenshot tables, quick start, core features, common CLI, configuration path, and docs links.
+- Full details moved to `docs/user-guide.md` / `docs/user-guide-en.md`, including service model, variables, templates, log window, full CLI, isolated tests, similar-tool comparison, and AI prompt.
+- The README hero image now uses the user-added service-manager screenshot, organized as `Assets/app-preview.png` and `Assets/screenshots/service-manager-overview-zh.png`. Other screenshots are expanded inline in tables instead of linked as a "more screenshots" list.
+- Homepage docs no longer surface screenshot guidance, competitive research, or process-runner research directly; those maintenance/research docs remain linked from the full user guide.
+- Added `AppSettings.BuiltInTemplatesSeeded`. No-argument tray startup seeds editable built-in templates once through `ServiceTemplateService.CreateBuiltInTemplates()` when the flag is false.
+- The current built-in template is only a safe starter example, ready for the user to replace later. Future default-template content should be changed in `ServiceTemplateService.CreateBuiltInTemplates()`.
+- `ConfigService` still defaults to `%APPDATA%\ServicePilot`. If the Roaming target file is missing, it copies legacy `config.json` / `variable-usage-cache.json` from the exe directory or current directory without deleting the legacy files.
+- Fixed underscores being hidden in WPF service-manager and log-window menus. User variables and step labels must be wrapped in `TextBlock` for `MenuItem.Header` instead of assigning raw user-data strings.
 - Verified: `rtk dotnet build ServicePilot.sln`.
 
 ## Next Useful Checks

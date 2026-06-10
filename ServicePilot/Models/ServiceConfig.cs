@@ -42,4 +42,5 @@ public class AppConfig
 public class AppSettings
 {
     public string Language { get; set; } = "auto";
+    public bool BuiltInTemplatesSeeded { get; set; }
 }

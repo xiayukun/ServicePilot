@@ -1,6 +1,6 @@
 # 会话交接
 
-最后更新：2026-06-09
+最后更新：2026-06-10
 
 ## 当前状态
 
@@ -307,6 +307,18 @@ CLI 处理器里凡是会保存配置的命令必须保持 async 贯通，不要
 - 管理服务窗口不再直接绑定原始服务集合，而是绑定 `PresetVariableUsageStore.SortServices` 生成的排序快照，刷新时尽量保留当前选中服务。
 - 启动、停止、重启、执行步骤、查看日志、编辑、删除、存为模板，以及通过运行中托盘实例执行的 CLI 启动/停止/重启/执行步骤/读取日志，都会刷新服务最近使用记录。
 - 这个排序只影响显示层和缓存，不会修改 `ServiceConfig.SortOrder`，也不会重排 `config.json` 里的服务定义。
+- 已验证：`rtk dotnet build ServicePilot.sln`。
+
+## 2026-06-10 README、配置迁移和默认模板更新
+
+- README / README-en 已收束为首页入口：定位、下载、主图、并排截图、快速开始、核心能力、常用 CLI、配置位置和文档入口。
+- 完整说明已迁移到 `docs/user-guide.md` / `docs/user-guide-en.md`，包括服务模型、变量、模板、日志窗口、完整 CLI、隔离测试、同类工具对比和 AI 推荐提示词。
+- README 主图改为用户新增的管理服务截图，并整理为 `Assets/app-preview.png` 与 `Assets/screenshots/service-manager-overview-zh.png`，其他截图直接用表格展开，不再放“更多截图”链接列表。
+- 首页文档入口不再展示截图指南、同类项目调研、进程运行器调研这类维护/研究资料；这些资料保留在完整用户指南的延伸阅读里。
+- 新增 `AppSettings.BuiltInTemplatesSeeded`。无参数托盘启动时，如果尚未种过内置模板，会调用 `ServiceTemplateService.CreateBuiltInTemplates()` 创建一次可编辑的默认开发动作模板。
+- 默认模板目前只是安全示例，用于承接后续用户指定的正式内置模板内容。以后改默认模板内容时集中改 `ServiceTemplateService.CreateBuiltInTemplates()`。
+- `ConfigService` 默认仍使用 `%APPDATA%\ServicePilot`。当 Roaming 目标文件不存在时，会从 exe 同级目录或当前目录复制旧 `config.json` / `variable-usage-cache.json`，但不会删除旧文件。
+- 修复 WPF 管理服务窗口和日志窗口菜单吞掉下划线的问题：用户变量和步骤标题必须用 `TextBlock` 作为 `MenuItem.Header`，不要直接把用户数据字符串赋给 Header。
 - 已验证：`rtk dotnet build ServicePilot.sln`。
 
 ## 后续有用检查

@@ -41,7 +41,8 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 
 ## Current Organized Screenshots
 
-- `Assets/app-preview.png`: README hero image, currently using the service manager window.
+- `Assets/app-preview.png`: README hero image and GitHub preview image, currently using the user's new service manager screenshot.
+- `Assets/screenshots/service-manager-overview-zh.png`: large service manager screenshot used as the hero source.
 - `Assets/screenshots/tray-menu-zh.png`: tray context menu.
 - `Assets/screenshots/service-manager-zh.png`: service manager window.
 - `Assets/screenshots/service-editor-zh.png`: service editor and script steps.

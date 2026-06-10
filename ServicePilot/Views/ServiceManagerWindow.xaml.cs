@@ -309,7 +309,7 @@ public partial class ServiceManagerWindow : Window
         };
         foreach (var variable in variables)
         {
-            var variableItem = new MenuItem { Header = variable };
+            var variableItem = new MenuItem { Header = CreatePlainHeader(variable) };
             variableItem.Click += async (_, _) =>
             {
                 RememberServiceUse(vm);
@@ -333,7 +333,7 @@ public partial class ServiceManagerWindow : Window
     private static object CreateStatusHeader(string text, System.Windows.Media.Brush? dotBrush)
     {
         if (dotBrush == null)
-            return text;
+            return CreatePlainHeader(text);
 
         var panel = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
         panel.Children.Add(new System.Windows.Shapes.Ellipse
@@ -344,7 +344,7 @@ public partial class ServiceManagerWindow : Window
             Margin = new Thickness(0, 0, 7, 0),
             VerticalAlignment = VerticalAlignment.Center
         });
-        panel.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        panel.Children.Add(CreatePlainHeader(text));
         return panel;
     }
 
@@ -354,6 +354,12 @@ public partial class ServiceManagerWindow : Window
         StepRunState.Failed => System.Windows.Media.Brushes.Firebrick,
         StepRunState.Cancelled => System.Windows.Media.Brushes.DarkOrange,
         _ => null
+    };
+
+    private static TextBlock CreatePlainHeader(string text) => new()
+    {
+        Text = text,
+        VerticalAlignment = VerticalAlignment.Center
     };
 
     private void Logs_Click(object sender, RoutedEventArgs e)
@@ -379,7 +385,7 @@ public partial class ServiceManagerWindow : Window
         var menu = new ContextMenu();
         foreach (var variable in variables)
         {
-            var item = new MenuItem { Header = variable };
+            var item = new MenuItem { Header = CreatePlainHeader(variable) };
             item.Click += async (_, _) =>
             {
                 RememberServiceUse(vm);

@@ -41,7 +41,8 @@
 
 ## 当前已整理截图
 
-- `Assets/app-preview.png`：README 主图，当前使用管理服务窗口。
+- `Assets/app-preview.png`：README 主图和 GitHub 预览图，当前使用用户新截取的管理服务窗口。
+- `Assets/screenshots/service-manager-overview-zh.png`：管理服务窗口大图，作为主图源文件。
 - `Assets/screenshots/tray-menu-zh.png`：托盘右键主菜单。
 - `Assets/screenshots/service-manager-zh.png`：管理服务窗口。
 - `Assets/screenshots/service-editor-zh.png`：编辑服务和脚本步骤。

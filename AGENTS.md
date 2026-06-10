@@ -23,12 +23,13 @@ Current repository facts:
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
-- This directory may not be a Git repository. Check before using Git commands.
+- This directory is currently a Git repository on branch `main`. Still check `git status` before edits because user screenshots/assets may be untracked.
 - Process-runner design references are summarized in `docs/process-runner-research.md` and `docs/process-runner-research-en.md`.
 - Competitive code research is summarized in `docs/competitive-research.md` and `docs/competitive-research-en.md`.
 - AI/automation usage is documented in `docs/ai-usage.md` and `docs/ai-usage-en.md`.
 - GitHub launch metadata is documented in `docs/github-launch-checklist.md`, `docs/github-launch-checklist-en.md`, `docs/repository-profile.md`, and `docs/repository-profile-en.md`.
 - Screenshot planning is documented in `docs/screenshot-guide.md` and `docs/screenshot-guide-en.md`.
+- The complete user guide lives in `docs/user-guide.md` and `docs/user-guide-en.md`; keep README concise and link to the guide for details.
 
 ## Required Workflow
 
@@ -72,6 +73,7 @@ Startup and app lifetime:
 - No-argument startup creates the tray instance.
 - Argument startup runs command-line mode through `CommandLineHost` and does not create the tray UI.
 - `CommandPipeServer` hosts the named pipe `ServicePilot.Command.v1`.
+- `ConfigService` stores config in `%APPDATA%\ServicePilot` by default. If the Roaming config/cache file does not exist, it copies legacy `config.json` and `variable-usage-cache.json` from the exe directory or current directory without deleting the legacy files.
 
 Service model:
 
@@ -86,6 +88,8 @@ Service model:
 - `ServiceTemplate` stores a full service template except working directory: name, description, script steps, preset variables, and timestamps.
 - `AppConfig.ServiceTemplates` stores user-managed full service templates.
 - `AppConfig.Settings.Language` stores the UI language preference: `auto`, `zh-CN`, or `en-US`. Missing or unknown values are treated as `auto`.
+- `AppConfig.Settings.BuiltInTemplatesSeeded` records whether first-run built-in templates have already been added.
+- `ServiceTemplateService.CreateBuiltInTemplates()` is the single place to change the editable default developer template. No-argument tray startup seeds it once when `BuiltInTemplatesSeeded=false`; deleting it later should not cause it to be recreated every launch.
 - `ServiceStartOptions.Variable` carries one selected preset variable for a run.
 - `ServiceStartOptions.OnlyStepId` runs only one selected step.
 - `ServiceRuntimeState.StepStates` stores in-memory per-step runtime state. It is not persisted to config.
@@ -140,6 +144,7 @@ Tray and dialogs:
 - Service and template step editors include `使用变量` and `启动执行` checkboxes next to script type. The left variable box shows service `预设变量` for startup steps and switches to per-step `手动执行变量` for manual-only steps.
 - Service manager: `Views\ServiceManagerWindow.xaml(.cs)` supports service add/edit/delete/start/execute-step/stop/restart/logs/save-as-template. Start/restart use variable menus when presets exist. Its service grid binds to a sorted snapshot from `PresetVariableUsageStore.SortServices`, so the most recently used service is shown at the top without mutating `ServiceConfig.SortOrder`.
 - `ServiceManagerWindow` buttons must be enabled from the selected row's live `RuntimeState`: start only for stopped/error/start-failed/completed, stop for running/starting/stopping or running steps, and restart except while starting/stopping.
+- WPF `MenuItem.Header` treats underscores as access-key markers. When displaying user data such as variables or step labels in service manager or log-window context menus, wrap the string in a `TextBlock` rather than assigning it directly as `Header`.
 - Template manager: `Views\TemplateManagerWindow.xaml(.cs)` supports full service template CRUD.
 - Template editor: `Views\ServiceTemplateDialog.xaml(.cs)`.
 - Log window: `Views\LogWindow.xaml(.cs)` receives a `ServiceItemViewModel`, `ProcessManager`, `PresetVariableUsageStore`, preset-variable save callback, step-variable save callback, and service edit callback. It offers variable-aware start, execute-step, and restart controls, edit, stop, bounded in-memory logs, search, copy, and horizontal scrolling for long lines. It subscribes to service/step state changes and must disable Start while the service is running/starting or any step is running. Opening a log window must use `LoadLogs()` for buffered history and throttled auto-scroll; do not replay cached logs by calling `AddLog()` in a loop.
@@ -210,6 +215,7 @@ ServicePilot.exe shutdown
 - Keep `README.md` and `README-en.md` equivalent.
 - Keep `CHANGELOG.md` and `CHANGELOG-en.md` equivalent.
 - Keep screenshot guidance in `docs/screenshot-guide.md` and `docs/screenshot-guide-en.md` aligned when the visible UI changes.
+- Keep README focused on positioning, download, screenshots, quick start, core capabilities, config path, and doc links. Move full CLI/service model/comparison/research detail to `docs/user-guide.md` and `docs/user-guide-en.md`.
 - Keep `.github` community files aligned too: default Issue/PR templates are Chinese, English alternatives use `-en.md`, and cross-links must point to the counterpart rather than themselves.
 - Because the project has not launched publicly, avoid exposing pre-launch bugfix/development-history noise in user-facing docs. Use initial-release language where appropriate; detailed engineering history can remain in AGENTS/session handoff.
 - Update release notes when publishing a real version.
