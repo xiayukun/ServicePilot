@@ -404,6 +404,7 @@ CLI 处理器里凡是会保存配置的命令必须保持 async 贯通，不要
 - `ServiceCommandProcessor` 新增 `version` / `--version` / `-v`，用于 AI、脚本和用户快速确认当前 exe 版本。
 - README / README-en 首页新增 linux.do 支持致谢、内置通用模板说明，以及可直接复制给 AI 的提示语；完整细节仍放在用户指南中。
 - CHANGELOG 和 `docs/release-notes-v1.0.0*.md` 已改为 `1.0.0` 正式发布口径。
+- GitHub Release 页面自身已经显示标题，发布说明正文不要再以重复的 `# ServicePilot 1.0.0` 开头；`v1.0.0` 线上 Release 已用去掉标题的正文重新覆盖。
 - 本次验证中发现 `dist\ServicePilot.exe` 正在运行并锁定正式 dist，因此使用 `dist-staged\ServicePilot.exe` 生成 GitHub Release 资产，避免强制关闭用户正在运行的托盘实例。
 - 已验证：`rtk dotnet build ServicePilot.sln`、隔离配置下 Debug/Release `version` 输出 `ServicePilot 1.0.0`、`dist-staged\ServicePilot.exe ai-help` 退出码 `0`、`dist-staged\ServicePilot.exe doctor --json` 空配置通过。
 

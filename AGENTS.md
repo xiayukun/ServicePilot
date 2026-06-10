@@ -233,6 +233,7 @@ ServicePilot.exe shutdown
 - Keep `.github` community files aligned too: default Issue/PR templates are Chinese, English alternatives use `-en.md`, and cross-links must point to the counterpart rather than themselves.
 - The project is now using public release wording. Keep user-facing docs focused on current capabilities and release notes, and keep detailed engineering history in AGENTS/session handoff rather than the landing page.
 - Update release notes when publishing a real version.
+- GitHub Release pages already show the release title. When uploading release notes with `gh release create/edit --notes-file`, the notes body should not start with a duplicate `# ServicePilot X.Y.Z` heading.
 - Update this `AGENTS.md` after every meaningful architecture or workflow change so future AI sessions can resume safely.
 - Update session handoff docs at the end of substantial work.
 

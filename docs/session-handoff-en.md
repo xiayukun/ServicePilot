@@ -404,6 +404,7 @@ When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands skip the global tray command
 - `ServiceCommandProcessor` now supports `version` / `--version` / `-v` for quick version checks by users, scripts, and AI agents.
 - README / README-en now include the linux.do support thanks, built-in general template explanation, and a copyable AI prompt; full details remain in the user guide.
 - CHANGELOG and `docs/release-notes-v1.0.0*.md` now use final `1.0.0` release wording.
+- GitHub Release pages already show the title, so release-note bodies should not start with a duplicate `# ServicePilot 1.0.0` heading; the online `v1.0.0` release has been overwritten with the title-free body.
 - During validation, `dist\ServicePilot.exe` was running and locking the official dist folder, so the GitHub Release asset was generated from `dist-staged\ServicePilot.exe` to avoid forcibly closing the user's active tray instance.
 - Verified: `rtk dotnet build ServicePilot.sln`, isolated Debug/Release `version` output `ServicePilot 1.0.0`, `dist-staged\ServicePilot.exe ai-help` exits `0`, and `dist-staged\ServicePilot.exe doctor --json` passes with an empty config.
 

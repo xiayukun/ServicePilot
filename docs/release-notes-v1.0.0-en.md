@@ -1,5 +1,3 @@
-﻿# ServicePilot 1.0.0
-
 Chinese release notes: [docs/release-notes-v1.0.0.md](release-notes-v1.0.0.md)
 
 Initial public release baseline.

@@ -1,5 +1,3 @@
-﻿# ServicePilot 1.0.0
-
 英文发布说明：[release-notes-v1.0.0-en.md](release-notes-v1.0.0-en.md)
 
 首次公开发布基线。
