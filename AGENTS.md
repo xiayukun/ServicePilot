@@ -22,7 +22,9 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
+- Public release version: `1.0.0`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
+- `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
 - This directory is currently a Git repository on branch `main`. Still check `git status` before edits because user screenshots/assets may be untracked.
 - Process-runner design references are summarized in `docs/process-runner-research.md` and `docs/process-runner-research-en.md`.
 - Competitive code research is summarized in `docs/competitive-research.md` and `docs/competitive-research-en.md`.
@@ -30,6 +32,7 @@ Current repository facts:
 - GitHub launch metadata is documented in `docs/github-launch-checklist.md`, `docs/github-launch-checklist-en.md`, `docs/repository-profile.md`, and `docs/repository-profile-en.md`.
 - Screenshot planning is documented in `docs/screenshot-guide.md` and `docs/screenshot-guide-en.md`.
 - The complete user guide lives in `docs/user-guide.md` and `docs/user-guide-en.md`; keep README concise and link to the guide for details.
+- The current user runtime config includes Java services/templates for `leniu-tengyun-core` and `leniu-tengyun`; both Java service/template definitions include Notepad opener steps for root `pom.xml`. The API service/template also includes a Notepad opener for `bootstrap-dev.yml` and a database-url mutation step that both use source-path-first and `target\classes` fallback lookup. These Java file-opener steps belong at the very end of the step list.
 
 ## Required Workflow
 
@@ -61,7 +64,7 @@ Primary behavior:
 - `ai-help` is the AI entrypoint. Keep it concise, current, and safe: agents should inspect `list/status/service/step/template/logs --json` before acting.
 - `doctor [--json]` is the preflight configuration diagnostic entrypoint. Keep it offline-capable and useful for AI before edits/startup.
 - The tray icon is generated dynamically as a large number only. It shows the count of `Running`/`Starting` services and displays `0` when none are active.
-- The tray tooltip lists running/starting service names and the active preset variable, when one was used.
+- The tray tooltip and disabled status line show only a short count summary: active/running count, total services, and failed count. Do not include service names or variables there because long values make the tray menu unusable.
 - UI language defaults to the Windows UI language. Users can switch between `auto`, `zh-CN`, and `en-US` from the tray context menu.
 
 ## Architecture
@@ -83,16 +86,19 @@ Service model:
 - `ScriptStep.UseVariable` controls whether the selected service variable applies to that step. Old configs default to `true`; when `false`, the step does not receive `SERVICEPILOT_VARIABLE`, does not replace variable placeholders, and execute-step menus run it directly without a variable submenu.
 - `ScriptStep.RunOnStart` controls whether normal service startup runs the step. Old configs default to `true`; when `false`, the step is skipped during normal startup but remains manually runnable from execute-step menus.
 - `ScriptStep.OpenLogOnRun` controls whether the service log window opens automatically when that step enters `Running`. It is optional and defaults to `false` for old configs.
+- Enable `OpenLogOnRun` for manual diagnostic/progress steps such as Git operations, dependency install, build/publish/package commands, Java/Maven/.NET/npm/Python checks, and CLI/doctor/check commands. Keep normal service startup steps (`RunOnStart=true`) off by default so starting a service does not automatically pop logs. Keep pure `打开：...` / `Open ...` tool-launcher steps off unless the user explicitly wants logs for them.
 - `ScriptStep.StepVariables` stores per-step variables for `RunOnStart=false` manual steps. Startup steps use `ServiceConfig.PresetVariables`; manual-only steps use their own `StepVariables`.
 - `ScriptStep.Order` remains a zero-based persisted execution order. UI display is separate: startup steps are numbered from `1` within the `启动执行` group, while `不启动执行` steps show no number.
 - `PresetVariableUsageStore` stores last-use ordering in `variable-usage-cache.json` under the same directory as config. It tracks both preset/step variable ordering and recent service usage. It is a cache, not source-of-truth configuration.
 - `ServiceTemplate` stores a full service template except working directory: name, description, script steps, preset variables, and timestamps.
 - `AppConfig.ServiceTemplates` stores user-managed full service templates.
+- `TemplateExchangeService` exports/imports shareable `.servicepilot-template.json` files. Import creates fresh template/step ids and auto-renames duplicates instead of overwriting existing templates.
 - Applying a service template preserves the target service name when it is already non-empty. The template name is used only for an empty target name; steps and preset variables are still replaced.
 - `AppConfig.Settings.Language` stores the UI language preference: `auto`, `zh-CN`, or `en-US`. Missing or unknown values are treated as `auto`.
 - `AppConfig.Settings.BuiltInTemplatesSeeded` records whether first-run built-in templates have already been added.
 - `ServiceTemplateService.CreateBuiltInTemplates()` is the single place to change the editable default developer template. No-argument tray startup seeds it once when `BuiltInTemplatesSeeded=false`; deleting it later should not cause it to be recreated every launch.
 - The current built-in `默认开发动作模板` is a 20-step generic developer toolbox: Git pull, safe/force branch checkout with rough `1.0.0`/`2.0.0` branch variables, safe/force tag checkout, npm install/build, and common app openers including Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman.
+- Built-in template generation uses the same `OpenLogOnRun` heuristic: manual Git/npm/build-style action steps may pop logs; normal startup-flow and pure opener steps do not by default.
 - Steps that open GUI apps or terminals must not use plain `Start-Process` from a normal PowerShell child process. ServicePilot assigns processes to a kill-on-close Job Object, so direct child apps can be closed when the step ends. Use the detached `.lnk` + `explorer.exe` pattern from `ServiceTemplateService.DetachedOpenHeader()` / existing working services; Explorer folder opens may use COM `Shell.Application.Open`.
 - `ServiceStartOptions.Variable` carries one selected preset variable for a run.
 - `ServiceStartOptions.OnlyStepId` runs only one selected step.
@@ -150,7 +156,7 @@ Tray and dialogs:
 - Service manager: `Views\ServiceManagerWindow.xaml(.cs)` supports service add/edit/delete/start/execute-step/stop/restart/logs/save-as-template. Start/restart use variable menus when presets exist. Its service grid binds to a sorted snapshot from `PresetVariableUsageStore.SortServices`, so the most recently used service is shown at the top without mutating `ServiceConfig.SortOrder`.
 - `ServiceManagerWindow` buttons must be enabled from the selected row's live `RuntimeState`: start only for stopped/error/start-failed/completed, stop for running/starting/stopping or running steps, and restart except while starting/stopping.
 - WPF `MenuItem.Header` treats underscores as access-key markers. When displaying user data such as variables or step labels in service manager or log-window context menus, wrap the string in a `TextBlock` rather than assigning it directly as `Header`.
-- Template manager: `Views\TemplateManagerWindow.xaml(.cs)` supports full service template CRUD.
+- Template manager: `Views\TemplateManagerWindow.xaml(.cs)` supports full service template CRUD plus import/export of shareable template JSON files.
 - Template editor: `Views\ServiceTemplateDialog.xaml(.cs)`.
 - Log window: `Views\LogWindow.xaml(.cs)` receives a `ServiceItemViewModel`, `ProcessManager`, `PresetVariableUsageStore`, preset-variable save callback, step-variable save callback, and service edit callback. It offers variable-aware start, execute-step, and restart controls, edit, stop, bounded in-memory logs, search, copy, and horizontal scrolling for long lines. It subscribes to service/step state changes and must disable Start while the service is running/starting or any step is running. Opening a log window must use `LoadLogs()` for buffered history and throttled auto-scroll; do not replay cached logs by calling `AddLog()` in a loop.
 - Log window title text should be clipped with ellipsis and must never push action buttons off-screen. Service names are user data and less important than keeping controls clickable.
@@ -172,6 +178,7 @@ Supported commands:
 
 ```text
 ServicePilot.exe help
+ServicePilot.exe version
 ServicePilot.exe ai-help
 ServicePilot.exe config-path
 ServicePilot.exe doctor [--json]
@@ -191,6 +198,8 @@ ServicePilot.exe step variable-clear SERVICE STEP
 ServicePilot.exe add --name NAME --dir DIR --step "Name|Batch|command" [--preset VALUE]
 ServicePilot.exe remove SERVICE
 ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
+ServicePilot.exe template export TEMPLATE --file FILE
+ServicePilot.exe template import --file FILE
 ServicePilot.exe template step-variables TEMPLATE STEP [--json]
 ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
@@ -222,7 +231,7 @@ ServicePilot.exe shutdown
 - Keep screenshot guidance in `docs/screenshot-guide.md` and `docs/screenshot-guide-en.md` aligned when the visible UI changes.
 - Keep README focused on positioning, download, screenshots, quick start, core capabilities, config path, and doc links. Move full CLI/service model/comparison/research detail to `docs/user-guide.md` and `docs/user-guide-en.md`.
 - Keep `.github` community files aligned too: default Issue/PR templates are Chinese, English alternatives use `-en.md`, and cross-links must point to the counterpart rather than themselves.
-- Because the project has not launched publicly, avoid exposing pre-launch bugfix/development-history noise in user-facing docs. Use initial-release language where appropriate; detailed engineering history can remain in AGENTS/session handoff.
+- The project is now using public release wording. Keep user-facing docs focused on current capabilities and release notes, and keep detailed engineering history in AGENTS/session handoff rather than the landing page.
 - Update release notes when publishing a real version.
 - Update this `AGENTS.md` after every meaningful architecture or workflow change so future AI sessions can resume safely.
 - Update session handoff docs at the end of substantial work.
@@ -230,6 +239,7 @@ ServicePilot.exe shutdown
 ## GitHub / CI Rules
 
 - `.github/workflows/build.yml` is the public confidence check. It should restore, build, publish the Windows exe, run CLI smoke tests with `SERVICEPILOT_CONFIG_DIR` set to a temporary directory, and upload `ServicePilot.exe`.
+- CI and local release packaging rely on the `Release` publish defaults in `ServicePilot.csproj`; do not reintroduce framework-dependent multi-file `dist` output unless the user explicitly asks.
 - Keep CI command-mode smoke tests offline-safe. Do not let CI or isolated local tests route to the user's real tray instance unless `SERVICEPILOT_ALLOW_TRAY_PIPE=1` is intentionally set.
 - Dependabot covers GitHub Actions and NuGet dependencies.
 - `.gitignore` must keep local build outputs and staged release folders out of Git, including `dist/`, `dist-staged/`, `bin/`, `obj/`, and `TestResults/`.
@@ -240,5 +250,5 @@ ServicePilot.exe shutdown
 - The project still needs deeper runtime QA with real services beyond the current Vite validation.
 - CLI behavior should continue to be tested against a running tray instance, not only offline/build mode.
 - The directory may still need Git initialization or connection to a remote repository before release.
-- Release artifacts in `dist` should be regenerated only as part of an explicit release/build step.
+- Release artifacts in `dist` should be regenerated only as part of an explicit release/build step and should leave only `ServicePilot.exe`.
 - The running `dist\ServicePilot.exe` can lock publish output. Use `dist-staged/` for validation when the user has not closed the app.

@@ -6,13 +6,15 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+Thanks to the [linux.do](https://linux.do/) community for the strong support.
+
 ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services**. It brings frontend apps, backend services, script steps, environment switching, and logs from multiple folders into one tray menu, with a CLI that AI agents and scripts can call safely.
 
 ```text
 ServicePilot starts, monitors, and stops local development services from the Windows tray and CLI, so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
 ```
 
-Anything the command line can do can usually become a ServicePilot step: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. On first launch, ServicePilot seeds a built-in "default developer actions" template with Git branch/tag actions, npm install/build steps, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
+Anything the command line can do can usually become a ServicePilot step: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. ServicePilot includes a general built-in template, "Default developer actions", with Git branch/tag actions, npm install/build steps, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
 
 **Download:** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [Latest release](https://github.com/xiayukun/ServicePilot/releases/latest) | [Full user guide](docs/user-guide-en.md)
 
@@ -30,6 +32,12 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 | --- |
 | ![AI command help](Assets/screenshots/ai-help-cli-zh.png) |
 
+## AI Prompt
+
+```text
+You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, doctor --json, list --json, and status all --json, then use the JSON output to understand existing services, steps, variables, and templates. When adding services or templates, prefer the built-in "Default developer actions" template where useful, or generate a project-specific multi-step service directly. Before deleting or overwriting configuration, state the exact target name.
+```
+
 ## Quick Start
 
 1. Download [`ServicePilot.exe`](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe).
@@ -46,7 +54,8 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 - **Startup / manual steps**: keep startup flow and one-off utility actions separate.
 - **Variable switching**: choose preset variables when starting, restarting, or running a step.
 - **Full service templates**: save names, descriptions, steps, and variables while keeping each target working directory.
-- **Built-in developer actions**: first launch seeds editable Git, npm, IDE, and terminal actions.
+- **Template sharing**: export templates as JSON files and import templates shared by others.
+- **Built-in general template**: first launch seeds editable "Default developer actions" with Git, npm, IDE, and terminal actions.
 - **Live logs**: search, copy, horizontal scrolling, and bounded history.
 - **AI/script CLI**: JSON output for `list/status/service/step/template/logs`.
 - **Reliable stop**: Windows Job Object cleanup reduces Vite/npm child processes that keep ports alive.
@@ -55,6 +64,7 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 ## Common CLI
 
 ```powershell
+ServicePilot.exe version
 ServicePilot.exe ai-help
 ServicePilot.exe doctor --json
 ServicePilot.exe list --json
@@ -85,8 +95,10 @@ Requirements:
 
 ```powershell
 dotnet build .\ServicePilot.sln
-dotnet publish .\ServicePilot\ServicePilot.csproj -c Release -r win-x64 --self-contained false -o .\dist
+dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
 ```
+
+`Release` publish defaults to a self-contained single-file `dist\ServicePilot.exe`.
 
 ## Docs
 

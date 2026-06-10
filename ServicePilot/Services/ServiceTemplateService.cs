@@ -92,9 +92,67 @@ public static class ServiceTemplateService
             Content = content,
             UseVariable = useVariable,
             RunOnStart = false,
+            OpenLogOnRun = ShouldOpenLogOnRun(name, content),
             StepVariables = variables?.ToList() ?? [],
             Order = steps.Count
         });
+    }
+
+    private static bool ShouldOpenLogOnRun(string name, string content)
+    {
+        if (name.StartsWith("打开", StringComparison.OrdinalIgnoreCase) ||
+            name.StartsWith("Open", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var text = $"{name}\n{content}";
+        string[] markers =
+        [
+            "git",
+            "npm",
+            "pnpm",
+            "yarn",
+            "npx",
+            "dotnet",
+            "mvn",
+            "mvnw",
+            "java",
+            "修改",
+            "写入",
+            "替换",
+            "接口",
+            "数据库",
+            "配置",
+            "启动",
+            "编译",
+            "构建",
+            "发布",
+            "打包",
+            "依赖",
+            "安装",
+            "拉取",
+            "切换",
+            "同步",
+            "校验",
+            "检查",
+            "体检",
+            "测试",
+            "运行",
+            "maven",
+            "core",
+            "api",
+            "cli",
+            "doctor",
+            "check",
+            "recommended",
+            "build",
+            "publish",
+            "install",
+            "start",
+            "dev",
+            "test"
+        ];
+
+        return markers.Any(marker => text.Contains(marker, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string GitCheckoutBranchScript(bool force) => force
@@ -307,6 +365,7 @@ public static class ServiceTemplateService
                     Name = "Install dependencies",
                     ScriptType = ScriptType.Batch,
                     Content = "if not exist node_modules npm install",
+                    OpenLogOnRun = true,
                     Order = 0
                 },
                 new ScriptStep
@@ -314,6 +373,7 @@ public static class ServiceTemplateService
                     Name = $"Run npm {script}",
                     ScriptType = ScriptType.Batch,
                     Content = $"npm run {script}",
+                    OpenLogOnRun = true,
                     Order = 1
                 }
             ]
@@ -339,6 +399,7 @@ public static class ServiceTemplateService
                     Name = "Restore packages",
                     ScriptType = ScriptType.Batch,
                     Content = project == null ? "dotnet restore" : $"dotnet restore \"{project}\"",
+                    OpenLogOnRun = true,
                     Order = 0
                 },
                 new ScriptStep
@@ -346,6 +407,7 @@ public static class ServiceTemplateService
                     Name = "Run dotnet",
                     ScriptType = ScriptType.Batch,
                     Content = runCommand,
+                    OpenLogOnRun = true,
                     Order = 1
                 }
             ]
@@ -365,6 +427,7 @@ public static class ServiceTemplateService
                 Name = "Install requirements",
                 ScriptType = ScriptType.Batch,
                 Content = "python -m pip install -r requirements.txt",
+                OpenLogOnRun = true,
                 Order = steps.Count
             });
         }
@@ -374,6 +437,7 @@ public static class ServiceTemplateService
             Name = "Run python service",
             ScriptType = ScriptType.Batch,
             Content = startCommand,
+            OpenLogOnRun = true,
             Order = steps.Count
         });
 

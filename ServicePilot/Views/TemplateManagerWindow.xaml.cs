@@ -1,5 +1,7 @@
+using System.IO;
 using System.Text;
 using System.Windows;
+using Microsoft.Win32;
 using ServicePilot.Models;
 using ServicePilot.Services;
 
@@ -41,6 +43,8 @@ public partial class TemplateManagerWindow : Window
         AddButton.Content = LocalizationService.Current.T("Add");
         EditButton.Content = LocalizationService.Current.T("Edit");
         DeleteButton.Content = LocalizationService.Current.T("Delete");
+        ExportButton.Content = LocalizationService.Current.T("Export");
+        ImportButton.Content = LocalizationService.Current.T("Import");
         NameColumn.Header = LocalizationService.Current.T("Name");
         DescriptionColumn.Header = LocalizationService.Current.T("Description");
         StepsColumn.Header = LocalizationService.Current.T("Steps");
@@ -114,6 +118,71 @@ public partial class TemplateManagerWindow : Window
         _changed();
     }
 
+    private async void Export_Click(object sender, RoutedEventArgs e)
+    {
+        var template = SelectedTemplate;
+        if (template == null)
+        {
+            MessageBox.Show(LocalizationService.Current.T("SelectTemplatePrompt"), "ServicePilot",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = LocalizationService.Current.T("ExportTemplate"),
+            Filter = LocalizationService.Current.T("TemplateFileFilter"),
+            FileName = SafeFileName(template.Name) + TemplateExchangeService.DefaultExtension,
+            AddExtension = true,
+            DefaultExt = TemplateExchangeService.DefaultExtension
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            await TemplateExchangeService.ExportAsync(template, dialog.FileName);
+            MessageBox.Show(LocalizationService.Current.F("TemplateExported", dialog.FileName), "ServicePilot",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(LocalizationService.Current.F("TemplateExportFailed", ex.Message), "ServicePilot",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private async void Import_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = LocalizationService.Current.T("ImportTemplate"),
+            Filter = LocalizationService.Current.T("TemplateFileFilter"),
+            Multiselect = false,
+            CheckFileExists = true
+        };
+
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var imported = await TemplateExchangeService.ImportAsync(dialog.FileName, _appConfig.ServiceTemplates);
+            _appConfig.ServiceTemplates.AddRange(imported);
+            await _configService.SaveAsync(_appConfig);
+            Refresh();
+            _changed();
+            MessageBox.Show(LocalizationService.Current.F("TemplateImported", imported.Count), "ServicePilot",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(LocalizationService.Current.F("TemplateImportFailed", ex.Message), "ServicePilot",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void TemplatesGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         RefreshPreview();
@@ -146,5 +215,12 @@ public partial class TemplateManagerWindow : Window
         }
 
         return builder.ToString().Trim();
+    }
+
+    private static string SafeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var name = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(name) ? "template" : name;
     }
 }

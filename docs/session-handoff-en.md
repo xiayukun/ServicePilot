@@ -106,7 +106,7 @@ When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands skip the global tray command
 - Chinese is the primary documentation language. Default Markdown files should be Chinese when the content can reasonably be localized.
 - English counterparts use `-en.md`, for example `README-en.md`, `CHANGELOG-en.md`, and `docs/ai-usage-en.md`.
 - Chinese and English docs link to each other near the top.
-- The project has not been publicly launched, so user-facing docs should not keep pre-launch bugfix history. CHANGELOG uses an initial `1.0.0 - To Be Released` style.
+- The project now uses public release wording. User-facing docs should focus on current capabilities and formal release notes, without keeping pre-launch bugfix history.
 - Added `docs/ai-usage.md` / `docs/ai-usage-en.md` for AI and automation workflows.
 - Added `docs/competitive-research.md` / `docs/competitive-research-en.md` covering code/positioning research for more than 10 related projects.
 - `docs/repository-profile.md` / `docs/repository-profile-en.md` contains GitHub description, topics, search keywords, and launch copy.
@@ -354,6 +354,66 @@ When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands skip the global tray command
 - Applying a template no longer overwrites the target service name when it is already non-empty. The template name is only used when the target name is empty; steps and preset variables are still replaced.
 - README / README-en and the full user guides now explain that anything the command line can do can usually be wrapped as a ServicePilot step, that first startup seeds the default developer-action template, and that AI agents should inspect `ai-help`, `doctor --json`, and `status --json` before generating services/templates.
 - `AGENTS.md` was updated with the new field, runtime log-popup behavior, template-name preservation, and CLI spec.
+
+## 2026-06-10 Single-File Publish Defaults
+
+- The `Release` configuration in `ServicePilot\ServicePilot.csproj` now defaults to `win-x64`, self-contained, compressed single-file publish, native-library self-extract support, and no debug symbols.
+- The default local package command is now: `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`.
+- `.github/workflows/build.yml`, README / README-en, and release checklists now rely on the project-level publish defaults.
+- After publishing, `dist` should contain only `ServicePilot.exe`; do not reintroduce framework-dependent multi-file output for distribution unless explicitly requested.
+
+## 2026-06-10 Open-Log Configuration Pass
+
+- Scanned the real `%APPDATA%\ServicePilot\config.json` across all services and templates; backup before editing: `config.json.bak-20260610133223-open-log-on-run`.
+- Set `OpenLogOnRun=true` on 116 of 227 steps across 11 services and 5 templates.
+- Selection rule: Git operations, dependency installs, build/publish/package commands, service startup, interface/database/config mutation, Java/Maven/.NET/npm/Python runs, and CLI/doctor/check/recommended steps should pop logs because their progress or failure output matters.
+- Pure `打开：...` / tool-launcher steps, Explorer, editors, terminals, and GUI exe openers stay off by default to avoid noisy log windows when simply opening tools.
+- `ServiceTemplateService.CreateBuiltInTemplates()` now applies the same rule: future first-run `默认开发动作模板` entries pop logs for Git/npm/build-style steps and keep pure opener steps quiet.
+
+## 2026-06-10 Template Import/Export Update
+
+- Added `TemplateExchangeService` for shareable `.servicepilot-template.json` files.
+- Export writes a JSON package with format name, version, export time, and template list; import also accepts a single template object or an array of templates.
+- Import regenerates template and step ids, and auto-renames duplicate template names with an imported suffix instead of overwriting local templates.
+- `TemplateManagerWindow` now has `Export` and `Import` buttons using save/open file dialogs.
+- CLI additions:
+  - `template export TEMPLATE --file FILE`
+  - `template import --file FILE`
+- README / README-en, full user guides, and AGENTS now document template sharing.
+
+## 2026-06-10 Java Config File Opener Steps
+
+- Updated the real `%APPDATA%\ServicePilot\config.json`; backup before editing: `config.json.bak-20260610140146-java-notepad-openers`.
+- Added `打开：pom.xml` to the `leniu-tengyun-core` service and `Java Maven core` template; it opens `pom.xml` in Notepad from the current working directory.
+- Added these steps to the `leniu-tengyun` service and `Java Maven API + 本地 core` template:
+  - `打开：pom.xml`: opens the API project root `pom.xml`; do not prefer the child-module `pom.xml`.
+  - `打开：bootstrap-dev.yml`: opens `leniu-yunshitang\src\main\resources\bootstrap-dev.yml` first, falling back to `leniu-yunshitang\target\classes\bootstrap-dev.yml`.
+- These opener steps keep `RunOnStart=false` and `OpenLogOnRun=false`, stay at the end of the step list, and use the detached `.lnk + explorer.exe` Notepad launch pattern so the process-runner Job Object does not close Notepad with the step.
+- `order-web` and `leniu-tengyun-core` were running during the edit, so the tray instance was not forcibly restarted; after services stop, restart the ServicePilot tray instance to load the new disk config into menus.
+
+## 2026-06-10 Short Tray Status Summary
+
+- The disabled tray-menu status line and tray tooltip no longer show running service names or variable details.
+- `App.GetTrayStatusText()` now returns only the short summary: `ServicePilot: active/total running, failed failed`.
+- `LocalizationService` `TrayStatusActive` text no longer has the details placeholder, preventing long variables from widening the tray menu.
+- `AGENTS.md` now records that the status line and tooltip must remain count-only summaries, without service names, variables, or project details.
+
+## 2026-06-10 1.0.0 Release Preparation
+
+- `ServicePilot\ServicePilot.csproj` now sets public version `1.0.0` and disables appending the Git SourceRevision to `InformationalVersion`, so `ServicePilot.exe version` should print `ServicePilot 1.0.0`.
+- `ServiceCommandProcessor` now supports `version` / `--version` / `-v` for quick version checks by users, scripts, and AI agents.
+- README / README-en now include the linux.do support thanks, built-in general template explanation, and a copyable AI prompt; full details remain in the user guide.
+- CHANGELOG and `docs/release-notes-v1.0.0*.md` now use final `1.0.0` release wording.
+- During validation, `dist\ServicePilot.exe` was running and locking the official dist folder, so the GitHub Release asset was generated from `dist-staged\ServicePilot.exe` to avoid forcibly closing the user's active tray instance.
+- Verified: `rtk dotnet build ServicePilot.sln`, isolated Debug/Release `version` output `ServicePilot 1.0.0`, `dist-staged\ServicePilot.exe ai-help` exits `0`, and `dist-staged\ServicePilot.exe doctor --json` passes with an empty config.
+
+## 2026-06-10 API DB Fallback And Startup Log Popups
+
+- Updated the real `%APPDATA%\ServicePilot\config.json`; backup before editing: `config.json.bak-20260610151358-api-db-fallback-startup-log-off`.
+- Fixed `修改数据库地址` in the `leniu-tengyun` service and `Java Maven API + 本地 core` template: it edits `leniu-yunshitang\src\main\resources\bootstrap-dev.yml` first, falling back to `leniu-yunshitang\target\classes\bootstrap-dev.yml` when the source file is missing.
+- The script still prefixes values without `jdbc:mysql://` and requires at least two `system` datasource `jdbcUrl` replacements for master/slave.
+- Turned off `OpenLogOnRun` for all service/template `RunOnStart=true` startup-required steps so normal service startup does not auto-open log windows.
+- Maintenance rule: manual diagnostic steps such as Git, dependency install, build, publish, doctor/check can pop logs; normal startup flow steps stay quiet unless explicitly requested.
 
 ## Next Useful Checks
 

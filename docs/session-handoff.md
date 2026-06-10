@@ -106,7 +106,7 @@ CLI 处理器里凡是会保存配置的命令必须保持 async 贯通，不要
 - 中文是主文档语言，默认 Markdown 文件优先为中文。
 - 英文配套文件使用 `-en.md`，例如 `README-en.md`、`CHANGELOG-en.md`、`docs/ai-usage-en.md`。
 - 中英文文档顶部互链。
-- 项目还未正式上线，用户可见文档不要保留上线前修复流水账；CHANGELOG 采用“1.0.0 待发布”的初始版本口径。
+- 项目已切换到公开发布口径；用户可见文档应聚焦当前能力和正式发布说明，不保留上线前修复流水账。
 - 新增 `docs/ai-usage.md` / `docs/ai-usage-en.md`，用于给 AI 和自动化脚本说明推荐工作流。
 - 新增 `docs/competitive-research.md` / `docs/competitive-research-en.md`，记录不少于 10 个同类项目的代码和定位调研。
 - `docs/repository-profile.md` / `docs/repository-profile-en.md` 记录 GitHub description、topics、搜索关键词和发布文案。
@@ -354,6 +354,66 @@ CLI 处理器里凡是会保存配置的命令必须保持 async 贯通，不要
 - 应用模板时，如果目标服务已有名称，不再覆盖名称；只有名称为空时才使用模板名称。步骤和预设变量仍会按模板替换。
 - README / README-en 和完整用户指南已补充：命令行能做的事通常都能包装成 ServicePilot 步骤；首次启动内置默认开发动作模板；推荐 AI 先读取 `ai-help`、`doctor --json`、`status --json` 再生成服务和模板。
 - `AGENTS.md` 已同步记录新字段、运行时弹日志、模板应用名称保留和 CLI 规格。
+
+## 2026-06-10 单文件发布默认化
+
+- `ServicePilot\ServicePilot.csproj` 的 `Release` 配置已默认设为 `win-x64`、自包含、压缩单文件、包含本机库自解压、无调试符号。
+- 默认本地发布命令改为：`rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`。
+- `.github/workflows/build.yml`、README / README-en、发布检查清单已改为依赖项目默认发布属性。
+- `dist` 目录发布后应只保留 `ServicePilot.exe`；不要再提交或分发 framework-dependent 的多文件输出。
+
+## 2026-06-10 弹出日志配置筛选
+
+- 已扫描真实 `%APPDATA%\ServicePilot\config.json` 中的全部服务和模板，修改前备份为 `config.json.bak-20260610133223-open-log-on-run`。
+- 11 个服务和 5 个模板共 227 个步骤中，116 个步骤已设置 `OpenLogOnRun=true`。
+- 筛选规则：Git 操作、依赖安装、构建/发布/打包、服务启动、修改接口/数据库/配置、Java/Maven/.NET/npm/Python 运行、CLI/doctor/check/recommended 等需要看进度或失败原因的步骤会弹出日志。
+- 纯 `打开：...` 工具入口、资源管理器、编辑器、终端、GUI exe 启动步骤默认不弹日志，避免只是打开工具时打扰用户。
+- `ServiceTemplateService.CreateBuiltInTemplates()` 已同步使用同一规则：后续首次生成的内置 `默认开发动作模板` 中，Git/npm/build 类步骤默认弹日志，纯打开工具步骤不弹。
+
+## 2026-06-10 模板导入导出更新
+
+- 新增 `TemplateExchangeService`，支持导出/导入可分享的 `.servicepilot-template.json` 文件。
+- 导出文件是带格式名、版本、导出时间和模板列表的 JSON 包；导入时也兼容单个模板对象或模板数组。
+- 导入模板会重新生成模板 id 和步骤 id，并对同名模板自动追加“导入”后缀，避免覆盖本地现有模板。
+- `TemplateManagerWindow` 新增 `导出`、`导入` 按钮，导出使用保存文件框，导入使用打开文件框。
+- CLI 新增：
+  - `template export TEMPLATE --file FILE`
+  - `template import --file FILE`
+- README / README-en、完整用户指南和 AGENTS 已同步模板分享说明。
+
+## 2026-06-10 Java 配置文件打开步骤更新
+
+- 已修改真实 `%APPDATA%\ServicePilot\config.json`，修改前备份为 `config.json.bak-20260610140146-java-notepad-openers`。
+- `leniu-tengyun-core` 服务和 `Java Maven core` 模板新增 `打开：pom.xml` 步骤，使用记事本打开当前工作目录下的 `pom.xml`。
+- `leniu-tengyun` 服务和 `Java Maven API + 本地 core` 模板新增：
+  - `打开：pom.xml`：打开 API 项目根目录下的 `pom.xml`，不要优先打开子模块 `pom.xml`。
+  - `打开：bootstrap-dev.yml`：优先打开 `leniu-yunshitang\src\main\resources\bootstrap-dev.yml`，不存在时退回 `leniu-yunshitang\target\classes\bootstrap-dev.yml`。
+- 这些打开文件步骤保持 `RunOnStart=false`、`OpenLogOnRun=false`，放在步骤列表最后，并使用 `.lnk + explorer.exe` 脱离式打开记事本，避免被步骤进程 Job Object 连带关闭。
+- 修改时检测到 `order-web` 和 `leniu-tengyun-core` 正在运行，因此没有强制重启托盘；需要等服务停止后重启 ServicePilot 托盘实例，菜单才会加载磁盘上的新步骤。
+
+## 2026-06-10 托盘状态摘要收短
+
+- 托盘菜单底部禁用状态行和鼠标悬停 tooltip 不再展示运行服务名或变量详情。
+- `App.GetTrayStatusText()` 现在只返回短摘要：`ServicePilot: 活动数/总服务数 运行中，失败数 失败`。
+- `LocalizationService` 的 `TrayStatusActive` 中英文文案已移除详情占位符，避免变量过长撑宽托盘菜单。
+- `AGENTS.md` 已记录：状态行和 tooltip 只能显示数量汇总，不要加入服务名、变量或项目详情。
+
+## 2026-06-10 1.0.0 发布准备
+
+- `ServicePilot\ServicePilot.csproj` 已设置公开版本 `1.0.0`，并禁用把 Git SourceRevision 追加到 `InformationalVersion`，所以 `ServicePilot.exe version` 应输出 `ServicePilot 1.0.0`。
+- `ServiceCommandProcessor` 新增 `version` / `--version` / `-v`，用于 AI、脚本和用户快速确认当前 exe 版本。
+- README / README-en 首页新增 linux.do 支持致谢、内置通用模板说明，以及可直接复制给 AI 的提示语；完整细节仍放在用户指南中。
+- CHANGELOG 和 `docs/release-notes-v1.0.0*.md` 已改为 `1.0.0` 正式发布口径。
+- 本次验证中发现 `dist\ServicePilot.exe` 正在运行并锁定正式 dist，因此使用 `dist-staged\ServicePilot.exe` 生成 GitHub Release 资产，避免强制关闭用户正在运行的托盘实例。
+- 已验证：`rtk dotnet build ServicePilot.sln`、隔离配置下 Debug/Release `version` 输出 `ServicePilot 1.0.0`、`dist-staged\ServicePilot.exe ai-help` 退出码 `0`、`dist-staged\ServicePilot.exe doctor --json` 空配置通过。
+
+## 2026-06-10 API 数据库 fallback 和启动日志关闭
+
+- 已修改真实 `%APPDATA%\ServicePilot\config.json`，修改前备份为 `config.json.bak-20260610151358-api-db-fallback-startup-log-off`。
+- `leniu-tengyun` 服务和 `Java Maven API + 本地 core` 模板的 `修改数据库地址` 步骤已修复：优先修改 `leniu-yunshitang\src\main\resources\bootstrap-dev.yml`，如果源码文件不存在，则修改 `leniu-yunshitang\target\classes\bootstrap-dev.yml`。
+- 修改数据库脚本仍会自动给不带协议的值补 `jdbc:mysql://`，并要求至少修改 `system` 数据源下 master/slave 两处 `jdbcUrl`。
+- 已把所有服务和模板中 `RunOnStart=true` 的启动必需步骤 `OpenLogOnRun` 关掉，避免正常启动服务时自动弹出日志窗口。
+- 后续维护规则：手动 Git、依赖安装、构建、发布、doctor/check 等诊断类步骤可以弹日志；正常启动流程步骤默认不弹日志，除非用户明确要求。
 
 ## 后续有用检查
 

@@ -4,9 +4,9 @@
 
 ServicePilot has not been publicly released yet. Internal pre-launch hardening is not kept as user-facing change history.
 
-## 1.0.0 - To Be Released
+## 1.0.0 - 2026-06-10
 
-The first public release will include:
+The first public release includes:
 
 - Windows tray-first local development service management.
 - Large numeric tray icon showing the count of running/starting services.
@@ -17,6 +17,8 @@ The first public release will include:
 - Service preset variables and step variables.
 - Variable injection as `SERVICEPILOT_VARIABLE`, plus `{{variable}}` / `{{变量}}` replacement.
 - Full service templates without working directories.
+- Template import/export for sharing `.servicepilot-template.json` files.
+- Built-in general "Default developer actions" template with Git, npm, and common tool opener actions.
 - Live log window with search, copy selected, copy all, horizontal scrolling, and bounded history.
 - Windows Job Object process-group cleanup to reduce orphan npm/Vite child processes.
 - AI/script-friendly CLI with `ai-help`, JSON queries, service/template CRUD, step execution, and step-variable maintenance.
@@ -24,10 +26,3 @@ The first public release will include:
 - JSON output keeps Chinese text readable instead of escaping it by default.
 - Configuration stored in `%APPDATA%/ServicePilot/config.json`.
 - Variable last-use cache stored in `%APPDATA%/ServicePilot/variable-usage-cache.json`.
-
-Pre-release validation still needs:
-
-- More real-world development service start/stop/restart testing.
-- Release package and GitHub Release download flow.
-- README screenshots and release notes.
-- Chinese and English screenshots prepared from `docs/screenshot-guide.md`.

@@ -12,10 +12,13 @@ Initial public release baseline.
 - Multi-step script configuration with Batch, PowerShell, Python, and Node.js.
 - Startup steps and manual-only steps, with service preset variables and step variables.
 - Full service templates that reuse name, description, steps, and variables while preserving the target working directory.
+- Templates can be exported/imported as `.servicepilot-template.json` files for sharing.
+- Built-in general "Default developer actions" template with Git, npm, and common tool opener actions.
 - Log window with search, selected-copy, copy-all, horizontal scrolling, and bounded history.
 - JSON-friendly CLI with `ai-help` and `doctor --json` for AI agents and automation scripts.
 - Windows Job Object cleanup to reduce orphan npm/Vite child processes and port leaks.
 - JSON configuration persisted to `%APPDATA%`.
+- Release package is a self-contained single-file `ServicePilot.exe`.
 
 ## Download
 
@@ -24,4 +27,4 @@ Initial public release baseline.
 ## Requirements
 
 - Windows
-- .NET 8.0 runtime, or download the self-contained executable.
+- No separate .NET runtime install is required when downloading `ServicePilot.exe`.

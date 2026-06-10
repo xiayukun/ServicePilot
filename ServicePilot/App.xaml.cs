@@ -600,23 +600,13 @@ public partial class App : Application
             return "ServicePilot: 0 running";
 
         var total = _mainViewModel.Services.Count;
-        var active = _mainViewModel.Services
-            .Where(s => s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
-                        s.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running))
-            .ToList();
+        var activeCount = GetActiveProcessCount();
         var failed = _mainViewModel.Services.Count(s => s.RuntimeState.State is ProcessState.Error or ProcessState.StartFailed);
 
-        if (active.Count == 0)
+        if (activeCount == 0)
             return LocalizationService.Current.F("TrayStatusEmpty", total, failed);
 
-        var details = active.Select(s =>
-        {
-            var variable = s.RuntimeState.ActiveVariable;
-            var suffix = string.IsNullOrWhiteSpace(variable) ? "" : $" [{variable}]";
-            return $"{s.Name}{suffix}";
-        });
-
-        return LocalizationService.Current.F("TrayStatusActive", GetActiveProcessCount(), total, failed, string.Join(", ", details));
+        return LocalizationService.Current.F("TrayStatusActive", activeCount, total, failed);
     }
 
     private void UpdateTrayIconBadge()

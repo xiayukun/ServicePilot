@@ -48,6 +48,8 @@
             <Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click"/>
             <Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click"/>
             <Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,6,0" Click="Delete_Click"/>
+            <Button x:Name="ExportButton" Content="导出" Width="76" Height="28" Margin="0,0,6,0" Click="Export_Click"/>
+            <Button x:Name="ImportButton" Content="导入" Width="76" Height="28" Margin="0,0,6,0" Click="Import_Click"/>
         </WrapPanel>
 
         <DataGrid x:Name="TemplatesGrid" Grid.Row="1"

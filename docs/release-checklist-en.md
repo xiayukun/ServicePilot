@@ -7,8 +7,10 @@
 Exit any running `dist\ServicePilot.exe` before publishing to `dist`. Use `dist-staged` when you only need to validate the publish command.
 
 ```powershell
-dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o .\dist
+dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
 ```
+
+The `Release` configuration in `ServicePilot.csproj` defaults to `win-x64`, self-contained, compressed single-file publish; `dist` should contain only `ServicePilot.exe`.
 
 Expected artifact:
 

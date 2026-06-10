@@ -7,8 +7,10 @@ English: [release-checklist-en.md](release-checklist-en.md)
 发布到 `dist` 前先退出正在运行的 `dist\ServicePilot.exe`。如果只是验证发布命令，可以输出到 `dist-staged`。
 
 ```powershell
-dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o .\dist
+dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
 ```
+
+`ServicePilot.csproj` 的 `Release` 配置默认使用 `win-x64`、自包含、单文件、压缩发布；`dist` 应只保留 `ServicePilot.exe`。
 
 预期制品：
 

@@ -63,6 +63,8 @@ Applying a template replaces the target service steps and preset variables while
 
 On first tray startup, ServicePilot creates an editable default developer-action template for common actions such as opening tools, Git operations, dependency installation, and startup commands. The current default template includes Git pull, safe/force branch checkout, safe/force tag checkout, npm install/build, and openers for Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman. If the user deletes it, ServicePilot does not recreate it on every launch.
 
+The template manager supports `Export` and `Import`. Exported templates are regular JSON files with the default `.servicepilot-template.json` extension and can be shared with others. Import regenerates template and step ids; if a local template already has the same name, ServicePilot appends a suffix instead of overwriting the existing template.
+
 ## Log Window
 
 The log window supports:
@@ -95,6 +97,7 @@ Common commands:
 
 ```powershell
 ServicePilot.exe help
+ServicePilot.exe version
 ServicePilot.exe ai-help
 ServicePilot.exe config-path
 ServicePilot.exe doctor [--json]
@@ -114,6 +117,8 @@ ServicePilot.exe step variable-remove SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-clear SERVICE STEP
 
 ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
+ServicePilot.exe template export TEMPLATE --file FILE
+ServicePilot.exe template import --file FILE
 ServicePilot.exe template step-variables TEMPLATE STEP [--json]
 ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
@@ -154,6 +159,8 @@ ServicePilot.exe service add `
 
 ServicePilot.exe template save-from-service --service "Frontend" --name "Vite Frontend"
 ServicePilot.exe template apply "Vite Frontend" --service "Another Frontend"
+ServicePilot.exe template export "Vite Frontend" --file ".\vite-frontend.servicepilot-template.json"
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json"
 ```
 
 ## Configuration And Isolated Tests

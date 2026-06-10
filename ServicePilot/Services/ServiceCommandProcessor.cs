@@ -1,4 +1,5 @@
 using System.IO;
+using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -55,6 +56,7 @@ public class ServiceCommandProcessor
         return command switch
         {
             "help" or "-h" or "--help" => Help(),
+            "version" or "--version" or "-v" => Version(),
             "ai-help" or "agent-help" => AiHelp(),
             "config-path" => CommandResponse.Ok(_configService.PathToConfig),
             "doctor" or "check" => Doctor(rest),
@@ -84,6 +86,7 @@ public class ServiceCommandProcessor
 
         Usage:
           ServicePilot.exe help
+          ServicePilot.exe version
           ServicePilot.exe ai-help
           ServicePilot.exe config-path
           ServicePilot.exe doctor [--json]
@@ -103,6 +106,8 @@ public class ServiceCommandProcessor
           ServicePilot.exe step variable-clear SERVICE STEP
 
           ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
+          ServicePilot.exe template export TEMPLATE --file FILE
+          ServicePilot.exe template import --file FILE
           ServicePilot.exe template step-variables TEMPLATE STEP [--json]
           ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
           ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
@@ -168,6 +173,8 @@ public class ServiceCommandProcessor
           ServicePilot.exe service edit "Frontend" --preset "http://localhost:9000" --preset "https://example.test/api"
           ServicePilot.exe template save-from-service --service "Frontend" --name "Vite Frontend"
           ServicePilot.exe template apply "Vite Frontend" --service "Frontend"
+          ServicePilot.exe template export "Vite Frontend" --file ".\vite-frontend.servicepilot-template.json"
+          ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json"
 
         机器可读优先:
           list --json
@@ -179,6 +186,17 @@ public class ServiceCommandProcessor
           template list --json
           template get TEMPLATE --json
         """);
+
+    private static CommandResponse Version()
+    {
+        var version = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+        if (string.IsNullOrWhiteSpace(version))
+            version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown";
+
+        return CommandResponse.Ok($"ServicePilot {version}");
+    }
 
     private CommandResponse Doctor(string[] args)
     {
@@ -808,16 +826,18 @@ public class ServiceCommandProcessor
                 "get" => TemplateGet(rest),
                 "add" => await TemplateAddAsync(rest),
                 "edit" => await TemplateEditAsync(rest),
-                "remove" or "delete" => await TemplateRemoveAsync(rest),
-                "apply" => await TemplateApplyAsync(rest),
-                "save-from-service" => await TemplateSaveFromServiceAsync(rest),
-                "step-variables" or "step-variable-list" or "step-vars" => TemplateStepVariables(rest),
-                "step-variable-add" or "step-var-add" => await TemplateStepVariableAddAsync(rest),
-                "step-variable-remove" or "step-variable-delete" or "step-var-remove" or "step-var-delete" => await TemplateStepVariableRemoveAsync(rest),
-                "step-variable-clear" or "step-var-clear" => await TemplateStepVariableClearAsync(rest),
-                _ => CommandResponse.Error("未知模板命令。用法: template list|get|add|edit|remove|apply|save-from-service|step-variables|step-variable-add|step-variable-remove|step-variable-clear", 2)
-            };
-        }
+            "remove" or "delete" => await TemplateRemoveAsync(rest),
+            "apply" => await TemplateApplyAsync(rest),
+            "save-from-service" => await TemplateSaveFromServiceAsync(rest),
+            "export" => await TemplateExportAsync(rest),
+            "import" => await TemplateImportAsync(rest),
+            "step-variables" or "step-variable-list" or "step-vars" => TemplateStepVariables(rest),
+            "step-variable-add" or "step-var-add" => await TemplateStepVariableAddAsync(rest),
+            "step-variable-remove" or "step-variable-delete" or "step-var-remove" or "step-var-delete" => await TemplateStepVariableRemoveAsync(rest),
+            "step-variable-clear" or "step-var-clear" => await TemplateStepVariableClearAsync(rest),
+            _ => CommandResponse.Error("未知模板命令。用法: template list|get|add|edit|remove|apply|save-from-service|export|import|step-variables|step-variable-add|step-variable-remove|step-variable-clear", 2)
+        };
+    }
 
         var templateId = ReadOption(args, "--template") ?? "auto";
         var dir = ReadOption(args, "--dir") ?? ReadOption(args, "--working-directory");
@@ -971,6 +991,52 @@ public class ServiceCommandProcessor
         _appConfig.ServiceTemplates.Add(template);
         await _configService.SaveAsync(_appConfig);
         return CommandResponse.Ok($"已保存模板: {template.Name} ({template.Id})");
+    }
+
+    private async Task<CommandResponse> TemplateExportAsync(string[] args)
+    {
+        if (args.Length == 0)
+            return CommandResponse.Error("用法: template export TEMPLATE --file FILE", 2);
+
+        var templateSelector = args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
+        var file = ReadFileOption(args);
+        if (string.IsNullOrWhiteSpace(templateSelector) || string.IsNullOrWhiteSpace(file))
+            return CommandResponse.Error("用法: template export TEMPLATE --file FILE", 2);
+
+        var template = FindTemplate(templateSelector);
+        if (template == null)
+            return CommandResponse.Error($"找不到模板: {templateSelector}", 2);
+
+        try
+        {
+            await TemplateExchangeService.ExportAsync(template, file);
+            return CommandResponse.Ok($"已导出模板: {template.Name} -> {Path.GetFullPath(file)}");
+        }
+        catch (Exception ex)
+        {
+            return CommandResponse.Error($"模板导出失败: {ex.Message}", 2);
+        }
+    }
+
+    private async Task<CommandResponse> TemplateImportAsync(string[] args)
+    {
+        var file = ReadFileOption(args) ??
+                   args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(file))
+            return CommandResponse.Error("用法: template import --file FILE", 2);
+
+        try
+        {
+            var imported = await TemplateExchangeService.ImportAsync(file, _appConfig.ServiceTemplates);
+            _appConfig.ServiceTemplates.AddRange(imported);
+            await _configService.SaveAsync(_appConfig);
+            var names = string.Join(", ", imported.Select(template => template.Name));
+            return CommandResponse.Ok($"已导入 {imported.Count} 个模板: {names}");
+        }
+        catch (Exception ex)
+        {
+            return CommandResponse.Error($"模板导入失败: {ex.Message}", 2);
+        }
     }
 
     private CommandResponse TemplateStepVariables(string[] args)
@@ -1314,6 +1380,9 @@ public class ServiceCommandProcessor
 
     private static string? ReadVariable(IReadOnlyList<string> args) =>
         ReadOption(args, "--variable") ?? ReadOption(args, "--var");
+
+    private static string? ReadFileOption(IReadOnlyList<string> args) =>
+        ReadOption(args, "--file") ?? ReadOption(args, "--path") ?? ReadOption(args, "--out") ?? ReadOption(args, "-o");
 
     private static List<string> ReadPresets(IReadOnlyList<string> args) =>
         ReadOptions(args, "--preset")
