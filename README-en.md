@@ -10,8 +10,14 @@ Thanks to the linux.do community for the strong support.
 
 ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services**. It brings frontend apps, backend services, script steps, environment switching, and logs from multiple folders into one tray menu, with a CLI that AI agents and scripts can call safely.
 
-```text
 ServicePilot starts, monitors, and stops local development services from the Windows tray and CLI, so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
+
+**Drop this prompt into your AI agent: it will inspect state first, then generate services, templates, actions, and variables from facts.**
+
+**Copy this to your AI agent:**
+
+```text
+You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, doctor --json, list --json, and status all --json, then use the JSON output to understand existing services, steps, variables, and templates. When adding services or templates, prefer the built-in "Default developer actions" template where useful, or generate a project-specific multi-step service directly. Before deleting or overwriting configuration, state the exact target name.
 ```
 
 Anything the command line can do can usually become a ServicePilot step: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. ServicePilot includes a general built-in template, "Default developer actions", with Git branch/tag actions, npm install/build steps, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
@@ -31,12 +37,6 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 | AI command help |
 | --- |
 | ![AI command help](Assets/screenshots/ai-help-cli-zh.png) |
-
-## AI Prompt
-
-```text
-You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, doctor --json, list --json, and status all --json, then use the JSON output to understand existing services, steps, variables, and templates. When adding services or templates, prefer the built-in "Default developer actions" template where useful, or generate a project-specific multi-step service directly. Before deleting or overwriting configuration, state the exact target name.
-```
 
 ## Quick Start
 
