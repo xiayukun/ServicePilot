@@ -24,19 +24,15 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 
 **Download:** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [Latest release](https://github.com/xiayukun/ServicePilot/releases/latest) | [Full user guide](docs/user-guide-en.md)
 
-![ServicePilot service manager window](Assets/app-preview.png)
+![ServicePilot tray context menu](Assets/screenshots/tray-menu-zh.png)
 
-| Tray context menu | Service editor and script steps |
+| Service editor and script steps | Live log window |
 | --- | --- |
-| ![Tray context menu](Assets/screenshots/tray-menu-zh.png) | ![Service editor and script steps](Assets/screenshots/service-editor-zh.png) |
+| ![Service editor and script steps](Assets/screenshots/service-editor-zh.png) | ![Live log window](Assets/screenshots/log-window-zh.png) |
 
-| Live log window | CLI / AI status checks |
+| CLI / AI status checks | AI command help |
 | --- | --- |
-| ![Live log window](Assets/screenshots/log-window-zh.png) | ![CLI / AI status checks](Assets/screenshots/status-doctor-cli-zh.png) |
-
-| AI command help |
-| --- |
-| ![AI command help](Assets/screenshots/ai-help-cli-zh.png) |
+| ![CLI / AI status checks](Assets/screenshots/status-doctor-cli-zh.png) | ![AI command help](Assets/screenshots/ai-help-cli-zh.png) |
 
 ## Quick Start
 

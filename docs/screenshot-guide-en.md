@@ -41,7 +41,8 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 
 ## Current Organized Screenshots
 
-- `Assets/app-preview.png`: README hero image and GitHub preview image, currently using the user's new service manager screenshot.
+- The README hero currently uses `Assets/screenshots/tray-menu-zh.png` directly. Do not reference the outdated `Assets/app-preview.png` in the README.
+- `Assets/app-preview.png`: old GitHub preview image kept as a historical asset; regenerate it only when a new social preview is needed.
 - `Assets/screenshots/service-manager-overview-zh.png`: large service manager screenshot used as the hero source.
 - `Assets/screenshots/tray-menu-zh.png`: tray context menu.
 - `Assets/screenshots/service-manager-zh.png`: service manager window.

@@ -41,7 +41,8 @@
 
 ## 当前已整理截图
 
-- `Assets/app-preview.png`：README 主图和 GitHub 预览图，当前使用用户新截取的管理服务窗口。
+- README 首屏主图当前直接使用 `Assets/screenshots/tray-menu-zh.png`，不要再引用过时的 `Assets/app-preview.png`。
+- `Assets/app-preview.png`：旧 GitHub 预览图，保留作历史资源；后续需要社交预览时再重新生成。
 - `Assets/screenshots/service-manager-overview-zh.png`：管理服务窗口大图，作为主图源文件。
 - `Assets/screenshots/tray-menu-zh.png`：托盘右键主菜单。
 - `Assets/screenshots/service-manager-zh.png`：管理服务窗口。
