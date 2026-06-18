@@ -1,10 +1,10 @@
-﻿@C:\Users\11467\.codex\RTK.md
+Follow the local RTK command rules configured for this machine.
 
 --- project-doc ---
 
 # ServicePilot Agent Notes
 
-@C:\Users\11467\.codex\RTK.md
+Follow the local RTK command rules configured for this machine.
 
 ## Project State
 
@@ -14,17 +14,19 @@ Treat the codebase as actively hardening for public release. Inspect the current
 
 Current repository facts:
 
-- Workspace path: `C:\git\其他\ServicePilot`
+- Workspace path: current repository root on this machine.
 - Solution: `ServicePilot.sln`
 - App project: `ServicePilot\ServicePilot.csproj`
 - Main startup: `ServicePilot\App.xaml.cs`
-- Runtime config path: `%APPDATA%\ServicePilot\config.json`
+- Runtime config path: `%APPDATA%\ServicePilot\config.v2.json`
+- Legacy v1 config path: `%APPDATA%\ServicePilot\config.json` (read-only migration source; do not delete it).
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `1.0.0`.
+- Public release version: `2.0.0`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
 - `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
+- After every successful package/build that produces `ServicePilot.exe`, also follow the local private copy target documented in `LOCAL_NOTES.private.md` when that file exists. Do not copy the target path into committed docs.
 - This directory is currently a Git repository on branch `main`. Still check `git status` before edits because user screenshots/assets may be untracked.
 - Process-runner design references are summarized in `docs/process-runner-research.md` and `docs/process-runner-research-en.md`.
 - Competitive code research is summarized in `docs/competitive-research.md` and `docs/competitive-research-en.md`.
@@ -32,7 +34,7 @@ Current repository facts:
 - GitHub launch metadata is documented in `docs/github-launch-checklist.md`, `docs/github-launch-checklist-en.md`, `docs/repository-profile.md`, and `docs/repository-profile-en.md`.
 - Screenshot planning is documented in `docs/screenshot-guide.md` and `docs/screenshot-guide-en.md`.
 - The complete user guide lives in `docs/user-guide.md` and `docs/user-guide-en.md`; keep README concise and link to the guide for details.
-- The current user runtime config includes Java services/templates for `leniu-tengyun-core` and `leniu-tengyun`; both Java service/template definitions include Notepad opener steps for root `pom.xml`. The API service/template also includes a Notepad opener for `bootstrap-dev.yml` and a database-url mutation step that both use source-path-first and `target\classes` fallback lookup. These Java file-opener steps belong at the very end of the step list.
+- Machine-specific runtime service/template details belong in `LOCAL_NOTES.private.md` or the real runtime config, not in committed project docs.
 
 ## Required Workflow
 
@@ -82,15 +84,20 @@ Service model:
 
 - `ServiceConfig` stores persistent service definitions.
 - `ScriptStep` stores ordered script steps.
-- `ServiceConfig.PresetVariables` stores optional strings selectable at start/restart/step-run time.
+- ServicePilot 2.0 uses two step kinds: `Action` and `Composite`.
+- `Action` is a runnable command step with `ScriptType`, `Content`, `UseVariable`, `OpenLogOnRun`, and action-local `StepVariables`.
+- `Composite` is an ordered action workflow. It has no command content and stores member action ids in `MemberStepIds`.
+- A `Composite` cannot contain another `Composite`; editor save validation allows at most one `UseVariable=true` member action.
+- `start SERVICE` runs the first `Composite` by `Order`. `step run SERVICE STEP` can run either an `Action` or a `Composite`.
+- `ServiceConfig.PresetVariables` is legacy v1 data only. Do not add new service/template-level preset variable UI or behavior.
 - `ScriptStep.UseVariable` controls whether the selected service variable applies to that step. Old configs default to `true`; when `false`, the step does not receive `SERVICEPILOT_VARIABLE`, does not replace variable placeholders, and execute-step menus run it directly without a variable submenu.
-- `ScriptStep.RunOnStart` controls whether normal service startup runs the step. Old configs default to `true`; when `false`, the step is skipped during normal startup but remains manually runnable from execute-step menus.
+- `ScriptStep.RunOnStart` is legacy migration data only. Do not build new UI logic around startup/manual groups.
 - `ScriptStep.OpenLogOnRun` controls whether the service log window opens automatically when that step enters `Running`. It is optional and defaults to `false` for old configs.
 - Enable `OpenLogOnRun` for manual diagnostic/progress steps such as Git operations, dependency install, build/publish/package commands, Java/Maven/.NET/npm/Python checks, and CLI/doctor/check commands. Keep normal service startup steps (`RunOnStart=true`) off by default so starting a service does not automatically pop logs. Keep pure `打开：...` / `Open ...` tool-launcher steps off unless the user explicitly wants logs for them.
-- `ScriptStep.StepVariables` stores per-step variables for `RunOnStart=false` manual steps. Startup steps use `ServiceConfig.PresetVariables`; manual-only steps use their own `StepVariables`.
+- `ScriptStep.StepVariables` stores variables for that action. Composite variable menus are driven by the single variable-enabled member action.
 - `ScriptStep.Order` remains a zero-based persisted execution order. UI display is separate: startup steps are numbered from `1` within the `启动执行` group, while `不启动执行` steps show no number.
 - `PresetVariableUsageStore` stores last-use ordering in `variable-usage-cache.json` under the same directory as config. It tracks both preset/step variable ordering and recent service usage. It is a cache, not source-of-truth configuration.
-- `ServiceTemplate` stores a full service template except working directory: name, description, script steps, preset variables, and timestamps.
+- `ServiceTemplate` stores a full service template except working directory: name, description, v2 action/composite steps, and timestamps.
 - `AppConfig.ServiceTemplates` stores user-managed full service templates.
 - `TemplateExchangeService` exports/imports shareable `.servicepilot-template.json` files. Import creates fresh template/step ids and auto-renames duplicates instead of overwriting existing templates.
 - Applying a service template preserves the target service name when it is already non-empty. The template name is used only for an empty target name; steps and preset variables are still replaced.
@@ -111,7 +118,7 @@ Execution path:
 - `ProcessManager` owns runtime states and service lifecycle.
 - `App.RebuildTrayMenu` must read `ServiceRuntimeState.State` for live menu state; `ServiceItemViewModel.State` can lag by one dispatcher tick.
 - Executor cleanup in `ProcessManager` must only remove the executor/cancellation token instance it created, so short completed steps can be run again immediately without losing the new executor.
-- `ScriptExecutor` runs ordered steps whose `RunOnStart` is `true`, or a single selected step when `OnlyStepId` is set.
+- `ScriptExecutor` runs the selected `Composite` by resolving its ordered member `Action` steps, or a single selected `Action` when `OnlyStepId` is set.
 - `ScriptExecutor.StepStateChanged` updates step states: `NotRun`, `Running`, `Succeeded`, `Failed`, `Skipped`, and `Cancelled`.
 - `App.OnProcessStepStateChanged` rebuilds the tray menu and opens the log window for a step whose persisted `OpenLogOnRun` is `true`.
 - Single-step execution uses a separate runtime path and is allowed while the service is running unless that same step is already `Running`.
@@ -127,7 +134,7 @@ Execution path:
 - PowerShell temporary scripts must be written as UTF-8 with BOM because Windows PowerShell 5 reads UTF-8 without BOM as the local ANSI code page and can corrupt Chinese string literals into parse errors. Batch temporary scripts must remain UTF-8 without BOM because `cmd.exe` treats a BOM as part of the first command on this system.
 - Every launched process is assigned to a Windows Job Object configured with kill-on-close. This is required for `npm run dev` / Vite, whose final `node.exe` can outlive `cmd.exe`/`npm` and otherwise keep ports like 3000 open.
 - A step must exit with `0` before the next step runs.
-- Steps with `RunOnStart=false` are marked `Skipped` for a normal service startup and are grouped under `不启动执行` in execute-step menus.
+- Non-member actions are marked `Skipped` for a composite run.
 - Empty script steps are ignored at runtime for backward compatibility with older configs; the GUI prevents saving new empty steps.
 - Starting any main service step process marks the service as `Running`; a short service still becomes `Completed` after all selected steps exit successfully.
 - A final step that exits successfully becomes `Completed`; a failed final step becomes `StartFailed`.
@@ -141,8 +148,8 @@ Execution path:
 Tray and dialogs:
 
 - Tray menu is built in `App.RebuildTrayMenu`.
-- Per-service tray submenu includes start, execute step, stop, restart, view logs, edit, delete, and save as template.
-- Start and restart become variable submenus when the service has preset variables. Without variables they are direct actions.
+- Per-service tray submenu is flat: each `Composite` and `Action` is shown as an operation, followed by stop, view logs, edit, delete, and save as template.
+- A `Composite` shows a variable submenu only when one of its member actions uses variables. An `Action` shows a variable submenu when `UseVariable=true`.
 - Variable submenus are sorted by `PresetVariableUsageStore`; selecting an existing variable records usage but does not reorder `ServiceConfig.PresetVariables`.
 - Variable submenus end with `新增`. The dialog defaults to the most recently used variable, saves a new variable into the service if needed, records usage, and immediately executes the selected action.
 - The tray service list is sorted by recent service usage first, then by persisted `SortOrder`/name. Starting, stopping, restarting, running a step, viewing logs, editing, deleting, saving as template, and equivalent tray-routed CLI actions should call `PresetVariableUsageStore.RememberService`.
@@ -150,21 +157,23 @@ Tray and dialogs:
 - CLI `step run SERVICE STEP --variable VALUE` records variable usage against the service for startup steps and against the step id for manual-only steps.
 - Template step variables are also CLI-manageable via `template step-variables`, `template step-variable-add`, `template step-variable-remove`, and `template step-variable-clear`.
 - Tray service menus and execute-step menus should not prefix every item with verbose state text. Use colored status dots only for attention-worthy states: green for running/starting, red for failed/error, orange for stopping/cancelled. Stopped/not-run/succeeded items normally have no dot; detailed state can remain in tooltip text.
-- Execute step menus group steps into `启动执行` and `不启动执行`. Startup steps use service preset variables; manual-only steps use `ScriptStep.StepVariables` and the usage-cache key is the step id. Manual-only steps with `UseVariable=true` still show a variable submenu with `新增` even when the step variable list is empty. Steps with `UseVariable=false` run directly. A step with `Running` state is disabled, but other steps remain executable even while the service is running.
-- Service add/edit dialog: `Views\ServiceConfigDialog.xaml(.cs)`. It supports applying one full service template, saving an edited service draft as a template, editing steps, and editing preset variables.
-- Service and template step editors include `使用变量`, `启动执行`, and `弹出日志` checkboxes next to script type. The left variable box shows service `预设变量` for startup steps and switches to per-step `手动执行变量` for manual-only steps.
+- Operation menus no longer group `启动执行` / `不启动执行`. They list `Composite` and `Action` entries directly. A running action is disabled; other actions remain executable when safe.
+- Service add/edit dialog: `Views\ServiceConfigDialog.xaml(.cs)`. It supports applying one full service template, saving an edited service draft as a template, editing actions, and editing action variables.
+- Service and template action editors display localized action kind labels (`动作` / `组合动作` in Chinese, `Action` / `Composite` in English). Do not show raw enum names in user-facing action-kind controls.
 - Service manager: `Views\ServiceManagerWindow.xaml(.cs)` supports service add/edit/delete/start/execute-step/stop/restart/logs/save-as-template. Start/restart use variable menus when presets exist. Its service grid binds to a sorted snapshot from `PresetVariableUsageStore.SortServices`, so the most recently used service is shown at the top without mutating `ServiceConfig.SortOrder`.
 - `ServiceManagerWindow` buttons must be enabled from the selected row's live `RuntimeState`: start only for stopped/error/start-failed/completed, stop for running/starting/stopping or running steps, and restart except while starting/stopping.
 - WPF `MenuItem.Header` treats underscores as access-key markers. When displaying user data such as variables or step labels in service manager or log-window context menus, wrap the string in a `TextBlock` rather than assigning it directly as `Header`.
 - Template manager: `Views\TemplateManagerWindow.xaml(.cs)` supports full service template CRUD plus import/export of shareable template JSON files.
 - Template editor: `Views\ServiceTemplateDialog.xaml(.cs)`.
-- Log window: `Views\LogWindow.xaml(.cs)` receives a `ServiceItemViewModel`, `ProcessManager`, `PresetVariableUsageStore`, preset-variable save callback, step-variable save callback, and service edit callback. It offers variable-aware start, execute-step, and restart controls, edit, stop, bounded in-memory logs, search, copy, and horizontal scrolling for long lines. It subscribes to service/step state changes and must disable Start while the service is running/starting or any step is running. Opening a log window must use `LoadLogs()` for buffered history and throttled auto-scroll; do not replay cached logs by calling `AddLog()` in a loop.
+- Log window: `Views\LogWindow.xaml(.cs)` receives a `ServiceItemViewModel`, `ProcessManager`, `PresetVariableUsageStore`, action-variable save callback, and service edit callback. It offers variable-aware action/composite execution, stop, edit, bounded in-memory logs, search, copy, and horizontal scrolling for long lines. It intentionally has no separate Start button; the `运行动作` / `Run action` menu is the single execution entrypoint.
+- Log window tabs are created lazily. Do not create default `全部` / `All` or default `服务` / `Service` tabs. When an action enters `Running`, the log window should activate that action's tab even if the tab already exists. Continuous output alone must not steal the user's active tab. System logs without an action name may create the service tab only when such logs actually exist.
 - Log window title text should be clipped with ellipsis and must never push action buttons off-screen. Service names are user data and less important than keeping controls clickable.
-- Log buffers are capped at 20,000 entries in both `App.OnServiceOutput` and `LogWindow`; keep any future increase bounded.
+- App log buffers are capped at 20,000 entries, while each visible log-window tab renders at most 5,000 recent entries and batches high-frequency output before refreshing AvalonEdit. Keep future increases bounded and preserve batched rendering so webpack/Vite-style progress logs cannot freeze the UI. In the log window, non-error `[webpack.Progress] NN% ...` lines are coalesced into one visible progress line with a text progress bar; this is display-layer compaction only and must not remove raw logs from CLI/buffer data.
 - `Views\PresetVariableInputDialog.xaml(.cs)` is the small input dialog used by tray and service manager variable `新增`.
 - Log window action buttons use `LogActionButtonStyle`; disabled button foreground must stay black for readability against WPF's disabled button background.
 - Runtime/system failure logs trigger a throttled tray balloon from `App.OnServiceOutput`. Do not notify on every stderr line; notify on final/system failures so retry noise does not spam the user.
 - UI text that appears in tray menus, WPF management windows, log windows, template windows, and variable dialogs should use `LocalizationService.Current` rather than hard-coded Chinese/English. User data such as service names, step names, variables, and script content must not be translated.
+- User-facing Chinese UI and docs should say `动作`, not the old Chinese term. Internal code symbols such as `ScriptStep`, `StepVariables`, and `step run` remain for compatibility and serialization, but visible Chinese text must use the action terminology.
 
 Command-line / AI control:
 
@@ -184,13 +193,13 @@ ServicePilot.exe config-path
 ServicePilot.exe doctor [--json]
 ServicePilot.exe list [--json]
 ServicePilot.exe status [all|SERVICE] [--json]
-ServicePilot.exe start SERVICE [--variable VALUE]
+ServicePilot.exe start SERVICE [--variable VALUE]          # runs the first Composite
 ServicePilot.exe stop all|SERVICE
 ServicePilot.exe restart all|SERVICE [--variable VALUE]
 ServicePilot.exe logs SERVICE [--tail N] [--json]
 ServicePilot.exe service list|get|add|edit|remove|start|stop|restart|logs ...
 ServicePilot.exe step list SERVICE [--json]
-ServicePilot.exe step run SERVICE STEP [--variable VALUE]
+ServicePilot.exe step run SERVICE ACTION_OR_COMPOSITE [--variable VALUE]
 ServicePilot.exe step variables SERVICE STEP [--json]
 ServicePilot.exe step variable-add SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-remove SERVICE STEP --variable VALUE

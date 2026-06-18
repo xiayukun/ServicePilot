@@ -113,7 +113,11 @@ public class ProcessManager : IDisposable
             if (state.State == ProcessState.Running || state.State == ProcessState.Starting)
                 return true;
 
-            ResetStepStatesForRun(state, startOptions.Variable);
+            var composite = ScriptDefinitionService.ResolveComposite(state.Config, startOptions.CompositeStepId);
+            var memberIds = composite != null
+                ? ScriptDefinitionService.ResolveCompositeMembers(state.Config, composite).Select(s => s.Id).ToHashSet()
+                : new HashSet<Guid>();
+            ResetStepStatesForRun(state, memberIds, startOptions.Variable);
         }
 
         var runtimeState = state ?? throw new InvalidOperationException("Service state was not loaded.");
@@ -232,6 +236,9 @@ public class ProcessManager : IDisposable
             });
         }
     }
+
+    public bool RunComposite(Guid serviceId, Guid compositeStepId, string? variable = null) =>
+        StartService(serviceId, new ServiceStartOptions { CompositeStepId = compositeStepId, Variable = variable });
 
     public async Task RestartServiceAsync(Guid serviceId, ServiceStartOptions? options = null)
     {
@@ -507,17 +514,20 @@ public class ProcessManager : IDisposable
         }
     }
 
-    private static void ResetStepStatesForRun(ServiceRuntimeState state, string? variable)
+    private static void ResetStepStatesForRun(ServiceRuntimeState state, HashSet<Guid> memberIds, string? variable)
     {
         EnsureStepStates(state);
         foreach (var step in state.Config.ScriptSteps)
         {
+            var isMember = memberIds.Contains(step.Id) &&
+                           step.Kind == StepKind.Action &&
+                           !string.IsNullOrWhiteSpace(step.Content);
             state.StepStates[step.Id] = new StepRuntimeState
             {
                 StepId = step.Id,
                 StepName = step.Name,
-                State = string.IsNullOrWhiteSpace(step.Content) || !step.RunOnStart ? StepRunState.Skipped : StepRunState.NotRun,
-                ActiveVariable = string.IsNullOrWhiteSpace(step.Content) || !step.RunOnStart || !step.UseVariable ? null : variable
+                State = isMember ? StepRunState.NotRun : StepRunState.Skipped,
+                ActiveVariable = isMember && step.UseVariable ? variable : null
             };
         }
     }

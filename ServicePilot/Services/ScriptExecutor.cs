@@ -26,26 +26,19 @@ public class ScriptExecutor : IDisposable
     public async Task RunAsync()
     {
         var allSteps = _config.ScriptSteps.OrderBy(s => s.Order).ToList();
-        foreach (var skipped in allSteps.Where(s => string.IsNullOrWhiteSpace(s.Content)))
+
+        var composite = ScriptDefinitionService.ResolveComposite(_config, _options.CompositeStepId);
+        var steps = composite != null
+            ? ScriptDefinitionService.ResolveCompositeMembers(_config, composite)
+            : new List<ScriptStep>();
+
+        var memberIds = steps.Select(s => s.Id).ToHashSet();
+        foreach (var skipped in allSteps.Where(s => !memberIds.Contains(s.Id)))
             PublishStepState(skipped, StepRunState.Skipped);
-        if (!_options.OnlyStepId.HasValue)
-        {
-            foreach (var skipped in allSteps.Where(s => !string.IsNullOrWhiteSpace(s.Content) && !s.RunOnStart))
-                PublishStepState(skipped, StepRunState.Skipped);
-        }
-
-        var steps = allSteps
-            .Where(s => !string.IsNullOrWhiteSpace(s.Content))
-            .ToList();
-
-        if (_options.OnlyStepId.HasValue)
-            steps = steps.Where(s => s.Id == _options.OnlyStepId.Value).ToList();
-        else
-            steps = steps.Where(s => s.RunOnStart).ToList();
 
         if (steps.Count == 0)
         {
-            OutputReceived?.Invoke(new LogEntry(LogLevel.Warning, "服务没有可执行的脚本步骤。", "system"));
+            OutputReceived?.Invoke(new LogEntry(LogLevel.Warning, "组合动作没有可执行的成员动作。", "system"));
             StateChanged?.Invoke(ProcessState.Completed);
             return;
         }
@@ -86,9 +79,9 @@ public class ScriptExecutor : IDisposable
     {
         var step = _config.ScriptSteps.FirstOrDefault(s => s.Id == stepId);
         if (step == null)
-            throw new InvalidOperationException("找不到脚本步骤。");
+            throw new InvalidOperationException("找不到脚本动作。");
         if (string.IsNullOrWhiteSpace(step.Content))
-            throw new InvalidOperationException("脚本步骤没有内容。");
+            throw new InvalidOperationException("脚本动作没有内容。");
 
         _currentStep = step;
         PublishStepState(step, StepRunState.Running, variable: GetStepVariable(step, variable));
@@ -118,7 +111,7 @@ public class ScriptExecutor : IDisposable
             var runnableStep = ScriptDefinitionService.CreateRunnableStep(step, effectiveVariable);
             OutputReceived?.Invoke(new LogEntry(
                 LogLevel.System,
-                $"--- 步骤 {index + 1}/{total}: {runnableStep.Name} ---",
+                $"--- 动作 {index + 1}/{total}: {runnableStep.Name} ---",
                 "system",
                 runnableStep.Name));
 

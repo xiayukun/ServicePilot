@@ -21,7 +21,7 @@
 ## 本地 Git 设置
 
 ```powershell
-git config user.name "xiayukun"
+git config user.name "你的_GITHUB_用户名"
 git config user.email "你的_GITHUB_邮箱"
 ```
 
@@ -36,7 +36,7 @@ git commit -m "Initial public release"
 ## 连接远程
 
 ```powershell
-git remote add origin https://github.com/xiayukun/ServicePilot.git
+git remote add origin https://github.com/<owner>/ServicePilot.git
 git branch -M main
 git push -u origin main
 ```

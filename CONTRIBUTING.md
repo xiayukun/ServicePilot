@@ -1,4 +1,4 @@
-﻿# 参与贡献
+# 参与贡献
 
 English: [CONTRIBUTING-en.md](CONTRIBUTING-en.md)
 
@@ -27,4 +27,4 @@ dotnet build .\ServicePilot\ServicePilot.csproj -c Release
 
 ## 安全规则
 
-脚本执行通过配置的脚本引擎运行用户提供的命令。程序不应在用户配置的步骤之外执行任意命令。
+脚本执行通过配置的脚本引擎运行用户提供的命令。程序不应在用户配置的动作之外执行任意命令。

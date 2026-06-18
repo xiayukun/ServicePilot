@@ -49,22 +49,24 @@ ServicePilot.exe step list "Frontend" --json
 ServicePilot.exe logs "Frontend" --tail 200 --json
 ```
 
-`step list --json` returns persisted order, display order, `UseVariable`, `RunOnStart`, `StepVariables`, and runtime step state.
+`step list --json` returns persisted order, `Kind`, `MemberStepIds`, `UseVariable`, `StepVariables`, and runtime step state.
+The GUI log window groups output by action tabs, but CLI `logs` currently returns the raw service log stream. For AI-heavy workflows, a future improvement should add an action-name filter to `logs`.
 
 ## Lifecycle Commands
 
 ```powershell
 ServicePilot.exe start "Frontend" --variable "http://localhost:9000"
 ServicePilot.exe restart "Frontend" --variable "http://localhost:9000"
+ServicePilot.exe step run "Frontend" "Start" --variable "http://localhost:9000"
 ServicePilot.exe step run "Frontend" "Set API URL" --variable "http://localhost:9000"
 ServicePilot.exe stop "Frontend"
 ```
 
-When a step has `UseVariable` enabled, the selected value is injected as `SERVICEPILOT_VARIABLE` and replaces `{{variable}}` / `{{变量}}`.
+When an Action has `UseVariable` enabled, the selected value is injected as `SERVICEPILOT_VARIABLE` and replaces `{{variable}}` / `{{变量}}`. A Composite passes the selected value to its variable-enabled member Action.
 
 ## Step Variables
 
-Startup steps use service preset variables. Manual-only steps can own step variables.
+Variables live on Actions as `StepVariables`. Service-level preset variables are legacy migration data only.
 
 ```powershell
 ServicePilot.exe step variables "Frontend" "Set API URL" --json
@@ -79,15 +81,16 @@ ServicePilot.exe step variable-clear "Frontend" "Set API URL"
 ServicePilot.exe service add `
   --name "Frontend" `
   --dir "D:\projects\frontend" `
-  --step "Set API|PowerShell|true|true|$p='src/store/index.js'; (Get-Content $p) -replace 'http://.*?/api', '{{variable}}' | Set-Content $p" `
-  --step "Start dev server|Batch|false|true|npm run dev" `
-  --preset "http://localhost:9000" `
-  --preset "https://test.example.com/api"
+  --step "Set API|PowerShell|true|$p='src/store/index.js'; (Get-Content $p) -replace 'http://.*?/api', '{{variable}}' | Set-Content $p" `
+  --step "Start dev server|Batch|false|npm run dev"
+
+ServicePilot.exe step variable-add "Frontend" "Set API" --variable "http://localhost:9000"
+ServicePilot.exe step variable-add "Frontend" "Set API" --variable "https://test.example.com/api"
 ```
 
 ## Templates
 
-Templates are complete service definitions without a working directory. They include name, description, steps, and variables.
+Templates are complete service definitions without a working directory. They include name, description, Actions, Composites, and Action variables.
 
 ```powershell
 ServicePilot.exe template save-from-service --service "Frontend" --name "Vite Frontend"

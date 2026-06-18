@@ -47,10 +47,8 @@
             <Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click"/>
             <Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click"/>
             <Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,14,0" Click="Delete_Click"/>
-            <Button x:Name="StartButton" Content="启动" Width="76" Height="28" Margin="0,0,6,0" Click="Start_Click"/>
-            <Button x:Name="RunStepButton" Content="执行步骤" Width="92" Height="28" Margin="0,0,6,0" Click="RunStep_Click"/>
+            <Button x:Name="RunActionButton" Content="运行动作" Width="92" Height="28" Margin="0,0,6,0" Click="RunAction_Click"/>
             <Button x:Name="StopButton" Content="停止" Width="76" Height="28" Margin="0,0,6,0" Click="Stop_Click"/>
-            <Button x:Name="RestartButton" Content="重启" Width="76" Height="28" Margin="0,0,6,0" Click="Restart_Click"/>
             <Button x:Name="LogsButton" Content="查看日志" Width="86" Height="28" Margin="0,0,14,0" Click="Logs_Click"/>
             <Button x:Name="SaveTemplateButton" Content="存为模板" Width="116" Height="28" Margin="0,0,6,0" Click="SaveTemplate_Click"/>
         </WrapPanel>
@@ -76,8 +74,7 @@
                 <DataGridTextColumn x:Name="StatusColumn" Header="状态" Binding="{Binding StatusText}" Width="100"/>
                 <DataGridTextColumn x:Name="NameColumn" Header="名称" Binding="{Binding Name}" Width="160"/>
                 <DataGridTextColumn x:Name="WorkingDirectoryColumn" Header="工作目录" Binding="{Binding Config.WorkingDirectory}" Width="*"/>
-                <DataGridTextColumn x:Name="StepsColumn" Header="步骤" Binding="{Binding Config.ScriptSteps.Count}" Width="70"/>
-                <DataGridTextColumn x:Name="VariablesColumn" Header="变量" Binding="{Binding Config.PresetVariables.Count}" Width="70"/>
+                <DataGridTextColumn x:Name="StepsColumn" Header="动作" Binding="{Binding Config.ScriptSteps.Count}" Width="70"/>
                 <DataGridCheckBoxColumn x:Name="AutoStartColumn" Header="自启" Binding="{Binding Config.AutoStart}" Width="70"/>
             </DataGrid.Columns>
         </DataGrid>

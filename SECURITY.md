@@ -1,4 +1,4 @@
-﻿# 安全策略
+# 安全策略
 
 English: [SECURITY-en.md](SECURITY-en.md)
 
@@ -16,7 +16,7 @@ ServicePilot 管理进程执行和脚本运行，欢迎提交安全报告。
 
 - Windows 版本
 - ServicePilot 版本
-- 复现步骤
+- 复现动作
 - 使用的是图形界面还是托盘菜单
 
 ## 安全预期

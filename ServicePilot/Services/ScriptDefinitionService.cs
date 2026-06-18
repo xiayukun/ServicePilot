@@ -12,12 +12,13 @@ public static class ScriptDefinitionService
         {
             Id = Guid.NewGuid(),
             Name = source.Name,
+            Kind = source.Kind,
             ScriptType = source.ScriptType,
             UseVariable = source.UseVariable,
-            RunOnStart = source.RunOnStart,
             OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
+            MemberStepIds = source.MemberStepIds.ToList(),
             Order = source.Order
         };
     }
@@ -40,22 +41,46 @@ public static class ScriptDefinitionService
         };
     }
 
+    /// <summary>
+    /// Clones an ordered set of steps with brand-new ids, remapping composite member references
+    /// so composite actions keep pointing at the right cloned member actions.
+    /// </summary>
+    public static List<ScriptStep> CloneStepsWithNewIds(IEnumerable<ScriptStep> steps)
+    {
+        var ordered = steps.OrderBy(s => s.Order).ToList();
+        var idMap = new Dictionary<Guid, Guid>();
+        var clones = new List<ScriptStep>();
+
+        foreach (var source in ordered)
+        {
+            var clone = CloneStep(source);
+            idMap[source.Id] = clone.Id;
+            clones.Add(clone);
+        }
+
+        for (var i = 0; i < clones.Count; i++)
+        {
+            var clone = clones[i];
+            clone.Order = i;
+            if (clone.Kind == StepKind.Composite)
+            {
+                clone.MemberStepIds = clone.MemberStepIds
+                    .Where(idMap.ContainsKey)
+                    .Select(id => idMap[id])
+                    .ToList();
+            }
+        }
+
+        return clones;
+    }
+
     public static ServiceTemplate CreateTemplateFromService(ServiceConfig service, string name, string description)
     {
         return new ServiceTemplate
         {
             Name = name,
             Description = description,
-            PresetVariables = service.PresetVariables.ToList(),
-            ScriptSteps = service.ScriptSteps
-                .OrderBy(s => s.Order)
-                .Select(CloneStep)
-                .Select((step, index) =>
-                {
-                    step.Order = index;
-                    return step;
-                })
-                .ToList()
+            ScriptSteps = CloneStepsWithNewIds(service.ScriptSteps)
         };
     }
 
@@ -70,18 +95,44 @@ public static class ScriptDefinitionService
             AutoStart = target.AutoStart,
             SortOrder = target.SortOrder,
             CreatedAt = createdAt,
-            PresetVariables = template.PresetVariables.ToList(),
-            ScriptSteps = template.ScriptSteps
-                .OrderBy(s => s.Order)
-                .Select(CloneStep)
-                .Select((step, index) =>
-                {
-                    step.Order = index;
-                    return step;
-                })
-                .ToList()
+            ScriptSteps = CloneStepsWithNewIds(template.ScriptSteps)
         };
     }
+
+    /// <summary>
+    /// Resolves which composite action to run: the one matching <paramref name="compositeId"/>,
+    /// or the first composite action (by order) when no id is supplied.
+    /// </summary>
+    public static ScriptStep? ResolveComposite(ServiceConfig config, Guid? compositeId)
+    {
+        var composites = config.ScriptSteps
+            .Where(s => s.Kind == StepKind.Composite)
+            .OrderBy(s => s.Order)
+            .ToList();
+
+        if (compositeId.HasValue)
+            return composites.FirstOrDefault(s => s.Id == compositeId.Value);
+
+        return composites.FirstOrDefault();
+    }
+
+    /// <summary>Resolves the ordered runnable member actions of a composite action.</summary>
+    public static List<ScriptStep> ResolveCompositeMembers(ServiceConfig config, ScriptStep composite)
+    {
+        var byId = new Dictionary<Guid, ScriptStep>();
+        foreach (var step in config.ScriptSteps)
+            byId[step.Id] = step;
+
+        return composite.MemberStepIds
+            .Where(byId.ContainsKey)
+            .Select(id => byId[id])
+            .Where(s => s.Kind == StepKind.Action && !string.IsNullOrWhiteSpace(s.Content))
+            .ToList();
+    }
+
+    /// <summary>The single member action that carries variables, if any (used to drive variable menus).</summary>
+    public static ScriptStep? FindVariableMember(ServiceConfig config, ScriptStep composite) =>
+        ResolveCompositeMembers(config, composite).FirstOrDefault(s => s.UseVariable);
 
     public static ScriptStep CreateRunnableStep(ScriptStep source, string? variable)
     {

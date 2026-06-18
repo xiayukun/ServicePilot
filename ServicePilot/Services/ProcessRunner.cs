@@ -33,7 +33,7 @@ public class ProcessRunner : IDisposable
             throw new DirectoryNotFoundException($"工作目录不存在: {_workingDirectory}");
 
         if (string.IsNullOrWhiteSpace(_step.Content))
-            throw new InvalidOperationException($"脚本步骤没有内容: {_step.Name}");
+            throw new InvalidOperationException($"脚本动作没有内容: {_step.Name}");
 
         _tempFile = _step.ScriptType == ScriptType.Batch ? null : WriteTempScript(_step);
 

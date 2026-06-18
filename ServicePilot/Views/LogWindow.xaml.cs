@@ -1,8 +1,13 @@
 using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Rendering;
 using ServicePilot.Models;
 using ServicePilot.Services;
 using ServicePilot.ViewModels;
@@ -11,17 +16,29 @@ namespace ServicePilot.Views;
 
 public partial class LogWindow : Window
 {
-    private const int MaxLogEntries = 20000;
+    private const int MaxLogEntries = 5000;
+    private const string ServiceLogsKey = "__service__";
+    private static readonly Regex WebpackProgressRegex = new(
+        @"^(?<prefix>.*?\s*)?\[webpack\.Progress\]\s+(?<percent>\d{1,3})%\s+(?<rest>.*)$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly ServiceItemViewModel _service;
     private readonly ProcessManager _processManager;
     private readonly PresetVariableUsageStore _variableUsageStore;
-    private readonly Func<ServiceConfig, string?, bool, Task> _rememberPresetVariableAsync;
     private readonly Func<ServiceConfig, ScriptStep, string?, bool, Task> _rememberVariableForStepAsync;
     private readonly Func<ServiceItemViewModel, Window?, Task> _editServiceAsync;
     private readonly DispatcherTimer _scrollTimer;
-    private LogEntry? _pendingScrollEntry;
-    private int _lastSearchIndex = -1;
+    private readonly DispatcherTimer _renderTimer;
+    private readonly ObservableCollection<LogTabState> _logTabs = new();
+    private readonly Dictionary<string, LogTabState> _logTabsByKey = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _pendingLogLock = new();
+    private readonly List<LogEntry> _pendingCrossThreadLogs = new();
+    private bool _pendingCrossThreadDispatch;
+    private bool _activeTabDirty;
+    private bool _searchStatusDirty;
+    private bool _pendingAutoScroll;
+    private bool _logUiReady;
+    private int _lastSearchOffset = -1;
 
     public ObservableCollection<LogEntry> LogEntries { get; } = new();
 
@@ -29,23 +46,24 @@ public partial class LogWindow : Window
         ServiceItemViewModel service,
         ProcessManager processManager,
         PresetVariableUsageStore variableUsageStore,
-        Func<ServiceConfig, string?, bool, Task> rememberPresetVariableAsync,
         Func<ServiceConfig, ScriptStep, string?, bool, Task> rememberVariableForStepAsync,
         Func<ServiceItemViewModel, Window?, Task> editServiceAsync)
     {
         _service = service;
         _processManager = processManager;
         _variableUsageStore = variableUsageStore;
-        _rememberPresetVariableAsync = rememberPresetVariableAsync;
         _rememberVariableForStepAsync = rememberVariableForStepAsync;
         _editServiceAsync = editServiceAsync;
 
         InitializeComponent();
         DataContext = service;
+        LogEditor.Document ??= new TextDocument();
+        LogTabs.ItemsSource = _logTabs;
+        LogEditor.TextArea.TextView.LineTransformers.Add(new LogLineColorizer(LogEntries));
         ApplyLocalization();
         UpdateTitle();
-        LogList.ItemsSource = LogEntries;
         UpdateActionButtons();
+        _logUiReady = true;
 
         _scrollTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -54,13 +72,15 @@ public partial class LogWindow : Window
         _scrollTimer.Tick += (_, _) =>
         {
             _scrollTimer.Stop();
-            if (_pendingScrollEntry == null || AutoScrollCheck.IsChecked != true)
-                return;
-
-            var entry = _pendingScrollEntry;
-            _pendingScrollEntry = null;
-            LogList.ScrollIntoView(entry);
+            if (AutoScrollCheck.IsChecked == true && LogEntries.Count > 0)
+                LogEditor.ScrollToLine(LogEntries.Count);
         };
+
+        _renderTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(180)
+        };
+        _renderTimer.Tick += (_, _) => FlushLogRender();
 
         _processManager.ServiceStateChanged += OnServiceStateChanged;
         _processManager.StepStateChanged += OnStepStateChanged;
@@ -68,6 +88,7 @@ public partial class LogWindow : Window
         Closed += (_, _) =>
         {
             _scrollTimer.Stop();
+            _renderTimer.Stop();
             _processManager.ServiceStateChanged -= OnServiceStateChanged;
             _processManager.StepStateChanged -= OnStepStateChanged;
             LocalizationService.Current.LanguageChanged -= OnLanguageChanged;
@@ -86,10 +107,8 @@ public partial class LogWindow : Window
 
     private void ApplyLocalization()
     {
-        StartButton.Content = LocalizationService.Current.T("Start");
-        RunStepButton.Content = LocalizationService.Current.T("RunStep");
+        RunActionButton.Content = LocalizationService.Current.T("RunAction");
         StopButton.Content = LocalizationService.Current.T("Stop");
-        RestartButton.Content = LocalizationService.Current.T("Restart");
         SearchBox.ToolTip = LocalizationService.Current.T("SearchLogs");
         FindPreviousButton.Content = LocalizationService.Current.T("FindPrevious");
         FindNextButton.Content = LocalizationService.Current.T("FindNext");
@@ -98,6 +117,7 @@ public partial class LogWindow : Window
         ClearButton.Content = LocalizationService.Current.T("Clear");
         CopySelectedMenuItem.Header = LocalizationService.Current.T("CopySelected");
         CopyAllMenuItem.Header = LocalizationService.Current.T("CopyAll");
+        RefreshServiceTabHeader();
     }
 
     public void LoadLogs(IEnumerable<LogEntry> entries)
@@ -108,15 +128,18 @@ public partial class LogWindow : Window
             if (!IsLoaded)
                 return;
 
-            LogList.ItemsSource = null;
             LogEntries.Clear();
+            _logTabs.Clear();
+            _logTabsByKey.Clear();
             foreach (var entry in snapshot)
-                LogEntries.Add(entry);
-            LogList.ItemsSource = LogEntries;
+                AddEntryToTab(entry);
+
+            LogTabs.SelectedItem = _logTabs.LastOrDefault();
+            RebuildActiveLogText();
             UpdateSearchStatus();
 
             if (LogEntries.Count > 0)
-                ScheduleAutoScroll(LogEntries[LogEntries.Count - 1]);
+                ScheduleAutoScroll();
         }, DispatcherPriority.Background);
     }
 
@@ -124,32 +147,148 @@ public partial class LogWindow : Window
     {
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(() => AddLog(entry), DispatcherPriority.Background);
+            var shouldSchedule = false;
+            lock (_pendingLogLock)
+            {
+                _pendingCrossThreadLogs.Add(entry);
+                if (!_pendingCrossThreadDispatch)
+                {
+                    _pendingCrossThreadDispatch = true;
+                    shouldSchedule = true;
+                }
+            }
+
+            if (shouldSchedule)
+                Dispatcher.BeginInvoke(DrainPendingLogs, DispatcherPriority.Background);
             return;
         }
 
-        if (LogEntries.Count >= MaxLogEntries)
-            LogEntries.RemoveAt(0);
-
-        LogEntries.Add(entry);
-        UpdateSearchStatus();
-        ScheduleAutoScroll(entry);
+        AddLogOnUi(entry);
     }
 
-    private void Start_Click(object sender, RoutedEventArgs e)
+    private void DrainPendingLogs()
     {
-        if (ShowVariableMenu(sender, variable =>
-            {
-                _processManager.StartService(_service.Config.Id, new ServiceStartOptions { Variable = variable });
-                UpdateActionButtons();
-                return Task.CompletedTask;
-            }))
+        List<LogEntry> batch;
+        lock (_pendingLogLock)
         {
-            return;
+            batch = _pendingCrossThreadLogs.ToList();
+            _pendingCrossThreadLogs.Clear();
+            _pendingCrossThreadDispatch = false;
         }
 
-        _processManager.StartService(_service.Config.Id);
-        UpdateActionButtons();
+        foreach (var entry in batch)
+            AddLogOnUi(entry);
+
+        lock (_pendingLogLock)
+        {
+            if (_pendingCrossThreadLogs.Count > 0 && !_pendingCrossThreadDispatch)
+            {
+                _pendingCrossThreadDispatch = true;
+                Dispatcher.BeginInvoke(DrainPendingLogs, DispatcherPriority.Background);
+            }
+        }
+    }
+
+    private void AddLogOnUi(LogEntry entry)
+    {
+        var targetTab = AddEntryToTab(entry);
+        var selectedTab = LogTabs.SelectedItem as LogTabState;
+        if (selectedTab == null)
+        {
+            LogTabs.SelectedItem = targetTab;
+            MarkActiveTabDirty(autoScroll: true);
+        }
+        else if (ReferenceEquals(selectedTab, targetTab))
+        {
+            MarkActiveTabDirty(autoScroll: true);
+        }
+    }
+
+    private void RefreshServiceTabHeader()
+    {
+        if (_logTabsByKey.TryGetValue(ServiceLogsKey, out var service))
+            service.Header = LocalizationService.Current.T("ServiceLogs");
+        LogTabs.Items.Refresh();
+    }
+
+    private LogTabState AddEntryToTab(LogEntry entry)
+    {
+        var targetTab = string.IsNullOrWhiteSpace(entry.StepName)
+            ? EnsureLogTab(ServiceLogsKey, LocalizationService.Current.T("ServiceLogs"))
+            : EnsureLogTab(StepLogKey(entry.StepName), entry.StepName.Trim());
+        AddEntryToTabEntries(targetTab, entry);
+        return targetTab;
+    }
+
+    private LogTabState EnsureLogTab(string key, string header)
+    {
+        if (_logTabsByKey.TryGetValue(key, out var existing))
+            return existing;
+
+        var tab = new LogTabState(key, header);
+        _logTabsByKey[key] = tab;
+        _logTabs.Add(tab);
+        return tab;
+    }
+
+    private static void AddEntryToTabEntries(LogTabState tab, LogEntry entry)
+    {
+        if (TryCreateProgressEntry(entry, out var progressEntry, out var progressKey))
+        {
+            if (tab.Entries.Count > 0 &&
+                TryGetProgressKey(tab.Entries[^1], out var lastProgressKey) &&
+                string.Equals(lastProgressKey, progressKey, StringComparison.Ordinal))
+            {
+                tab.Entries[^1] = progressEntry;
+                return;
+            }
+
+            entry = progressEntry;
+        }
+
+        if (tab.Entries.Count >= MaxLogEntries)
+            tab.Entries.RemoveAt(0);
+        tab.Entries.Add(entry);
+    }
+
+    private void MarkActiveTabDirty(bool autoScroll)
+    {
+        _activeTabDirty = true;
+        _pendingAutoScroll |= autoScroll;
+        _searchStatusDirty |= HasSearchQuery();
+        if (!_renderTimer.IsEnabled)
+            _renderTimer.Start();
+    }
+
+    private void FlushLogRender()
+    {
+        _renderTimer.Stop();
+        if (_activeTabDirty)
+            RebuildActiveLogText();
+
+        if (_searchStatusDirty)
+            UpdateSearchStatus();
+
+        if (_pendingAutoScroll)
+            ScheduleAutoScroll();
+
+        _activeTabDirty = false;
+        _searchStatusDirty = false;
+        _pendingAutoScroll = false;
+    }
+
+    private static string StepLogKey(string stepName) => "step:" + stepName.Trim();
+
+    private void LogTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (e.Source != LogTabs)
+            return;
+        if (!_logUiReady || LogEditor?.Document == null)
+            return;
+
+        RebuildActiveLogText();
+        UpdateSearchStatus();
+        ScheduleAutoScroll();
     }
 
     private async void Stop_Click(object sender, RoutedEventArgs e)
@@ -159,104 +298,121 @@ public partial class LogWindow : Window
         UpdateActionButtons();
     }
 
-    private async void Restart_Click(object sender, RoutedEventArgs e)
+    private void RunAction_Click(object sender, RoutedEventArgs e)
     {
-        if (ShowVariableMenu(sender, variable =>
-            RestartWithVariableAsync(variable)))
-        {
-            return;
-        }
-
-        await _processManager.RestartServiceAsync(_service.Config.Id);
-        UpdateActionButtons();
-    }
-
-    private async Task RestartWithVariableAsync(string? variable)
-    {
-        await _processManager.RestartServiceAsync(_service.Config.Id, new ServiceStartOptions { Variable = variable });
-        UpdateActionButtons();
-    }
-
-    private void RunStep_Click(object sender, RoutedEventArgs e)
-    {
-        var steps = _service.Config.ScriptSteps
-            .Where(step => !string.IsNullOrWhiteSpace(step.Content))
-            .OrderBy(step => step.Order)
-            .ToList();
-        if (steps.Count == 0)
-            return;
-
         var menu = new ContextMenu();
-        AddStepGroup(menu, steps.Where(step => step.RunOnStart), LocalizationService.Current.T("StartupSteps"));
-        AddStepGroup(menu, steps.Where(step => !step.RunOnStart), LocalizationService.Current.T("ManualSteps"));
+        AddActionItems(menu);
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuItem { Header = LocalizationService.Current.T("NoActions"), IsEnabled = false });
         OpenMenu(sender, menu);
     }
 
-    private void AddStepGroup(ItemsControl menu, IEnumerable<ScriptStep> sourceSteps, string header)
+    private void AddActionItems(ItemsControl menu)
     {
-        var steps = sourceSteps.ToList();
-        if (steps.Count == 0)
-            return;
-
-        if (menu.Items.Count > 0)
-            menu.Items.Add(new Separator());
-
-        menu.Items.Add(new MenuItem { Header = header, IsEnabled = false });
-        for (var i = 0; i < steps.Count; i++)
+        foreach (var step in _service.Config.ScriptSteps.OrderBy(step => step.Order))
         {
-            var step = steps[i];
-            var displayHeader = step.RunOnStart ? $"{i + 1}. {step.Name}" : step.Name;
-            menu.Items.Add(CreateRunStepMenuItem(step, displayHeader));
+            if (step.Kind == StepKind.Composite)
+            {
+                menu.Items.Add(CreateCompositeMenuItem(step));
+            }
+            else if (!string.IsNullOrWhiteSpace(step.Content))
+            {
+                menu.Items.Add(CreateActionMenuItem(step));
+            }
         }
     }
 
-    private MenuItem CreateRunStepMenuItem(ScriptStep step, string header)
+    private MenuItem CreateCompositeMenuItem(ScriptStep composite)
     {
-        var state = GetStepState(_service.RuntimeState, step.Id);
-        var stepState = state?.State ?? StepRunState.NotRun;
-        var isRunning = stepState == StepRunState.Running;
-        var variables = GetSortedVariablesForStep(step);
-        if (!step.UseVariable || (variables.Count == 0 && step.RunOnStart))
+        var running = _service.RuntimeState.State is ProcessState.Running or ProcessState.Starting;
+        var variableMember = ScriptDefinitionService.FindVariableMember(_service.Config, composite);
+        if (variableMember == null)
         {
             var item = new MenuItem
             {
-                Header = CreateStatusHeader(header, GetStepStatusBrush(stepState)),
-                ToolTip = FormatStepStateText(stepState),
-                IsEnabled = !isRunning
+                Header = CreatePlainHeader(composite.Name),
+                IsEnabled = !running
             };
             item.Click += (_, _) =>
             {
-                _processManager.RunStep(_service.Config.Id, step.Id);
+                _processManager.RunComposite(_service.Config.Id, composite.Id);
                 UpdateActionButtons();
             };
             return item;
         }
 
-        var stepMenu = new MenuItem
+        var menu = new MenuItem
         {
-            Header = CreateStatusHeader(header, GetStepStatusBrush(stepState)),
+            Header = CreatePlainHeader(composite.Name),
+            IsEnabled = !running
+        };
+        AddVariableChoices(menu, variableMember, variable =>
+        {
+            _processManager.RunComposite(_service.Config.Id, composite.Id, variable);
+            UpdateActionButtons();
+            return Task.CompletedTask;
+        });
+        return menu;
+    }
+
+    private MenuItem CreateActionMenuItem(ScriptStep action)
+    {
+        var state = GetStepState(_service.RuntimeState, action.Id);
+        var stepState = state?.State ?? StepRunState.NotRun;
+        var isRunning = stepState == StepRunState.Running;
+        if (!action.UseVariable)
+        {
+            var item = new MenuItem
+            {
+                Header = CreateStatusHeader(action.Name, GetStepStatusBrush(stepState)),
+                ToolTip = FormatStepStateText(stepState),
+                IsEnabled = !isRunning
+            };
+            item.Click += (_, _) =>
+            {
+                _processManager.RunStep(_service.Config.Id, action.Id);
+                UpdateActionButtons();
+            };
+            return item;
+        }
+
+        var menu = new MenuItem
+        {
+            Header = CreateStatusHeader(action.Name, GetStepStatusBrush(stepState)),
             ToolTip = FormatStepStateText(stepState),
             IsEnabled = !isRunning
         };
-        foreach (var variable in variables)
+        AddVariableChoices(menu, action, variable =>
+        {
+            _processManager.RunStep(_service.Config.Id, action.Id, variable);
+            UpdateActionButtons();
+            return Task.CompletedTask;
+        });
+        return menu;
+    }
+
+    private void AddVariableChoices(ItemsControl parent, ScriptStep step, Func<string?, Task> runAsync)
+    {
+        foreach (var variable in GetSortedVariablesForStep(step))
         {
             var variableItem = new MenuItem { Header = CreatePlainHeader(variable) };
             variableItem.Click += async (_, _) =>
             {
                 await _rememberVariableForStepAsync(_service.Config, step, variable, false);
-                _processManager.RunStep(_service.Config.Id, step.Id, variable);
-                UpdateActionButtons();
+                await runAsync(variable);
             };
-            stepMenu.Items.Add(variableItem);
+            parent.Items.Add(variableItem);
         }
 
-        AddNewStepVariableMenuItem(stepMenu, step, variable =>
+        parent.Items.Add(new Separator());
+        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
+        add.Click += async (_, _) =>
         {
-            _processManager.RunStep(_service.Config.Id, step.Id, variable);
-            UpdateActionButtons();
-            return Task.CompletedTask;
-        });
-        return stepMenu;
+            var variable = await PromptForStepVariableAsync(step);
+            if (!string.IsNullOrWhiteSpace(variable))
+                await runAsync(variable);
+        };
+        parent.Items.Add(add);
     }
 
     private static object CreateStatusHeader(string text, System.Windows.Media.Brush? dotBrush)
@@ -291,35 +447,10 @@ public partial class LogWindow : Window
         VerticalAlignment = VerticalAlignment.Center
     };
 
-    private bool ShowVariableMenu(object sender, Func<string?, Task> runAsync)
-    {
-        var variables = GetSortedPresetVariables();
-        if (variables.Count == 0)
-            return false;
-
-        var menu = new ContextMenu();
-        foreach (var variable in variables)
-        {
-            var item = new MenuItem { Header = CreatePlainHeader(variable) };
-            item.Click += async (_, _) =>
-            {
-                await _rememberPresetVariableAsync(_service.Config, variable, false);
-                await runAsync(variable);
-            };
-            menu.Items.Add(item);
-        }
-
-        AddNewVariableMenuItem(menu, runAsync);
-        OpenMenu(sender, menu);
-        return true;
-    }
-
     private void OnServiceStateChanged(Guid serviceId, ProcessState state)
     {
-        if (serviceId != _service.Config.Id)
-            return;
-
-        Dispatcher.Invoke(UpdateActionButtons);
+        if (serviceId == _service.Config.Id)
+            Dispatcher.Invoke(UpdateActionButtons);
     }
 
     private void OnStepStateChanged(Guid serviceId, StepRuntimeState state)
@@ -327,77 +458,35 @@ public partial class LogWindow : Window
         if (serviceId != _service.Config.Id)
             return;
 
-        Dispatcher.Invoke(UpdateActionButtons);
+        Dispatcher.Invoke(() =>
+        {
+            UpdateActionButtons();
+            if (state.State == StepRunState.Running && !string.IsNullOrWhiteSpace(state.StepName))
+                ActivateStepTab(state.StepName);
+        });
+    }
+
+    private void ActivateStepTab(string stepName)
+    {
+        var tab = EnsureLogTab(StepLogKey(stepName), stepName.Trim());
+        if (!ReferenceEquals(LogTabs.SelectedItem, tab))
+            LogTabs.SelectedItem = tab;
     }
 
     private void UpdateActionButtons()
     {
         var state = _service.RuntimeState.State;
         var hasRunningStep = _service.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running);
-        StartButton.IsEnabled = !hasRunningStep &&
-                                state is ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed;
         StopButton.IsEnabled = state is ProcessState.Running or ProcessState.Starting or ProcessState.Stopping || hasRunningStep;
-        RestartButton.IsEnabled = state is not ProcessState.Starting and not ProcessState.Stopping;
-        RunStepButton.IsEnabled = _service.Config.ScriptSteps.Any(step => !string.IsNullOrWhiteSpace(step.Content));
+        RunActionButton.IsEnabled = _service.Config.ScriptSteps.Any(step =>
+            step.Kind == StepKind.Composite || !string.IsNullOrWhiteSpace(step.Content));
     }
-
-    private void AddNewVariableMenuItem(ItemsControl parent, Func<string?, Task> runAsync)
-    {
-        parent.Items.Add(new Separator());
-
-        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
-        add.Click += async (_, _) =>
-        {
-            var variable = await PromptForPresetVariableAsync();
-            if (string.IsNullOrWhiteSpace(variable))
-                return;
-
-            await runAsync(variable);
-        };
-        parent.Items.Add(add);
-    }
-
-    private async Task<string?> PromptForPresetVariableAsync()
-    {
-        var defaultValue = _variableUsageStore.First(_service.Config.Id, _service.Config.PresetVariables);
-        var dialog = new PresetVariableInputDialog(defaultValue) { Owner = this };
-        if (dialog.ShowDialog() != true)
-            return null;
-
-        var variable = dialog.Variable;
-        await _rememberPresetVariableAsync(_service.Config, variable, true);
-        return variable;
-    }
-
-    private IReadOnlyList<string> GetSortedPresetVariables() =>
-        _variableUsageStore.Sort(_service.Config.Id, _service.Config.PresetVariables);
 
     private IReadOnlyList<string> GetSortedVariablesForStep(ScriptStep step) =>
-        step.RunOnStart
-            ? _variableUsageStore.Sort(_service.Config.Id, _service.Config.PresetVariables)
-            : _variableUsageStore.Sort(step.Id, step.StepVariables);
-
-    private void AddNewStepVariableMenuItem(ItemsControl parent, ScriptStep step, Func<string?, Task> runAsync)
-    {
-        parent.Items.Add(new Separator());
-
-        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
-        add.Click += async (_, _) =>
-        {
-            var variable = await PromptForStepVariableAsync(step);
-            if (string.IsNullOrWhiteSpace(variable))
-                return;
-
-            await runAsync(variable);
-        };
-        parent.Items.Add(add);
-    }
+        _variableUsageStore.Sort(step.Id, step.StepVariables);
 
     private async Task<string?> PromptForStepVariableAsync(ScriptStep step)
     {
-        if (step.RunOnStart)
-            return await PromptForPresetVariableAsync();
-
         var defaultValue = _variableUsageStore.First(step.Id, step.StepVariables);
         var dialog = new PresetVariableInputDialog(defaultValue) { Owner = this };
         if (dialog.ShowDialog() != true)
@@ -435,7 +524,13 @@ public partial class LogWindow : Window
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
+        foreach (var tab in _logTabs)
+            tab.Entries.Clear();
+        _logTabs.Clear();
+        _logTabsByKey.Clear();
         LogEntries.Clear();
+        LogEditor.Clear();
+        LogTabs.SelectedItem = null;
         SearchStatusText.Text = string.Empty;
     }
 
@@ -443,6 +538,7 @@ public partial class LogWindow : Window
     {
         await _editServiceAsync(_service, this);
         UpdateTitle();
+        RebuildActiveLogText();
     }
 
     private void UpdateTitle()
@@ -451,13 +547,9 @@ public partial class LogWindow : Window
         Title = LocalizationService.Current.F("LogTitle", _service.Name);
     }
 
-    private void ScheduleAutoScroll(LogEntry entry)
+    private void ScheduleAutoScroll()
     {
-        if (AutoScrollCheck.IsChecked != true)
-            return;
-
-        _pendingScrollEntry = entry;
-        if (!_scrollTimer.IsEnabled)
+        if (AutoScrollCheck.IsChecked == true && !_scrollTimer.IsEnabled)
             _scrollTimer.Start();
     }
 
@@ -465,7 +557,7 @@ public partial class LogWindow : Window
 
     private void CopyAll_Click(object sender, RoutedEventArgs e) => CopyAllLogs();
 
-    private void LogList_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    private void LogEditor_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key == Key.C && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
@@ -476,22 +568,36 @@ public partial class LogWindow : Window
 
     private void CopySelectedLogs()
     {
-        var selected = LogList.SelectedItems.Cast<LogEntry>().ToList();
-        if (selected.Count == 0)
-            selected = LogEntries.ToList();
+        var text = LogEditor.SelectedText;
+        if (string.IsNullOrEmpty(text))
+            text = LogEditor.Text;
 
-        if (selected.Count == 0)
-            return;
-
-        System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, selected.Select(FormatLogLine)));
+        CopyToClipboard(text);
     }
 
     private void CopyAllLogs()
     {
-        if (LogEntries.Count == 0)
+        if (LogEditor.Text.Length > 0)
+            CopyToClipboard(LogEditor.Text);
+    }
+
+    private static void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text))
             return;
 
-        System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, LogEntries.Select(FormatLogLine)));
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetDataObject(text, true);
+                return;
+            }
+            catch (COMException)
+            {
+                Thread.Sleep(80);
+            }
+        }
     }
 
     private void SearchBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -505,9 +611,11 @@ public partial class LogWindow : Window
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
     {
-        _lastSearchIndex = -1;
+        _lastSearchOffset = -1;
         UpdateSearchStatus();
     }
+
+    private bool HasSearchQuery() => !string.IsNullOrWhiteSpace(SearchBox.Text);
 
     private void FindNext_Click(object sender, RoutedEventArgs e) => FindLogMatch(forward: true);
 
@@ -516,59 +624,206 @@ public partial class LogWindow : Window
     private void FindLogMatch(bool forward)
     {
         var query = SearchBox.Text?.Trim();
-        if (string.IsNullOrWhiteSpace(query) || LogEntries.Count == 0)
+        var text = LogEditor.Text;
+        if (string.IsNullOrWhiteSpace(query) || text.Length == 0)
         {
             UpdateSearchStatus();
             return;
         }
 
-        var start = _lastSearchIndex >= 0 ? _lastSearchIndex : LogList.SelectedIndex;
-        for (var offset = 1; offset <= LogEntries.Count; offset++)
+        var comparison = StringComparison.OrdinalIgnoreCase;
+        var start = _lastSearchOffset >= 0 ? _lastSearchOffset : LogEditor.CaretOffset;
+        int index;
+        if (forward)
         {
-            var index = forward
-                ? (start + offset + LogEntries.Count) % LogEntries.Count
-                : (start - offset + LogEntries.Count) % LogEntries.Count;
-            if (!Matches(LogEntries[index], query))
-                continue;
+            index = text.IndexOf(query, Math.Min(start + 1, text.Length), comparison);
+            if (index < 0)
+                index = text.IndexOf(query, 0, comparison);
+        }
+        else
+        {
+            index = text.LastIndexOf(query, Math.Max(0, start - 1), comparison);
+            if (index < 0)
+                index = text.LastIndexOf(query, text.Length - 1, comparison);
+        }
 
-            _lastSearchIndex = index;
-            LogList.SelectedIndex = index;
-            LogList.ScrollIntoView(LogEntries[index]);
-            UpdateSearchStatus();
+        if (index < 0)
+        {
+            SearchStatusText.Text = "0/0";
             return;
         }
 
-        SearchStatusText.Text = "0/0";
+        _lastSearchOffset = index;
+        LogEditor.Select(index, query.Length);
+        var line = LogEditor.Document.GetLineByOffset(index).LineNumber;
+        LogEditor.ScrollToLine(line);
+        UpdateSearchStatus();
     }
 
     private void UpdateSearchStatus()
     {
         var query = SearchBox.Text?.Trim();
+        var text = LogEditor.Text;
         if (string.IsNullOrWhiteSpace(query))
         {
             SearchStatusText.Text = string.Empty;
             return;
         }
 
-        var matches = LogEntries
-            .Select((entry, index) => (entry, index))
-            .Where(item => Matches(item.entry, query))
-            .Select(item => item.index)
-            .ToList();
-        if (matches.Count == 0)
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(query, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            count++;
+            index += query.Length;
+        }
+
+        if (count == 0)
         {
             SearchStatusText.Text = "0/0";
             return;
         }
 
-        var current = _lastSearchIndex >= 0 ? matches.IndexOf(_lastSearchIndex) + 1 : 0;
-        SearchStatusText.Text = current > 0 ? $"{current}/{matches.Count}" : $"0/{matches.Count}";
+        var current = _lastSearchOffset >= 0
+            ? CountMatchesBefore(text, query, _lastSearchOffset) + 1
+            : 0;
+        SearchStatusText.Text = current > 0 ? $"{current}/{count}" : $"0/{count}";
     }
 
-    private static bool Matches(LogEntry entry, string query) =>
-        entry.Message.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-        entry.Level.ToString().Contains(query, StringComparison.OrdinalIgnoreCase);
+    private static int CountMatchesBefore(string text, string query, int offset)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(query, index, StringComparison.OrdinalIgnoreCase)) >= 0 && index < offset)
+        {
+            count++;
+            index += query.Length;
+        }
+        return count;
+    }
+
+    private void RebuildActiveLogText()
+    {
+        if (!_logUiReady || LogEditor == null)
+            return;
+
+        EnsureLogDocument();
+        LogEntries.Clear();
+        if (LogTabs.SelectedItem is LogTabState tab)
+        {
+            foreach (var entry in tab.Entries)
+                LogEntries.Add(entry);
+        }
+
+        var builder = new StringBuilder();
+        foreach (var entry in LogEntries)
+        {
+            if (builder.Length > 0)
+                builder.AppendLine();
+            builder.Append(FormatLogLine(entry));
+        }
+
+        LogEditor.Text = builder.ToString();
+        LogEditor.TextArea.TextView.Redraw();
+    }
+
+    private void EnsureLogDocument()
+    {
+        LogEditor.Document ??= new TextDocument();
+    }
 
     private static string FormatLogLine(LogEntry entry) =>
         $"{entry.Timestamp:HH:mm:ss} [{entry.Level}] {entry.Message}";
+
+    private static bool TryCreateProgressEntry(LogEntry entry, out LogEntry progressEntry, out string progressKey)
+    {
+        progressEntry = entry;
+        progressKey = string.Empty;
+
+        if (entry.Level == LogLevel.Error)
+            return false;
+
+        var match = WebpackProgressRegex.Match(entry.Message);
+        if (!match.Success)
+            return false;
+
+        progressKey = "webpack-progress";
+        var percent = Math.Clamp(int.Parse(match.Groups["percent"].Value), 0, 100);
+        var prefix = match.Groups["prefix"].Success ? match.Groups["prefix"].Value.TrimEnd() : string.Empty;
+        var rest = match.Groups["rest"].Value.Trim();
+        var bar = CreateProgressBar(percent);
+        var messagePrefix = string.IsNullOrWhiteSpace(prefix)
+            ? "[webpack.Progress]"
+            : $"{prefix} [webpack.Progress]";
+
+        progressEntry = new LogEntry(entry.Level, $"{messagePrefix} {percent}% {bar} {rest}", entry.Source, entry.StepName)
+        {
+            Timestamp = entry.Timestamp
+        };
+        return true;
+    }
+
+    private static bool TryGetProgressKey(LogEntry entry, out string progressKey)
+    {
+        progressKey = string.Empty;
+        if (entry.Level == LogLevel.Error)
+            return false;
+
+        var match = WebpackProgressRegex.Match(entry.Message);
+        if (!match.Success)
+            return false;
+
+        progressKey = "webpack-progress";
+        return true;
+    }
+
+    private static string CreateProgressBar(int percent)
+    {
+        const int width = 24;
+        var filled = Math.Clamp((int)Math.Round(percent / 100d * width), 0, width);
+        return "[" + new string('#', filled) + new string('-', width - filled) + "]";
+    }
+
+    private sealed class LogLineColorizer : DocumentColorizingTransformer
+    {
+        private readonly IReadOnlyList<LogEntry> _entries;
+
+        public LogLineColorizer(IReadOnlyList<LogEntry> entries)
+        {
+            _entries = entries;
+        }
+
+        protected override void ColorizeLine(DocumentLine line)
+        {
+            var index = line.LineNumber - 1;
+            if (index < 0 || index >= _entries.Count)
+                return;
+
+            var brush = _entries[index].Level switch
+            {
+                LogLevel.Error => System.Windows.Media.Brushes.OrangeRed,
+                LogLevel.Warning => System.Windows.Media.Brushes.Gold,
+                LogLevel.System => System.Windows.Media.Brushes.Gray,
+                _ => System.Windows.Media.Brushes.White
+            };
+
+            ChangeLinePart(line.Offset, line.EndOffset, element =>
+            {
+                element.TextRunProperties.SetForegroundBrush(brush);
+            });
+        }
+    }
+
+    private sealed class LogTabState
+    {
+        public LogTabState(string key, string header)
+        {
+            Key = key;
+            Header = header;
+        }
+
+        public string Key { get; }
+        public string Header { get; set; }
+        public List<LogEntry> Entries { get; } = new();
+    }
 }

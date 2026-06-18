@@ -127,24 +127,8 @@ public static class TemplateExchangeService
             Description = source.Description ?? string.Empty,
             CreatedAt = now,
             UpdatedAt = now,
-            PresetVariables = DistinctStrings(source.PresetVariables),
-            ScriptSteps = source.ScriptSteps
-                .OrderBy(step => step.Order)
-                .Select((step, index) => new ScriptStep
-                {
-                    Id = Guid.NewGuid(),
-                    Name = string.IsNullOrWhiteSpace(step.Name)
-                        ? LocalizationService.Current.F("DefaultStepName", index + 1)
-                        : step.Name.Trim(),
-                    ScriptType = step.ScriptType,
-                    UseVariable = step.UseVariable,
-                    RunOnStart = step.RunOnStart,
-                    OpenLogOnRun = step.OpenLogOnRun,
-                    StepVariables = DistinctStrings(step.StepVariables),
-                    Content = step.Content ?? string.Empty,
-                    Order = index
-                })
-                .ToList()
+            PresetVariables = [],
+            ScriptSteps = CloneImportedSteps(source.ScriptSteps)
         };
     }
 
@@ -162,16 +146,50 @@ public static class TemplateExchangeService
             {
                 Id = step.Id,
                 Name = step.Name,
+                Kind = step.Kind,
                 ScriptType = step.ScriptType,
                 UseVariable = step.UseVariable,
-                RunOnStart = step.RunOnStart,
                 OpenLogOnRun = step.OpenLogOnRun,
                 StepVariables = step.StepVariables.ToList(),
                 Content = step.Content,
+                MemberStepIds = step.MemberStepIds.ToList(),
                 Order = step.Order
             })
             .ToList()
     };
+
+    private static List<ScriptStep> CloneImportedSteps(IEnumerable<ScriptStep> sourceSteps)
+    {
+        var ordered = sourceSteps.OrderBy(step => step.Order).ToList();
+        var idMap = ordered.ToDictionary(step => step.Id, _ => Guid.NewGuid());
+        var result = new List<ScriptStep>();
+
+        for (var index = 0; index < ordered.Count; index++)
+        {
+            var step = ordered[index];
+            var kind = step.Kind;
+            var name = string.IsNullOrWhiteSpace(step.Name)
+                ? LocalizationService.Current.F("DefaultStepName", index + 1)
+                : step.Name.Trim();
+            result.Add(new ScriptStep
+            {
+                Id = idMap[step.Id],
+                Name = name,
+                Kind = kind,
+                ScriptType = step.ScriptType,
+                UseVariable = kind == StepKind.Action && step.UseVariable,
+                OpenLogOnRun = kind == StepKind.Action && step.OpenLogOnRun,
+                StepVariables = kind == StepKind.Action ? DistinctStrings(step.StepVariables) : [],
+                Content = kind == StepKind.Action ? step.Content ?? string.Empty : string.Empty,
+                MemberStepIds = kind == StepKind.Composite
+                    ? step.MemberStepIds.Where(idMap.ContainsKey).Select(id => idMap[id]).ToList()
+                    : [],
+                Order = index
+            });
+        }
+
+        return result;
+    }
 
     private static List<string> DistinctStrings(IEnumerable<string>? values) =>
         (values ?? [])

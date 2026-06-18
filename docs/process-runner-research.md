@@ -1,4 +1,4 @@
-﻿# 进程运行器调研
+# 进程运行器调研
 
 [English](process-runner-research-en.md)
 
@@ -23,8 +23,8 @@
 ## 对 ServicePilot 的结论
 
 - 生命周期状态必须明确。ServicePilot 应继续区分 `Starting`、`Running`、`Stopping`、`Stopped`、`Completed`、`Error` 和 `StartFailed`。
-- 服务执行到最后一个步骤后就应该离开 `Starting`。最后一步成功退出可变为 `Completed`；失败退出应变为 `StartFailed`。
-- 长时运行步骤自行退出，对本地开发服务来说通常是启动或运行失败，应明确显示为 `StartFailed`。
+- 服务执行到最后一个动作后就应该离开 `Starting`。最后一步成功退出可变为 `Completed`；失败退出应变为 `StartFailed`。
+- 长时运行动作自行退出，对本地开发服务来说通常是启动或运行失败，应明确显示为 `StartFailed`。
 - 停止应按进程树处理，只有确实停止失败时才告警。无窗口 console 命令不能依赖 `CloseMainWindow`。
 - 日志需要前缀、稳定顺序、有限内存和直接操作入口。日志窗口应提供当前服务的启动、停止、重启。
 - CLI 应覆盖托盘可见操作，并在适合自动化的场景返回机器可读输出。

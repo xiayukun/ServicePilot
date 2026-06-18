@@ -11,8 +11,8 @@ It is not only for "starting services". Anything the command line can do can usu
 1. Launch `ServicePilot.exe`.
 2. Right-click the numeric notification-area icon.
 3. Add a service through `Add service` or `Manage services`.
-4. Configure the working directory, script steps, and variables.
-5. Start, stop, restart, run steps, and inspect logs from the tray, service manager, log window, or CLI.
+4. Configure the working directory, Action steps, Composite steps, and variables.
+5. Run actions/composites, stop services, and inspect logs from the tray, service manager, log window, or CLI.
 
 The tray number shows services in `Running` or `Starting` state. It shows `0` when nothing is active.
 
@@ -22,19 +22,19 @@ Each service contains:
 
 - **Name**: display name in the tray, GUI, and CLI.
 - **Working directory**: root folder where scripts execute.
-- **Script steps**: ordered Batch, PowerShell, Python, or Node.js scripts.
-- **Preset variables**: one string per line for start, restart, and startup-step execution.
-- **Step variables**: variables owned by manual-only steps.
-- **Open log**: automatically open the current service log window when the step starts.
+- **Actions**: executable Batch, PowerShell, Python, or Node.js scripts.
+- **Composites**: ordered groups of Action members. Composites cannot contain other Composites.
+- **Step variables**: one string per line on variable-enabled Actions.
+- **Open log**: automatically open the current service log window when the Action starts.
 - **Autostart**: optional startup when ServicePilot launches.
 
-Normal startup only runs steps with `Run on start` enabled. Disabled startup steps appear in a separate manual group and can be run as utility actions.
+Normal startup runs the first Composite. Single Actions and named Composites can also be run directly as utility actions.
 
 A step must exit with code `0` before the next step runs. If the final command keeps running, the service stays running. If it exits with `0`, the service becomes completed. A nonzero exit marks startup failed.
 
 ## Variables
 
-Preset variables and step variables are plain strings. They do not need to be `key=value`.
+Action variables are plain strings. They do not need to be `key=value`.
 
 At runtime:
 
@@ -56,10 +56,10 @@ A template is a full service without a working directory:
 
 - Name
 - Description
-- Script steps
-- Preset variables
+- Actions and Composites
+- Action variables
 
-Applying a template replaces the target service steps and preset variables while keeping the target working directory, service id, autostart setting, and display order. If the current service already has a name, the name is preserved; the template name is only used when the current name is empty.
+Applying a template replaces the target service actions, composites, and action variables while keeping the target working directory, service id, autostart setting, and display order. If the current service already has a name, the name is preserved; the template name is only used when the current name is empty.
 
 On first tray startup, ServicePilot creates an editable default developer-action template for common actions such as opening tools, Git operations, dependency installation, and startup commands. The current default template includes Git pull, safe/force branch checkout, safe/force tag checkout, npm install/build, and openers for Explorer, CMD, PowerShell, Windows Terminal, Git Bash, VS Code, Cursor, Visual Studio, IntelliJ IDEA, WebStorm, Rider, Notepad++, and Postman. If the user deletes it, ServicePilot does not recreate it on every launch.
 
@@ -69,8 +69,10 @@ The template manager supports `Export` and `Import`. Exported templates are regu
 
 The log window supports:
 
-- Start, run step, stop, and restart.
-- Variable-aware start and step execution.
+- Run actions/composites and stop the service.
+- Variable-aware action and composite execution.
+- Per-action log tabs created lazily. When an action starts running, the matching action tab is selected.
+- Display-layer coalescing for non-error webpack progress logs to reduce UI stalls from noisy build output.
 - Editing the current service.
 - Search, previous/next match.
 - Copy selected logs and copy all logs.
@@ -126,7 +128,7 @@ ServicePilot.exe template step-variable-clear TEMPLATE STEP
 ServicePilot.exe shutdown
 ```
 
-`SERVICE`, `STEP`, and `TEMPLATE` can be names or GUIDs. `STEP` can also be numeric: `1..N` selects the displayed startup-step number, while `0` remains available for legacy internal order.
+`SERVICE`, `STEP`, and `TEMPLATE` can be names or GUIDs. `STEP` may be an Action or a Composite. Numeric step selection is kept only for legacy compatibility; prefer names or GUIDs for automation.
 
 Supported script types:
 
@@ -142,9 +144,10 @@ CLI step specs:
 ```text
 Name|Type|command
 Name|Type|UseVariable|command
-Name|Type|UseVariable|RunOnStart|command
 Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command
 ```
+
+`RunOnStart` in CLI step specs is accepted only for backward compatibility. ServicePilot 2.0 creates a default `Start` Composite around added Action specs.
 
 Example:
 
@@ -152,10 +155,11 @@ Example:
 ServicePilot.exe service add `
   --name "Frontend" `
   --dir "D:\projects\frontend" `
-  --step "Set API|PowerShell|true|true|$p='src/store/index.js'; (Get-Content $p) -replace 'http://.*?/api', '{{variable}}' | Set-Content $p" `
-  --step "Start dev server|Batch|false|true|npm run dev" `
-  --preset "http://localhost:9000" `
-  --preset "https://test.example.com/api"
+  --step "Set API|PowerShell|true|$p='src/store/index.js'; (Get-Content $p) -replace 'http://.*?/api', '{{variable}}' | Set-Content $p" `
+  --step "Start dev server|Batch|false|npm run dev"
+
+ServicePilot.exe step variable-add "Frontend" "Set API" --variable "http://localhost:9000"
+ServicePilot.exe step variable-add "Frontend" "Set API" --variable "https://test.example.com/api"
 
 ServicePilot.exe template save-from-service --service "Frontend" --name "Vite Frontend"
 ServicePilot.exe template apply "Vite Frontend" --service "Another Frontend"
@@ -168,11 +172,12 @@ ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.j
 Real user configuration lives at:
 
 ```text
+%APPDATA%\ServicePilot\config.v2.json
 %APPDATA%\ServicePilot\config.json
 %APPDATA%\ServicePilot\variable-usage-cache.json
 ```
 
-If an older version or a manual run left `config.json` beside the executable or in the current directory, ServicePilot copies it into the Roaming target when the target config does not exist. The old file is not deleted automatically.
+`config.v2.json` is the active ServicePilot 2.0 configuration. If it does not exist, ServicePilot migrates legacy `config.json` and keeps the old file.
 
 Isolated tests:
 

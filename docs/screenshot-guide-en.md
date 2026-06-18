@@ -25,7 +25,7 @@ Use this checklist before the first public release to prepare README, GitHub Rel
    Show service name, working directory, multi-step scripts, `Use variable`, `Run on start`, preset/manual step variables, and apply-template button.
 
 4. Log window  
-   Show live logs, search, copy menu, horizontal scrolling for long lines, and start/run-step/stop/restart/edit buttons.
+   Show live logs, action tabs, search, copy menu, horizontal scrolling for long lines, webpack progress coalescing, and run-action/stop/edit buttons.
 
 5. Template manager window  
    Show full service templates, descriptions, step counts, variable counts, and template preview.

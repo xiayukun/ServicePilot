@@ -200,21 +200,19 @@ public partial class App : Application
                 ToolTipText = FormatStatusText(state)
             };
 
-            AddStartMenu(serviceMenu, service);
-            AddRunStepMenuV2(serviceMenu, service);
+            AddStepItems(serviceMenu, service);
 
-            var stop = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Stop"))
-            {
-                Enabled = service.RuntimeState.State is ProcessState.Running or ProcessState.Starting
-            };
+            serviceMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+
+            var hasRunning = service.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
+                             service.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running);
+            var stop = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Stop")) { Enabled = hasRunning };
             stop.Click += async (_, _) =>
             {
                 RememberServiceUse(service);
                 await StopServiceQuietlyAsync(service.Config.Id);
             };
             serviceMenu.DropDownItems.Add(stop);
-
-            AddRestartMenu(serviceMenu, service);
 
             var viewLog = new Forms.ToolStripMenuItem(LocalizationService.Current.T("ViewLogs"));
             viewLog.Click += (_, _) => OnViewLogRequested(service);
@@ -335,44 +333,124 @@ public partial class App : Application
         _variableUsageStore.RememberService(service.Config.Id);
     }
 
-    private void AddStartMenu(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
+    private void AddStepItems(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
     {
-        var state = service.RuntimeState.State;
-        var enabled = state is ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed;
-        var variables = GetSortedPresetVariables(service);
-        if (variables.Count == 0)
+        var steps = service.Config.ScriptSteps.OrderBy(s => s.Order).ToList();
+        var serviceBusy = service.RuntimeState.State is ProcessState.Starting or ProcessState.Stopping;
+
+        var any = false;
+        foreach (var step in steps)
         {
-            var start = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Start")) { Enabled = enabled };
-            start.Click += (_, _) =>
+            if (step.Kind == StepKind.Composite)
             {
-                RememberServiceUse(service);
-                _processManager?.StartService(service.Config.Id);
-                RebuildTrayMenu();
-            };
-            parent.DropDownItems.Add(start);
-            return;
+                parent.DropDownItems.Add(CreateCompositeMenuItem(service, step, serviceBusy));
+                any = true;
+            }
+            else if (!string.IsNullOrWhiteSpace(step.Content))
+            {
+                parent.DropDownItems.Add(CreateActionMenuItem(service, step));
+                any = true;
+            }
         }
 
-        var startMenu = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Start")) { Enabled = enabled };
-        foreach (var variable in variables)
+        if (!any)
         {
-            var item = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
-            item.Click += async (_, _) =>
+            parent.DropDownItems.Add(new Forms.ToolStripMenuItem(LocalizationService.Current.T("NoActions")) { Enabled = false });
+        }
+    }
+
+    private Forms.ToolStripMenuItem CreateCompositeMenuItem(ServiceItemViewModel service, ScriptStep composite, bool serviceBusy)
+    {
+        var running = service.RuntimeState.State is ProcessState.Running or ProcessState.Starting;
+        var variableMember = ScriptDefinitionService.FindVariableMember(service.Config, composite);
+        var label = composite.Name;
+
+        if (variableMember == null)
+        {
+            var item = new Forms.ToolStripMenuItem(label)
+            {
+                Image = running ? RunningStatusDot : null,
+                Enabled = !serviceBusy && !running
+            };
+            item.Click += (_, _) =>
             {
                 RememberServiceUse(service);
-                await RememberPresetVariableAsync(service.Config, variable, addIfMissing: false);
-                _processManager?.StartService(service.Config.Id, new ServiceStartOptions { Variable = variable });
+                _processManager?.RunComposite(service.Config.Id, composite.Id);
                 RebuildTrayMenu();
             };
-            startMenu.DropDownItems.Add(item);
+            return item;
         }
-        AddNewVariableMenuItem(startMenu, service, variable =>
+
+        var menu = new Forms.ToolStripMenuItem(label)
+        {
+            Image = running ? RunningStatusDot : null,
+            Enabled = !serviceBusy && !running
+        };
+        AddVariableChoices(menu, service, variableMember, variable =>
         {
             RememberServiceUse(service);
-            _processManager?.StartService(service.Config.Id, new ServiceStartOptions { Variable = variable });
+            _processManager?.RunComposite(service.Config.Id, composite.Id, variable);
             return Task.CompletedTask;
         });
-        parent.DropDownItems.Add(startMenu);
+        return menu;
+    }
+
+    private Forms.ToolStripMenuItem CreateActionMenuItem(ServiceItemViewModel service, ScriptStep action)
+    {
+        var stepState = GetStepState(service.RuntimeState, action.Id)?.State ?? StepRunState.NotRun;
+        var isRunning = stepState == StepRunState.Running;
+
+        if (!action.UseVariable)
+        {
+            var item = new Forms.ToolStripMenuItem(action.Name)
+            {
+                Enabled = !isRunning,
+                Image = GetStepStatusDot(stepState),
+                ToolTipText = FormatStepStateText(stepState)
+            };
+            item.Click += (_, _) =>
+            {
+                RememberServiceUse(service);
+                _processManager?.RunStep(service.Config.Id, action.Id);
+                RebuildTrayMenu();
+            };
+            return item;
+        }
+
+        var menu = new Forms.ToolStripMenuItem(action.Name)
+        {
+            Enabled = !isRunning,
+            Image = GetStepStatusDot(stepState),
+            ToolTipText = FormatStepStateText(stepState)
+        };
+        AddVariableChoices(menu, service, action, variable =>
+        {
+            RememberServiceUse(service);
+            _processManager?.RunStep(service.Config.Id, action.Id, variable);
+            return Task.CompletedTask;
+        });
+        return menu;
+    }
+
+    private void AddVariableChoices(
+        Forms.ToolStripMenuItem menu,
+        ServiceItemViewModel service,
+        ScriptStep variableStep,
+        Func<string?, Task> runAsync)
+    {
+        foreach (var variable in GetSortedVariablesForStep(variableStep))
+        {
+            var variableItem = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
+            variableItem.Click += async (_, _) =>
+            {
+                await RememberVariableForStepAsync(service.Config, variableStep, variable, addIfMissing: false);
+                await runAsync(variable);
+                RebuildTrayMenu();
+            };
+            menu.DropDownItems.Add(variableItem);
+        }
+
+        AddNewStepVariableMenuItem(menu, service, variableStep, variable => runAsync(variable));
     }
 
     private void AddLanguageMenu(Forms.ContextMenuStrip menu)
@@ -421,177 +499,6 @@ public partial class App : Application
         }
 
         RebuildTrayMenu();
-    }
-
-    private void AddRestartMenu(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
-    {
-        var state = service.RuntimeState.State;
-        var enabled = state is not ProcessState.Starting and not ProcessState.Stopping;
-        var variables = GetSortedPresetVariables(service);
-        if (variables.Count == 0)
-        {
-            var restart = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Restart")) { Enabled = enabled };
-            restart.Click += async (_, _) =>
-            {
-                RememberServiceUse(service);
-                await RestartServiceQuietlyAsync(service.Config.Id);
-            };
-            parent.DropDownItems.Add(restart);
-            return;
-        }
-
-        var restartMenu = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Restart")) { Enabled = enabled };
-        foreach (var variable in variables)
-        {
-            var item = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
-            item.Click += async (_, _) =>
-            {
-                RememberServiceUse(service);
-                await RememberPresetVariableAsync(service.Config, variable, addIfMissing: false);
-                await RestartServiceQuietlyAsync(service.Config.Id, variable);
-            };
-            restartMenu.DropDownItems.Add(item);
-        }
-        AddNewVariableMenuItem(restartMenu, service, variable =>
-        {
-            RememberServiceUse(service);
-            return RestartServiceQuietlyAsync(service.Config.Id, variable);
-        });
-        parent.DropDownItems.Add(restartMenu);
-    }
-
-    private void AddRunStepMenu(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
-    {
-        var runStepMenu = new Forms.ToolStripMenuItem(LocalizationService.Current.T("RunStep"))
-        {
-            Enabled = service.RuntimeState.State is ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed
-        };
-
-        var startupNumber = 1;
-        foreach (var step in service.Config.ScriptSteps
-                     .Where(s => !string.IsNullOrWhiteSpace(s.Content))
-                     .OrderBy(s => s.Order))
-        {
-            var label = step.RunOnStart ? $"{startupNumber++}. {step.Name}" : step.Name;
-            if (service.Config.PresetVariables.Count == 0)
-            {
-            var stepItem = new Forms.ToolStripMenuItem(label);
-                stepItem.Click += (_, _) =>
-                {
-                    RememberServiceUse(service);
-                    _processManager?.RunStep(service.Config.Id, step.Id);
-                    RebuildTrayMenu();
-                };
-                runStepMenu.DropDownItems.Add(stepItem);
-                continue;
-            }
-
-            var stepMenu = new Forms.ToolStripMenuItem(label);
-            foreach (var variable in service.Config.PresetVariables)
-            {
-                var variableItem = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
-                variableItem.Click += (_, _) =>
-                {
-                    RememberServiceUse(service);
-                    _processManager?.RunStep(service.Config.Id, step.Id, variable);
-                    RebuildTrayMenu();
-                };
-                stepMenu.DropDownItems.Add(variableItem);
-            }
-            runStepMenu.DropDownItems.Add(stepMenu);
-        }
-
-        parent.DropDownItems.Add(runStepMenu);
-    }
-
-    private void AddRunStepMenuV2(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
-    {
-        var runnableSteps = service.Config.ScriptSteps
-            .Where(s => !string.IsNullOrWhiteSpace(s.Content))
-            .OrderBy(s => s.Order)
-            .ToList();
-
-        var runStepMenu = new Forms.ToolStripMenuItem(LocalizationService.Current.T("RunStep"))
-        {
-            Enabled = runnableSteps.Count > 0
-        };
-
-        AddRunStepGroup(runStepMenu, service, runnableSteps.Where(step => step.RunOnStart), LocalizationService.Current.T("StartupSteps"));
-        AddRunStepGroup(runStepMenu, service, runnableSteps.Where(step => !step.RunOnStart), LocalizationService.Current.T("ManualSteps"));
-
-        parent.DropDownItems.Add(runStepMenu);
-    }
-
-    private void AddRunStepGroup(
-        Forms.ToolStripMenuItem parent,
-        ServiceItemViewModel service,
-        IEnumerable<ScriptStep> sourceSteps,
-        string header)
-    {
-        var steps = sourceSteps.ToList();
-        if (steps.Count == 0)
-            return;
-
-        if (parent.DropDownItems.Count > 0)
-            parent.DropDownItems.Add(new Forms.ToolStripSeparator());
-
-        parent.DropDownItems.Add(new Forms.ToolStripMenuItem(header) { Enabled = false });
-        for (var i = 0; i < steps.Count; i++)
-        {
-            var step = steps[i];
-            var label = step.RunOnStart ? $"{i + 1}. {step.Name}" : step.Name;
-            parent.DropDownItems.Add(CreateRunStepMenuItem(service, step, label));
-        }
-    }
-
-    private Forms.ToolStripMenuItem CreateRunStepMenuItem(ServiceItemViewModel service, ScriptStep step, string label)
-    {
-        var stepState = GetStepState(service.RuntimeState, step.Id);
-        var state = stepState?.State ?? StepRunState.NotRun;
-        var isRunning = state == StepRunState.Running;
-        var variables = GetSortedVariablesForStep(service, step);
-        if (!step.UseVariable || (variables.Count == 0 && step.RunOnStart))
-        {
-            var stepItem = new Forms.ToolStripMenuItem(label)
-            {
-                Enabled = !isRunning,
-                Image = GetStepStatusDot(state),
-                ToolTipText = FormatStepStateText(state)
-            };
-            stepItem.Click += (_, _) =>
-            {
-                RememberServiceUse(service);
-                _processManager?.RunStep(service.Config.Id, step.Id);
-                RebuildTrayMenu();
-            };
-            return stepItem;
-        }
-
-        var stepMenu = new Forms.ToolStripMenuItem(label)
-        {
-            Enabled = !isRunning,
-            Image = GetStepStatusDot(state),
-            ToolTipText = FormatStepStateText(state)
-        };
-        foreach (var variable in variables)
-        {
-            var variableItem = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
-            variableItem.Click += async (_, _) =>
-            {
-                RememberServiceUse(service);
-                await RememberVariableForStepAsync(service.Config, step, variable, addIfMissing: false);
-                _processManager?.RunStep(service.Config.Id, step.Id, variable);
-                RebuildTrayMenu();
-            };
-            stepMenu.DropDownItems.Add(variableItem);
-        }
-        AddNewStepVariableMenuItem(stepMenu, service, step, variable =>
-        {
-            RememberServiceUse(service);
-            _processManager?.RunStep(service.Config.Id, step.Id, variable);
-            return Task.CompletedTask;
-        });
-        return stepMenu;
     }
 
     private string GetTrayStatusText()
@@ -740,67 +647,8 @@ public partial class App : Application
     private static string FormatVariableLabel(string variable) =>
         string.IsNullOrWhiteSpace(variable) ? LocalizationService.Current.T("EmptyVariable") : variable;
 
-    private IReadOnlyList<string> GetSortedPresetVariables(ServiceItemViewModel service) =>
-        _variableUsageStore.Sort(service.Config.Id, service.Config.PresetVariables);
-
-    private IReadOnlyList<string> GetSortedVariablesForStep(ServiceItemViewModel service, ScriptStep step) =>
-        step.RunOnStart
-            ? _variableUsageStore.Sort(service.Config.Id, service.Config.PresetVariables)
-            : _variableUsageStore.Sort(step.Id, step.StepVariables);
-
-    private void AddNewVariableMenuItem(
-        Forms.ToolStripMenuItem parent,
-        ServiceItemViewModel service,
-        Func<string, Task> runAsync)
-    {
-        parent.DropDownItems.Add(new Forms.ToolStripSeparator());
-
-        var add = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Add"));
-        add.Click += async (_, _) =>
-        {
-            var variable = await PromptForPresetVariableAsync(service);
-            if (string.IsNullOrWhiteSpace(variable))
-                return;
-
-            await runAsync(variable);
-            RebuildTrayMenu();
-        };
-        parent.DropDownItems.Add(add);
-    }
-
-    private async Task<string?> PromptForPresetVariableAsync(ServiceItemViewModel service)
-    {
-        var defaultValue = _variableUsageStore.First(service.Config.Id, service.Config.PresetVariables);
-        var dialog = new PresetVariableInputDialog(defaultValue)
-        {
-            WindowStartupLocation = WindowStartupLocation.CenterScreen
-        };
-
-        if (dialog.ShowDialog() != true)
-            return null;
-
-        var variable = dialog.Variable;
-        await RememberPresetVariableAsync(service.Config, variable, addIfMissing: true);
-        return variable;
-    }
-
-    private async Task RememberPresetVariableAsync(ServiceConfig service, string? variable, bool addIfMissing)
-    {
-        if (string.IsNullOrWhiteSpace(variable))
-            return;
-
-        var normalized = variable.Trim();
-        if (addIfMissing && !service.PresetVariables.Any(v => string.Equals(v, normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            service.PresetVariables.Add(normalized);
-            if (_mainViewModel != null)
-                await _mainViewModel.SaveConfigAsync();
-            else
-                await _configService.SaveAsync(_appConfig);
-        }
-
-        _variableUsageStore.Remember(service.Id, normalized);
-    }
+    private IReadOnlyList<string> GetSortedVariablesForStep(ScriptStep step) =>
+        _variableUsageStore.Sort(step.Id, step.StepVariables);
 
     private void AddNewStepVariableMenuItem(
         Forms.ToolStripMenuItem parent,
@@ -825,9 +673,6 @@ public partial class App : Application
 
     private async Task<string?> PromptForStepVariableAsync(ServiceItemViewModel service, ScriptStep step)
     {
-        if (step.RunOnStart)
-            return await PromptForPresetVariableAsync(service);
-
         var defaultValue = _variableUsageStore.First(step.Id, step.StepVariables);
         var dialog = new PresetVariableInputDialog(defaultValue)
         {
@@ -844,12 +689,6 @@ public partial class App : Application
 
     private async Task RememberVariableForStepAsync(ServiceConfig service, ScriptStep step, string? variable, bool addIfMissing)
     {
-        if (step.RunOnStart)
-        {
-            await RememberPresetVariableAsync(service, variable, addIfMissing);
-            return;
-        }
-
         if (string.IsNullOrWhiteSpace(variable))
             return;
 
@@ -895,29 +734,6 @@ public partial class App : Application
         }
         catch (InvalidOperationException)
         {
-        }
-        finally
-        {
-            RebuildTrayMenu();
-        }
-    }
-
-    private async Task RestartServiceQuietlyAsync(Guid serviceId, string? variable = null)
-    {
-        if (_processManager == null)
-            return;
-
-        try
-        {
-            await _processManager.RestartServiceAsync(serviceId, new ServiceStartOptions { Variable = variable });
-        }
-        catch (Win32Exception ex) when (ex.NativeErrorCode == 6)
-        {
-            _processManager.StartService(serviceId, new ServiceStartOptions { Variable = variable });
-        }
-        catch (InvalidOperationException)
-        {
-            _processManager.StartService(serviceId, new ServiceStartOptions { Variable = variable });
         }
         finally
         {
@@ -1096,7 +912,6 @@ public partial class App : Application
             vm,
             _processManager,
             _variableUsageStore,
-            RememberPresetVariableAsync,
             RememberVariableForStepAsync,
             OnEditServiceRequested);
 

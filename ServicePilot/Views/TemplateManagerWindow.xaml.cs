@@ -47,8 +47,7 @@ public partial class TemplateManagerWindow : Window
         ImportButton.Content = LocalizationService.Current.T("Import");
         NameColumn.Header = LocalizationService.Current.T("Name");
         DescriptionColumn.Header = LocalizationService.Current.T("Description");
-        StepsColumn.Header = LocalizationService.Current.T("Steps");
-        VariablesColumn.Header = LocalizationService.Current.T("Variables");
+        StepsColumn.Header = LocalizationService.Current.T("Actions");
         UpdatedAtColumn.Header = LocalizationService.Current.T("UpdatedAt");
     }
 
@@ -200,21 +199,34 @@ public partial class TemplateManagerWindow : Window
         if (!string.IsNullOrWhiteSpace(template.Description))
             builder.AppendLine(template.Description);
 
-        if (template.PresetVariables.Count > 0)
-            builder.AppendLine(LocalizationService.Current.T("Variables") + ": " + string.Join(", ", template.PresetVariables));
-
-        var startupNumber = 1;
         foreach (var step in template.ScriptSteps.OrderBy(s => s.Order))
         {
-            var label = step.RunOnStart ? $"{startupNumber++}. {step.Name}" : step.Name;
             builder.AppendLine();
-            builder.AppendLine($"{label} ({step.ScriptType})");
-            if (!step.RunOnStart && step.StepVariables.Count > 0)
+            if (step.Kind == StepKind.Composite)
+            {
+                builder.AppendLine($"{step.Name} ({LocalizationService.Current.T("Composite")})");
+                builder.AppendLine(LocalizationService.Current.T("Members") + ": " + ResolveMemberNames(template, step));
+                continue;
+            }
+
+            builder.AppendLine($"{step.Name} ({LocalizationService.Current.T("Action")} / {step.ScriptType})");
+            if (step.StepVariables.Count > 0)
                 builder.AppendLine(LocalizationService.Current.T("StepVariables") + ": " + string.Join(", ", step.StepVariables));
             builder.AppendLine(step.Content);
         }
 
         return builder.ToString().Trim();
+    }
+
+    private static string ResolveMemberNames(ServiceTemplate template, ScriptStep composite)
+    {
+        var byId = template.ScriptSteps.ToDictionary(s => s.Id);
+        var names = composite.MemberStepIds
+            .Where(byId.ContainsKey)
+            .Select(id => byId[id].Name)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .ToList();
+        return names.Count == 0 ? LocalizationService.Current.T("NoActions") : string.Join(" -> ", names);
     }
 
     private static string SafeFileName(string value)

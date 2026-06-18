@@ -67,17 +67,14 @@ public partial class ServiceManagerWindow : Window
         AddButton.Content = LocalizationService.Current.T("Add");
         EditButton.Content = LocalizationService.Current.T("Edit");
         DeleteButton.Content = LocalizationService.Current.T("Delete");
-        StartButton.Content = LocalizationService.Current.T("Start");
-        RunStepButton.Content = LocalizationService.Current.T("RunStep");
+        RunActionButton.Content = LocalizationService.Current.T("RunAction");
         StopButton.Content = LocalizationService.Current.T("Stop");
-        RestartButton.Content = LocalizationService.Current.T("Restart");
         LogsButton.Content = LocalizationService.Current.T("ViewLogs");
         SaveTemplateButton.Content = LocalizationService.Current.T("SaveAsTemplate");
         StatusColumn.Header = LocalizationService.Current.T("Status");
         NameColumn.Header = LocalizationService.Current.T("Name");
         WorkingDirectoryColumn.Header = LocalizationService.Current.T("WorkingDirectory");
-        StepsColumn.Header = LocalizationService.Current.T("Steps");
-        VariablesColumn.Header = LocalizationService.Current.T("Variables");
+        StepsColumn.Header = LocalizationService.Current.T("Actions");
         AutoStartColumn.Header = LocalizationService.Current.T("AutoStart");
     }
 
@@ -120,29 +117,23 @@ public partial class ServiceManagerWindow : Window
         _changed();
     }
 
-    private void ServicesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        UpdateActionButtons();
-    }
+    private void ServicesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateActionButtons();
 
     private void UpdateActionButtons()
     {
         var vm = SelectedService;
         if (vm == null)
         {
-            StartButton.IsEnabled = false;
             StopButton.IsEnabled = false;
-            RestartButton.IsEnabled = false;
-            RunStepButton.IsEnabled = false;
+            RunActionButton.IsEnabled = false;
             return;
         }
 
         var state = vm.RuntimeState.State;
         var hasRunningStep = vm.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running);
-        StartButton.IsEnabled = state is ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed;
         StopButton.IsEnabled = state is ProcessState.Running or ProcessState.Starting or ProcessState.Stopping || hasRunningStep;
-        RestartButton.IsEnabled = state is not ProcessState.Starting and not ProcessState.Stopping;
-        RunStepButton.IsEnabled = vm.Config.ScriptSteps.Any(step => !string.IsNullOrWhiteSpace(step.Content));
+        RunActionButton.IsEnabled = vm.Config.ScriptSteps.Any(step =>
+            step.Kind == StepKind.Composite || !string.IsNullOrWhiteSpace(step.Content));
     }
 
     private async void Add_Click(object sender, RoutedEventArgs e)
@@ -202,19 +193,6 @@ public partial class ServiceManagerWindow : Window
         _changed();
     }
 
-    private void Start_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = SelectedService;
-        if (vm == null) return;
-        if (ShowVariableMenu(sender, vm, variable => _processManager.StartService(vm.Config.Id, new ServiceStartOptions { Variable = variable })))
-            return;
-
-        RememberServiceUse(vm);
-        _processManager.StartService(vm.Config.Id);
-        UpdateActionButtons();
-        _changed();
-    }
-
     private async void Stop_Click(object sender, RoutedEventArgs e)
     {
         var vm = SelectedService;
@@ -226,68 +204,69 @@ public partial class ServiceManagerWindow : Window
         _changed();
     }
 
-    private async void Restart_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = SelectedService;
-        if (vm == null) return;
-        if (ShowVariableMenu(sender, vm, variable => _ = RestartWithVariableAsync(vm, variable)))
-            return;
-
-        RememberServiceUse(vm);
-        await _processManager.RestartServiceAsync(vm.Config.Id);
-        UpdateActionButtons();
-        _changed();
-    }
-
-    private void RunStep_Click(object sender, RoutedEventArgs e)
+    private void RunAction_Click(object sender, RoutedEventArgs e)
     {
         var vm = SelectedService;
         if (vm == null) return;
         RememberServiceUse(vm);
-
-        var steps = vm.Config.ScriptSteps
-            .Where(s => !string.IsNullOrWhiteSpace(s.Content))
-            .OrderBy(s => s.Order)
-            .ToList();
-        if (steps.Count == 0)
-            return;
 
         var menu = new ContextMenu();
-        AddStepGroup(menu, vm, steps.Where(step => step.RunOnStart), LocalizationService.Current.T("StartupSteps"));
-        AddStepGroup(menu, vm, steps.Where(step => !step.RunOnStart), LocalizationService.Current.T("ManualSteps"));
-
+        AddActionItems(menu, vm);
+        if (menu.Items.Count == 0)
+            menu.Items.Add(new MenuItem { Header = LocalizationService.Current.T("NoActions"), IsEnabled = false });
         OpenMenu(sender, menu);
     }
 
-    private void AddStepGroup(ItemsControl menu, ServiceItemViewModel vm, IEnumerable<ScriptStep> sourceSteps, string header)
+    private void AddActionItems(ItemsControl menu, ServiceItemViewModel vm)
     {
-        var steps = sourceSteps.ToList();
-        if (steps.Count == 0)
-            return;
-
-        if (menu.Items.Count > 0)
-            menu.Items.Add(new Separator());
-
-        menu.Items.Add(new MenuItem { Header = header, IsEnabled = false });
-        for (var i = 0; i < steps.Count; i++)
+        foreach (var step in vm.Config.ScriptSteps.OrderBy(s => s.Order))
         {
-            var step = steps[i];
-            var displayHeader = step.RunOnStart ? $"{i + 1}. {step.Name}" : step.Name;
-            menu.Items.Add(CreateRunStepMenuItem(vm, step, displayHeader));
+            if (step.Kind == StepKind.Composite)
+                menu.Items.Add(CreateCompositeMenuItem(vm, step));
+            else if (!string.IsNullOrWhiteSpace(step.Content))
+                menu.Items.Add(CreateActionMenuItem(vm, step));
         }
     }
 
-    private MenuItem CreateRunStepMenuItem(ServiceItemViewModel vm, ScriptStep step, string header)
+    private MenuItem CreateCompositeMenuItem(ServiceItemViewModel vm, ScriptStep composite)
+    {
+        var running = vm.RuntimeState.State is ProcessState.Running or ProcessState.Starting;
+        var variableMember = ScriptDefinitionService.FindVariableMember(vm.Config, composite);
+        if (variableMember == null)
+        {
+            var item = new MenuItem { Header = CreatePlainHeader(composite.Name), IsEnabled = !running };
+            item.Click += (_, _) =>
+            {
+                RememberServiceUse(vm);
+                _processManager.RunComposite(vm.Config.Id, composite.Id);
+                UpdateActionButtons();
+                _changed();
+            };
+            return item;
+        }
+
+        var menu = new MenuItem { Header = CreatePlainHeader(composite.Name), IsEnabled = !running };
+        AddVariableChoices(menu, vm, variableMember, variable =>
+        {
+            RememberServiceUse(vm);
+            _processManager.RunComposite(vm.Config.Id, composite.Id, variable);
+            UpdateActionButtons();
+            _changed();
+            return Task.CompletedTask;
+        });
+        return menu;
+    }
+
+    private MenuItem CreateActionMenuItem(ServiceItemViewModel vm, ScriptStep step)
     {
         var state = GetStepState(vm.RuntimeState, step.Id);
         var stepState = state?.State ?? StepRunState.NotRun;
         var isRunning = stepState == StepRunState.Running;
-        var variables = GetSortedVariablesForStep(vm, step);
-        if (!step.UseVariable || (variables.Count == 0 && step.RunOnStart))
+        if (!step.UseVariable)
         {
             var item = new MenuItem
             {
-                Header = CreateStatusHeader(header, GetStepStatusBrush(stepState)),
+                Header = CreateStatusHeader(step.Name, GetStepStatusBrush(stepState)),
                 ToolTip = FormatStepStateText(stepState),
                 IsEnabled = !isRunning
             };
@@ -301,33 +280,88 @@ public partial class ServiceManagerWindow : Window
             return item;
         }
 
-        var stepMenu = new MenuItem
+        var menu = new MenuItem
         {
-            Header = CreateStatusHeader(header, GetStepStatusBrush(stepState)),
+            Header = CreateStatusHeader(step.Name, GetStepStatusBrush(stepState)),
             ToolTip = FormatStepStateText(stepState),
             IsEnabled = !isRunning
         };
-        foreach (var variable in variables)
+        AddVariableChoices(menu, vm, step, variable =>
+        {
+            RememberServiceUse(vm);
+            _processManager.RunStep(vm.Config.Id, step.Id, variable);
+            UpdateActionButtons();
+            _changed();
+            return Task.CompletedTask;
+        });
+        return menu;
+    }
+
+    private void AddVariableChoices(ItemsControl parent, ServiceItemViewModel vm, ScriptStep step, Func<string?, Task> runAsync)
+    {
+        foreach (var variable in GetSortedVariablesForStep(step))
         {
             var variableItem = new MenuItem { Header = CreatePlainHeader(variable) };
             variableItem.Click += async (_, _) =>
             {
                 RememberServiceUse(vm);
                 await RememberVariableForStepAsync(vm.Config, step, variable, addIfMissing: false);
-                _processManager.RunStep(vm.Config.Id, step.Id, variable);
-                UpdateActionButtons();
-                _changed();
+                await runAsync(variable);
+                ServicesGrid.Items.Refresh();
             };
-            stepMenu.Items.Add(variableItem);
+            parent.Items.Add(variableItem);
         }
 
-        AddNewStepVariableMenuItem(stepMenu, vm, step, variable =>
+        parent.Items.Add(new Separator());
+        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
+        add.Click += async (_, _) =>
         {
-            RememberServiceUse(vm);
-            _processManager.RunStep(vm.Config.Id, step.Id, variable);
-            return Task.CompletedTask;
-        });
-        return stepMenu;
+            var variable = await PromptForStepVariableAsync(step);
+            if (string.IsNullOrWhiteSpace(variable))
+                return;
+
+            await runAsync(variable);
+            ServicesGrid.Items.Refresh();
+        };
+        parent.Items.Add(add);
+    }
+
+    private IReadOnlyList<string> GetSortedVariablesForStep(ScriptStep step) =>
+        _variableUsageStore.Sort(step.Id, step.StepVariables);
+
+    private async Task<string?> PromptForStepVariableAsync(ScriptStep step)
+    {
+        var defaultValue = _variableUsageStore.First(step.Id, step.StepVariables);
+        var dialog = new PresetVariableInputDialog(defaultValue) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            return null;
+
+        var variable = dialog.Variable;
+        await RememberVariableForStepAsync(SelectedService?.Config ?? throw new InvalidOperationException(), step, variable, addIfMissing: true);
+        return variable;
+    }
+
+    private async Task RememberVariableForStepAsync(ServiceConfig config, ScriptStep step, string? variable, bool addIfMissing)
+    {
+        if (string.IsNullOrWhiteSpace(variable))
+            return;
+
+        var normalized = variable.Trim();
+        if (addIfMissing && !step.StepVariables.Any(v => string.Equals(v, normalized, StringComparison.OrdinalIgnoreCase)))
+        {
+            step.StepVariables.Add(normalized);
+            await _mainViewModel.SaveConfigAsync();
+        }
+
+        _variableUsageStore.Remember(step.Id, normalized);
+    }
+
+    private void Logs_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = SelectedService;
+        if (vm == null) return;
+        RememberServiceUse(vm);
+        _viewLog(vm);
     }
 
     private static object CreateStatusHeader(string text, System.Windows.Media.Brush? dotBrush)
@@ -361,158 +395,6 @@ public partial class ServiceManagerWindow : Window
         Text = text,
         VerticalAlignment = VerticalAlignment.Center
     };
-
-    private void Logs_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = SelectedService;
-        if (vm == null) return;
-        RememberServiceUse(vm);
-        _viewLog(vm);
-    }
-
-    private async Task RestartWithVariableAsync(ServiceItemViewModel vm, string? variable)
-    {
-        await _processManager.RestartServiceAsync(vm.Config.Id, new ServiceStartOptions { Variable = variable });
-        _changed();
-    }
-
-    private bool ShowVariableMenu(object sender, ServiceItemViewModel vm, Action<string?> run)
-    {
-        var variables = GetSortedPresetVariables(vm);
-        if (variables.Count == 0)
-            return false;
-
-        var menu = new ContextMenu();
-        foreach (var variable in variables)
-        {
-            var item = new MenuItem { Header = CreatePlainHeader(variable) };
-            item.Click += async (_, _) =>
-            {
-                RememberServiceUse(vm);
-                await RememberPresetVariableAsync(vm.Config, variable, addIfMissing: false);
-                run(variable);
-                _changed();
-            };
-            menu.Items.Add(item);
-        }
-        AddNewVariableMenuItem(menu, vm, variable =>
-        {
-            RememberServiceUse(vm);
-            run(variable);
-            _changed();
-            return Task.CompletedTask;
-        });
-
-        OpenMenu(sender, menu);
-        return true;
-    }
-
-    private IReadOnlyList<string> GetSortedPresetVariables(ServiceItemViewModel vm) =>
-        _variableUsageStore.Sort(vm.Config.Id, vm.Config.PresetVariables);
-
-    private IReadOnlyList<string> GetSortedVariablesForStep(ServiceItemViewModel vm, ScriptStep step) =>
-        step.RunOnStart
-            ? _variableUsageStore.Sort(vm.Config.Id, vm.Config.PresetVariables)
-            : _variableUsageStore.Sort(step.Id, step.StepVariables);
-
-    private void AddNewVariableMenuItem(ItemsControl parent, ServiceItemViewModel vm, Func<string, Task> runAsync)
-    {
-        parent.Items.Add(new Separator());
-
-        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
-        add.Click += async (_, _) =>
-        {
-            var variable = await PromptForPresetVariableAsync(vm);
-            if (string.IsNullOrWhiteSpace(variable))
-                return;
-
-            await runAsync(variable);
-            ServicesGrid.Items.Refresh();
-            _changed();
-        };
-        parent.Items.Add(add);
-    }
-
-    private async Task<string?> PromptForPresetVariableAsync(ServiceItemViewModel vm)
-    {
-        var defaultValue = _variableUsageStore.First(vm.Config.Id, vm.Config.PresetVariables);
-        var dialog = new PresetVariableInputDialog(defaultValue) { Owner = this };
-        if (dialog.ShowDialog() != true)
-            return null;
-
-        var variable = dialog.Variable;
-        await RememberPresetVariableAsync(vm.Config, variable, addIfMissing: true);
-        return variable;
-    }
-
-    private async Task RememberPresetVariableAsync(ServiceConfig config, string? variable, bool addIfMissing)
-    {
-        if (string.IsNullOrWhiteSpace(variable))
-            return;
-
-        var normalized = variable.Trim();
-        if (addIfMissing && !config.PresetVariables.Any(v => string.Equals(v, normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            config.PresetVariables.Add(normalized);
-            await _mainViewModel.SaveConfigAsync();
-        }
-
-        _variableUsageStore.Remember(config.Id, normalized);
-    }
-
-    private void AddNewStepVariableMenuItem(ItemsControl parent, ServiceItemViewModel vm, ScriptStep step, Func<string, Task> runAsync)
-    {
-        parent.Items.Add(new Separator());
-
-        var add = new MenuItem { Header = LocalizationService.Current.T("Add") };
-        add.Click += async (_, _) =>
-        {
-            var variable = await PromptForStepVariableAsync(vm, step);
-            if (string.IsNullOrWhiteSpace(variable))
-                return;
-
-            await runAsync(variable);
-            ServicesGrid.Items.Refresh();
-            _changed();
-        };
-        parent.Items.Add(add);
-    }
-
-    private async Task<string?> PromptForStepVariableAsync(ServiceItemViewModel vm, ScriptStep step)
-    {
-        if (step.RunOnStart)
-            return await PromptForPresetVariableAsync(vm);
-
-        var defaultValue = _variableUsageStore.First(step.Id, step.StepVariables);
-        var dialog = new PresetVariableInputDialog(defaultValue) { Owner = this };
-        if (dialog.ShowDialog() != true)
-            return null;
-
-        var variable = dialog.Variable;
-        await RememberVariableForStepAsync(vm.Config, step, variable, addIfMissing: true);
-        return variable;
-    }
-
-    private async Task RememberVariableForStepAsync(ServiceConfig config, ScriptStep step, string? variable, bool addIfMissing)
-    {
-        if (step.RunOnStart)
-        {
-            await RememberPresetVariableAsync(config, variable, addIfMissing);
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(variable))
-            return;
-
-        var normalized = variable.Trim();
-        if (addIfMissing && !step.StepVariables.Any(v => string.Equals(v, normalized, StringComparison.OrdinalIgnoreCase)))
-        {
-            step.StepVariables.Add(normalized);
-            await _mainViewModel.SaveConfigAsync();
-        }
-
-        _variableUsageStore.Remember(step.Id, normalized);
-    }
 
     private static void OpenMenu(object sender, ContextMenu menu)
     {

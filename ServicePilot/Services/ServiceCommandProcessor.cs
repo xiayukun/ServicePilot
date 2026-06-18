@@ -116,8 +116,9 @@ public class ServiceCommandProcessor
           ServicePilot.exe shutdown
 
         SERVICE, STEP, and TEMPLATE can be a name or id. STEP can also be its numeric order.
-        Script types: Batch, PowerShell, Python, Node.
-        --step accepts Name|Type|command, Name|Type|UseVariable|command, Name|Type|UseVariable|RunOnStart|command, or Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command.
+        ServicePilot 2.0 uses Action steps and Composite steps. start SERVICE runs the first Composite.
+        Script types for Action steps: Batch, PowerShell, Python, Node.
+        --step accepts Action specs: Name|Type|command, Name|Type|UseVariable|command, or Name|Type|UseVariable|RunOnStart|OpenLogOnRun|command.
         --variable injects SERVICEPILOT_VARIABLE and replaces {{variable}} / {{变量}} in scripts.
         Start, stop, restart, step run, logs, and shutdown require the tray instance to be running.
         """;
@@ -126,7 +127,10 @@ public class ServiceCommandProcessor
         """
         ServicePilot AI 操作指南
 
-        你正在操作一个 Windows 托盘优先的本地开发服务管理器。ServicePilot 适合启动、停止、重启和查看本机项目服务，例如 npm/Vite、dotnet、Python、Batch、PowerShell、Node.js 脚本。
+        ServicePilot 2.0 是一个 Windows 托盘优先的本地服务和动作运行器。
+        2.0 模型:
+          - Action: 一个可执行脚本命令。
+          - Composite: 按顺序编排多个 Action；Composite 不能嵌套 Composite。
 
         推荐工作流:
           1. 先读取帮助和配置路径:
@@ -143,34 +147,37 @@ public class ServiceCommandProcessor
              ServicePilot.exe logs "SERVICE" --tail 200 --json
           4. 再执行明确动作:
              ServicePilot.exe start "SERVICE" --variable "VALUE"
-             ServicePilot.exe step run "SERVICE" "STEP" --variable "VALUE"
+             ServicePilot.exe step run "SERVICE" "ACTION_OR_COMPOSITE" --variable "VALUE"
              ServicePilot.exe stop "SERVICE"
              ServicePilot.exe restart "SERVICE" --variable "VALUE"
 
         重要规则:
-          - 启动、停止、重启、执行步骤、读取运行时日志和 shutdown 需要托盘实例正在运行。没有参数启动 ServicePilot.exe 可启动托盘实例。
-          - SERVICE、STEP、TEMPLATE 可以使用名称或 GUID。STEP 也可以用数字: 1..N 表示启动执行步骤的显示编号；0 是旧内部顺序兼容入口。
-          - 服务级预设变量用于启动、重启和启动执行步骤。
-          - 不启动执行步骤可以有自己的步骤变量。维护命令:
+          - 启动、停止、重启、执行动作、读取运行时日志和 shutdown 需要托盘实例正在运行。没有参数启动 ServicePilot.exe 可启动托盘实例。
+          - start SERVICE 会运行该服务的第一个 Composite。
+          - step run 可以运行单个 Action，也可以运行一个 Composite。
+          - SERVICE、STEP、TEMPLATE 可以使用名称或 GUID；自动化优先使用名称或 GUID。
+          - 变量现在属于 Action 的 StepVariables；服务级预设变量只是 v1 迁移遗留。
+          - 维护 Action 变量:
              ServicePilot.exe step variables "SERVICE" "STEP" --json
              ServicePilot.exe step variable-add "SERVICE" "STEP" --variable "VALUE"
              ServicePilot.exe step variable-remove "SERVICE" "STEP" --variable "VALUE"
              ServicePilot.exe step variable-clear "SERVICE" "STEP"
-          - 模板步骤变量也可由 CLI 维护:
+          - 模板动作变量也可由 CLI 维护:
              ServicePilot.exe template step-variables "TEMPLATE" "STEP" --json
              ServicePilot.exe template step-variable-add "TEMPLATE" "STEP" --variable "VALUE"
              ServicePilot.exe template step-variable-remove "TEMPLATE" "STEP" --variable "VALUE"
              ServicePilot.exe template step-variable-clear "TEMPLATE" "STEP"
-          - --variable 会注入环境变量 SERVICEPILOT_VARIABLE，并替换脚本里的 {{variable}} / {{变量}}，前提是步骤启用了 UseVariable。
-          - 不要猜配置。修改前先用 --json 查看当前服务、步骤、变量和模板。
-          - 修改配置前可以运行 doctor --json，先处理缺失目录、空步骤、重名等问题。
+          - --variable 会注入环境变量 SERVICEPILOT_VARIABLE，并替换脚本里的 {{variable}} / {{变量}}，前提是目标 Action 启用了 UseVariable。
+          - 不要猜配置。修改前先用 --json 查看当前服务、动作、变量和模板。
+          - 修改配置前可以运行 doctor --json，先处理缺失目录、空动作、组合成员缺失、组合嵌套、重名等问题。
           - 删除服务或模板时必须指定明确名称或 id。
           - ServicePilot 没有 start all。可以 stop all，但批量启动必须由调用方逐个服务显式启动。
-          - 自动化测试请先设置 SERVICEPILOT_CONFIG_DIR，避免写入用户真实 %APPDATA%\ServicePilot\config.json。
+          - 自动化测试请先设置 SERVICEPILOT_CONFIG_DIR，避免写入用户真实配置。
+          - 活跃配置是 config.v2.json；旧 config.json 只作为迁移来源保留。
 
         常用新增/编辑:
-          ServicePilot.exe service add --name "Frontend" --dir "D:\app" --step "Set API|PowerShell|true|true|..." --step "Start|Batch|false|true|npm run dev" --preset "http://localhost:9000"
-          ServicePilot.exe service edit "Frontend" --preset "http://localhost:9000" --preset "https://example.test/api"
+          ServicePilot.exe service add --name "Frontend" --dir "D:\app" --step "Set API|PowerShell|true|..." --step "Start|Batch|false|npm run dev"
+          ServicePilot.exe step variable-add "Frontend" "Set API" --variable "http://localhost:9000"
           ServicePilot.exe template save-from-service --service "Frontend" --name "Vite Frontend"
           ServicePilot.exe template apply "Vite Frontend" --service "Frontend"
           ServicePilot.exe template export "Vite Frontend" --file ".\vite-frontend.servicepilot-template.json"
@@ -261,7 +268,6 @@ public class ServiceCommandProcessor
                 issues.Add(new DiagnosticIssue("Error", "SERVICE_DIR_MISSING", target, $"服务工作目录不存在: {service.WorkingDirectory}"));
 
             ValidateSteps(issues, service.ScriptSteps, target, requiresStartupStep: true);
-            AddDuplicateVariablesIssue(issues, service.PresetVariables, target, "SERVICE_PRESET_DUPLICATE", "服务预设变量重复。");
         }
 
         foreach (var template in _appConfig.ServiceTemplates.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase))
@@ -271,7 +277,6 @@ public class ServiceCommandProcessor
                 issues.Add(new DiagnosticIssue("Error", "TEMPLATE_NAME_EMPTY", target, "模板名称不能为空。"));
 
             ValidateSteps(issues, template.ScriptSteps, target, requiresStartupStep: false);
-            AddDuplicateVariablesIssue(issues, template.PresetVariables, target, "TEMPLATE_PRESET_DUPLICATE", "模板预设变量重复。");
         }
 
         return issues;
@@ -281,12 +286,13 @@ public class ServiceCommandProcessor
     {
         if (steps.Count == 0)
         {
-            issues.Add(new DiagnosticIssue("Error", "STEPS_EMPTY", ownerTarget, "至少需要一个脚本步骤。"));
+            issues.Add(new DiagnosticIssue("Error", "STEPS_EMPTY", ownerTarget, "至少需要一个脚本动作。"));
             return;
         }
 
-        if (requiresStartupStep && !steps.Any(s => s.RunOnStart && !string.IsNullOrWhiteSpace(s.Content)))
-            issues.Add(new DiagnosticIssue("Warning", "STARTUP_STEPS_EMPTY", ownerTarget, "没有可启动执行的脚本步骤；普通启动不会运行任何命令。"));
+        var byId = steps.ToDictionary(s => s.Id);
+        if (requiresStartupStep && !steps.Any(s => s.Kind == StepKind.Composite))
+            issues.Add(new DiagnosticIssue("Warning", "COMPOSITE_MISSING", ownerTarget, "没有组合动作；start SERVICE 无法找到默认启动动作。"));
 
         var duplicateOrders = steps
             .GroupBy(s => s.Order)
@@ -294,19 +300,34 @@ public class ServiceCommandProcessor
             .Select(g => g.Key)
             .ToList();
         if (duplicateOrders.Count > 0)
-            issues.Add(new DiagnosticIssue("Warning", "STEP_ORDER_DUPLICATE", ownerTarget, $"步骤顺序重复: {string.Join(", ", duplicateOrders)}"));
+            issues.Add(new DiagnosticIssue("Warning", "STEP_ORDER_DUPLICATE", ownerTarget, $"动作顺序重复: {string.Join(", ", duplicateOrders)}"));
 
-        AddDuplicateNameIssues(issues, steps, s => s.Name, "STEP_NAME_DUPLICATE", ownerTarget, "步骤名称重复。");
+        AddDuplicateNameIssues(issues, steps, s => s.Name, "STEP_NAME_DUPLICATE", ownerTarget, "动作名称重复。");
 
         foreach (var step in steps.OrderBy(s => s.Order))
         {
             var stepTarget = $"{ownerTarget}/step:{DisplayName(step.Name, step.Id)}";
             if (string.IsNullOrWhiteSpace(step.Name))
-                issues.Add(new DiagnosticIssue("Warning", "STEP_NAME_EMPTY", stepTarget, "步骤名称为空，建议填写可读名称。"));
-            if (string.IsNullOrWhiteSpace(step.Content))
-                issues.Add(new DiagnosticIssue("Error", "STEP_CONTENT_EMPTY", stepTarget, "脚本内容不能为空。"));
-            if (!step.RunOnStart && step.UseVariable)
-                AddDuplicateVariablesIssue(issues, step.StepVariables, stepTarget, "STEP_VARIABLE_DUPLICATE", "步骤变量重复。");
+                issues.Add(new DiagnosticIssue("Warning", "STEP_NAME_EMPTY", stepTarget, "动作名称为空，建议填写可读名称。"));
+            if (step.Kind == StepKind.Action && string.IsNullOrWhiteSpace(step.Content))
+                issues.Add(new DiagnosticIssue("Error", "ACTION_CONTENT_EMPTY", stepTarget, "动作命令不能为空。"));
+            if (step.Kind == StepKind.Composite)
+            {
+                var members = step.MemberStepIds
+                    .Where(byId.ContainsKey)
+                    .Select(id => byId[id])
+                    .ToList();
+                if (members.Count == 0)
+                    issues.Add(new DiagnosticIssue("Error", "COMPOSITE_MEMBERS_EMPTY", stepTarget, "组合动作至少需要一个有效成员动作。"));
+                if (step.MemberStepIds.Any(id => !byId.ContainsKey(id)))
+                    issues.Add(new DiagnosticIssue("Error", "COMPOSITE_MEMBER_MISSING", stepTarget, "组合动作引用了不存在的成员动作。"));
+                if (members.Any(m => m.Kind == StepKind.Composite))
+                    issues.Add(new DiagnosticIssue("Error", "COMPOSITE_NESTED", stepTarget, "组合动作不能包含另一个组合动作。"));
+                if (members.Count(m => m.UseVariable) > 1)
+                    issues.Add(new DiagnosticIssue("Warning", "COMPOSITE_VARIABLE_MEMBER_MULTIPLE", stepTarget, "组合动作中有多个使用变量的成员动作；编辑保存时需要收敛为最多一个。"));
+            }
+            if (step.Kind == StepKind.Action && step.UseVariable)
+                AddDuplicateVariablesIssue(issues, step.StepVariables, stepTarget, "STEP_VARIABLE_DUPLICATE", "动作变量重复。");
         }
     }
 
@@ -355,14 +376,15 @@ public class ServiceCommandProcessor
                 s.AutoStart,
                 s.SortOrder,
                 StepCount = s.ScriptSteps.Count,
-                PresetVariables = s.PresetVariables
+                ActionCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Action),
+                CompositeCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Composite)
             }));
 
         if (services.Count == 0)
             return CommandResponse.Ok("没有配置服务。");
 
         var lines = services.Select(s =>
-            $"{s.SortOrder}. {s.Name} ({s.Id}) steps={s.ScriptSteps.Count} presets={s.PresetVariables.Count} autostart={s.AutoStart} dir=\"{s.WorkingDirectory}\"");
+            $"{s.SortOrder}. {s.Name} ({s.Id}) actions={s.ScriptSteps.Count(step => step.Kind == StepKind.Action)} composites={s.ScriptSteps.Count(step => step.Kind == StepKind.Composite)} autostart={s.AutoStart} dir=\"{s.WorkingDirectory}\"");
         return CommandResponse.Ok(string.Join(Environment.NewLine, lines));
     }
 
@@ -535,17 +557,17 @@ public class ServiceCommandProcessor
         if (HasFlag(args, "--json"))
             return Json(service);
 
-        var startupNumber = 1;
         var steps = service.ScriptSteps
             .OrderBy(s => s.Order)
             .Select(s =>
             {
-                var label = s.RunOnStart ? $"{startupNumber++}. {s.Name}" : s.Name;
-                return $"{label} type={s.ScriptType} useVariable={s.UseVariable} runOnStart={s.RunOnStart} openLogOnRun={s.OpenLogOnRun}";
+                var members = s.Kind == StepKind.Composite && s.MemberStepIds.Count > 0
+                    ? $" members={string.Join(",", s.MemberStepIds)}"
+                    : string.Empty;
+                return $"{s.Name} kind={s.Kind} type={s.ScriptType} useVariable={s.UseVariable} openLogOnRun={s.OpenLogOnRun} stepVariables={s.StepVariables.Count}{members}";
             });
-        var presets = service.PresetVariables.Count == 0 ? "(none)" : string.Join(", ", service.PresetVariables);
         return CommandResponse.Ok(
-            $"{service.Name} ({service.Id})\ndir=\"{service.WorkingDirectory}\"\nautostart={service.AutoStart}\npresets={presets}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
+            $"{service.Name} ({service.Id})\ndir=\"{service.WorkingDirectory}\"\nautostart={service.AutoStart}\nactions={service.ScriptSteps.Count(s => s.Kind == StepKind.Action)} composites={service.ScriptSteps.Count(s => s.Kind == StepKind.Composite)}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
     }
 
     private async Task<CommandResponse> ServiceEditAsync(string[] args)
@@ -587,7 +609,7 @@ public class ServiceCommandProcessor
             updated.ScriptSteps = steps;
 
         if (HasAnyOption(args, "--preset", "--preset-variable") || HasFlag(args, "--clear-presets"))
-            updated.PresetVariables = HasFlag(args, "--clear-presets") ? [] : ReadPresets(args);
+            return CommandResponse.Error("ServicePilot 2.0 已移除服务级预设变量；请使用 step variable-add 维护动作变量。", 2);
 
         await UpdateConfigAsync(updated);
         return CommandResponse.Ok($"已更新服务: {updated.Name}");
@@ -607,9 +629,12 @@ public class ServiceCommandProcessor
         if (!Directory.Exists(dir))
             return CommandResponse.Error($"工作目录不存在: {dir}", 2);
 
+        if (HasAnyOption(args, "--preset", "--preset-variable") || HasFlag(args, "--clear-presets"))
+            return CommandResponse.Error("ServicePilot 2.0 已移除服务级预设变量；请使用 step variable-add 维护动作变量。", 2);
+
         var steps = ParseSteps(args);
         if (steps.Count == 0)
-            return CommandResponse.Error("缺少脚本步骤。使用 --step \"Name|Batch|command\" 或 --content。", 2);
+            return CommandResponse.Error("缺少脚本动作。使用 --step \"Name|Batch|command\" 或 --content。", 2);
 
         if (FindConfig(name.Trim()) != null)
             return CommandResponse.Error($"服务名称已存在: {name.Trim()}", 2);
@@ -619,8 +644,8 @@ public class ServiceCommandProcessor
             Name = name.Trim(),
             WorkingDirectory = dir.Trim(),
             AutoStart = HasFlag(args, "--autostart"),
-            ScriptSteps = steps,
-            PresetVariables = ReadPresets(args)
+            ScriptSteps = EnsureDefaultComposite(steps),
+            PresetVariables = []
         };
 
         await AddConfigAsync(config);
@@ -661,21 +686,19 @@ public class ServiceCommandProcessor
             {
                 step.Id,
                 step.Name,
+                step.Kind,
                 step.ScriptType,
                 step.UseVariable,
-                step.RunOnStart,
                 step.OpenLogOnRun,
                 step.StepVariables,
+                step.MemberStepIds,
                 step.Order,
-                DisplayOrder = step.RunOnStart
-                    ? steps.TakeWhile(s => s.Id != step.Id).Count(s => s.RunOnStart) + 1
-                    : (int?)null,
                 HasContent = !string.IsNullOrWhiteSpace(step.Content),
                 Runtime = runtime != null && runtime.StepStates.TryGetValue(step.Id, out var state) ? state : null
             }));
 
         return steps.Count == 0
-            ? CommandResponse.Ok($"服务没有步骤: {service.Name}")
+            ? CommandResponse.Ok($"服务没有动作: {service.Name}")
             : CommandResponse.Ok(string.Join(Environment.NewLine, FormatStepList(steps)));
     }
 
@@ -693,17 +716,29 @@ public class ServiceCommandProcessor
 
         var step = FindStep(service.Config, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到步骤: {args[1]}", 2);
+            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+        if (step.Kind == StepKind.Composite)
+        {
+            var variableMember = ScriptDefinitionService.FindVariableMember(service.Config, step);
+            var compositeVariable = ReadVariable(args);
+            RememberService(service.Config.Id);
+            if (variableMember != null)
+                RememberVariableForStep(service.Config, variableMember, compositeVariable);
+            return _processManager.RunComposite(service.Config.Id, step.Id, compositeVariable)
+                ? CommandResponse.Ok($"已发送组合动作命令: {service.Config.Name} / {step.Name}")
+                : CommandResponse.Error($"组合动作执行失败: {service.Config.Name} / {step.Name}", 2);
+        }
+
         if (string.IsNullOrWhiteSpace(step.Content))
-            return CommandResponse.Error($"步骤没有脚本内容，无法执行: {step.Name}", 2);
+            return CommandResponse.Error($"动作没有脚本内容，无法执行: {step.Name}", 2);
 
         var variable = ReadVariable(args);
         RememberService(service.Config.Id);
         if (step.UseVariable)
             RememberVariableForStep(service.Config, step, variable);
         return _processManager.RunStep(service.Config.Id, step.Id, variable)
-            ? CommandResponse.Ok($"已发送执行步骤命令: {service.Config.Name} / {step.Name}")
-            : CommandResponse.Error($"执行步骤失败: {service.Config.Name} / {step.Name}", 2);
+            ? CommandResponse.Ok($"已发送执行动作命令: {service.Config.Name} / {step.Name}")
+            : CommandResponse.Error($"执行动作失败: {service.Config.Name} / {step.Name}", 2);
     }
 
     private CommandResponse StepVariables(string[] args)
@@ -717,9 +752,9 @@ public class ServiceCommandProcessor
 
         var step = FindStep(service, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到步骤: {args[1]}", 2);
+            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
 
-        var variables = step.RunOnStart ? service.PresetVariables : step.StepVariables;
+        var variables = step.StepVariables;
         if (HasFlag(args, "--json"))
             return Json(new
             {
@@ -727,8 +762,8 @@ public class ServiceCommandProcessor
                 ServiceName = service.Name,
                 StepId = step.Id,
                 StepName = step.Name,
-                step.RunOnStart,
-                VariableScope = step.RunOnStart ? "service" : "step",
+                step.Kind,
+                VariableScope = "step",
                 Variables = variables
             });
 
@@ -754,7 +789,7 @@ public class ServiceCommandProcessor
                 variables.Add(normalized);
         });
 
-        return result ?? CommandResponse.Ok($"已新增步骤变量: {variable.Trim()}");
+        return result ?? CommandResponse.Ok($"已新增动作变量: {variable.Trim()}");
     }
 
     private async Task<CommandResponse> StepVariableRemoveAsync(string[] args)
@@ -769,7 +804,7 @@ public class ServiceCommandProcessor
         var result = await UpdateStepVariablesAsync(args[0], args[1], variables =>
             variables.RemoveAll(v => string.Equals(v, variable.Trim(), StringComparison.OrdinalIgnoreCase)));
 
-        return result ?? CommandResponse.Ok($"已删除步骤变量: {variable.Trim()}");
+        return result ?? CommandResponse.Ok($"已删除动作变量: {variable.Trim()}");
     }
 
     private async Task<CommandResponse> StepVariableClearAsync(string[] args)
@@ -778,7 +813,7 @@ public class ServiceCommandProcessor
             return CommandResponse.Error("用法: step variable-clear SERVICE STEP", 2);
 
         var result = await UpdateStepVariablesAsync(args[0], args[1], variables => variables.Clear());
-        return result ?? CommandResponse.Ok("已清空步骤变量。");
+        return result ?? CommandResponse.Ok("已清空动作变量。");
     }
 
     private async Task<CommandResponse?> UpdateStepVariablesAsync(string serviceSelector, string stepSelector, Action<List<string>> update)
@@ -790,9 +825,12 @@ public class ServiceCommandProcessor
         var updated = ScriptDefinitionService.CloneService(service);
         var step = FindStep(updated, stepSelector);
         if (step == null)
-            return CommandResponse.Error($"找不到步骤: {stepSelector}", 2);
+            return CommandResponse.Error($"找不到动作: {stepSelector}", 2);
 
-        var variables = step.RunOnStart ? updated.PresetVariables : step.StepVariables;
+        if (step.Kind != StepKind.Action)
+            return CommandResponse.Error("组合动作不直接维护变量；请维护其成员动作的变量。", 2);
+
+        var variables = step.StepVariables;
         update(variables);
         await UpdateConfigAsync(updated);
         return null;
@@ -808,7 +846,7 @@ public class ServiceCommandProcessor
 
         var lines = _appConfig.ServiceTemplates
             .OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(t => $"{t.Name} ({t.Id}) steps={t.ScriptSteps.Count} presets={t.PresetVariables.Count} - {t.Description}");
+            .Select(t => $"{t.Name} ({t.Id}) actions={t.ScriptSteps.Count(step => step.Kind == StepKind.Action)} composites={t.ScriptSteps.Count(step => step.Kind == StepKind.Composite)} - {t.Description}");
         return CommandResponse.Ok(string.Join(Environment.NewLine, lines));
     }
 
@@ -874,8 +912,7 @@ public class ServiceCommandProcessor
             return Json(template);
 
         var steps = FormatStepList(template.ScriptSteps.OrderBy(s => s.Order).ToList());
-        var presets = template.PresetVariables.Count == 0 ? "(none)" : string.Join(", ", template.PresetVariables);
-        return CommandResponse.Ok($"{template.Name} ({template.Id})\n{template.Description}\npresets={presets}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
+        return CommandResponse.Ok($"{template.Name} ({template.Id})\n{template.Description}\nactions={template.ScriptSteps.Count(s => s.Kind == StepKind.Action)} composites={template.ScriptSteps.Count(s => s.Kind == StepKind.Composite)}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
     }
 
     private async Task<CommandResponse> TemplateAddAsync(string[] args)
@@ -888,15 +925,15 @@ public class ServiceCommandProcessor
 
         var steps = ParseSteps(args);
         if (steps.Count == 0)
-            return CommandResponse.Error("缺少脚本步骤。使用 --step \"Name|Batch|command\" 或 --content。", 2);
+            return CommandResponse.Error("缺少脚本动作。使用 --step \"Name|Batch|command\" 或 --content。", 2);
 
         var now = DateTime.Now;
         var template = new ServiceTemplate
         {
             Name = name.Trim(),
             Description = ReadOption(args, "--description") ?? string.Empty,
-            ScriptSteps = steps,
-            PresetVariables = ReadPresets(args),
+            ScriptSteps = EnsureDefaultComposite(steps),
+            PresetVariables = [],
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -930,10 +967,10 @@ public class ServiceCommandProcessor
 
         var steps = ParseSteps(args);
         if (steps.Count > 0)
-            template.ScriptSteps = steps;
+            template.ScriptSteps = EnsureDefaultComposite(steps);
 
         if (HasAnyOption(args, "--preset", "--preset-variable") || HasFlag(args, "--clear-presets"))
-            template.PresetVariables = HasFlag(args, "--clear-presets") ? [] : ReadPresets(args);
+            return CommandResponse.Error("ServicePilot 2.0 已移除模板级预设变量；请使用 template step-variable-add 维护动作变量。", 2);
 
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
@@ -1050,9 +1087,9 @@ public class ServiceCommandProcessor
 
         var step = FindStep(template.ScriptSteps, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到模板步骤: {args[1]}", 2);
+            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
 
-        var variables = step.RunOnStart ? template.PresetVariables : step.StepVariables;
+        var variables = step.StepVariables;
         if (HasFlag(args, "--json"))
             return Json(new
             {
@@ -1060,8 +1097,8 @@ public class ServiceCommandProcessor
                 TemplateName = template.Name,
                 StepId = step.Id,
                 StepName = step.Name,
-                step.RunOnStart,
-                VariableScope = step.RunOnStart ? "template" : "step",
+                step.Kind,
+                VariableScope = "step",
                 Variables = variables
             });
 
@@ -1087,7 +1124,7 @@ public class ServiceCommandProcessor
                 variables.Add(normalized);
         });
 
-        return result ?? CommandResponse.Ok($"已新增模板步骤变量: {variable.Trim()}");
+        return result ?? CommandResponse.Ok($"已新增模板动作变量: {variable.Trim()}");
     }
 
     private async Task<CommandResponse> TemplateStepVariableRemoveAsync(string[] args)
@@ -1102,7 +1139,7 @@ public class ServiceCommandProcessor
         var result = await UpdateTemplateStepVariablesAsync(args[0], args[1], variables =>
             variables.RemoveAll(v => string.Equals(v, variable.Trim(), StringComparison.OrdinalIgnoreCase)));
 
-        return result ?? CommandResponse.Ok($"已删除模板步骤变量: {variable.Trim()}");
+        return result ?? CommandResponse.Ok($"已删除模板动作变量: {variable.Trim()}");
     }
 
     private async Task<CommandResponse> TemplateStepVariableClearAsync(string[] args)
@@ -1111,7 +1148,7 @@ public class ServiceCommandProcessor
             return CommandResponse.Error("用法: template step-variable-clear TEMPLATE STEP", 2);
 
         var result = await UpdateTemplateStepVariablesAsync(args[0], args[1], variables => variables.Clear());
-        return result ?? CommandResponse.Ok("已清空模板步骤变量。");
+        return result ?? CommandResponse.Ok("已清空模板动作变量。");
     }
 
     private async Task<CommandResponse?> UpdateTemplateStepVariablesAsync(string templateSelector, string stepSelector, Action<List<string>> update)
@@ -1122,9 +1159,12 @@ public class ServiceCommandProcessor
 
         var step = FindStep(template.ScriptSteps, stepSelector);
         if (step == null)
-            return CommandResponse.Error($"找不到模板步骤: {stepSelector}", 2);
+            return CommandResponse.Error($"找不到模板动作: {stepSelector}", 2);
 
-        var variables = step.RunOnStart ? template.PresetVariables : step.StepVariables;
+        if (step.Kind != StepKind.Action)
+            return CommandResponse.Error("组合动作不直接维护变量；请维护其成员动作的变量。", 2);
+
+        var variables = step.StepVariables;
         update(variables);
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
@@ -1185,9 +1225,9 @@ public class ServiceCommandProcessor
             result.Add(new ScriptStep
             {
                 Name = parts[0],
+                Kind = StepKind.Action,
                 ScriptType = type,
                 UseVariable = parts.Length < 4 || !bool.TryParse(parts[2], out var useVariable) || useVariable,
-                RunOnStart = parts.Length < 5 || !bool.TryParse(parts[3], out var runOnStart) || runOnStart,
                 OpenLogOnRun = parts.Length >= 6 && bool.TryParse(parts[4], out var openLogOnRun) && openLogOnRun,
                 Content = parts.Length == 6 ? parts[5] : parts.Length == 5 ? parts[4] : parts.Length == 4 ? parts[3] : parts[2],
                 Order = result.Count
@@ -1200,13 +1240,46 @@ public class ServiceCommandProcessor
             result.Add(new ScriptStep
             {
                 Name = ReadOption(args, "--step-name") ?? "Main",
+                Kind = StepKind.Action,
                 ScriptType = ReadScriptType(args),
                 UseVariable = ReadBoolOption(args, "--use-variable") ?? true,
-                RunOnStart = ReadBoolOption(args, "--run-on-start") ?? true,
                 OpenLogOnRun = ReadBoolOption(args, "--open-log-on-run") ?? false,
                 Content = content,
                 Order = 0
             });
+        }
+
+        return result;
+    }
+
+    private static List<ScriptStep> EnsureDefaultComposite(List<ScriptStep> steps)
+    {
+        if (steps.Any(step => step.Kind == StepKind.Composite))
+            return steps.Select((step, index) =>
+            {
+                step.Order = index;
+                return step;
+            }).ToList();
+
+        var actions = steps.Where(step => step.Kind == StepKind.Action).ToList();
+        if (actions.Count == 0)
+            return steps;
+
+        var composite = new ScriptStep
+        {
+            Name = ConfigMigrationService.StartCompositeName,
+            Kind = StepKind.Composite,
+            UseVariable = false,
+            OpenLogOnRun = false,
+            MemberStepIds = actions.Select(step => step.Id).ToList(),
+            Order = 0
+        };
+
+        var result = new List<ScriptStep> { composite };
+        for (var i = 0; i < actions.Count; i++)
+        {
+            actions[i].Order = i + 1;
+            result.Add(actions[i]);
         }
 
         return result;
@@ -1306,12 +1379,11 @@ public class ServiceCommandProcessor
 
             if (order > 0)
             {
-                var startupSteps = steps
-                    .Where(s => s.RunOnStart)
+                var orderedSteps = steps
                     .OrderBy(s => s.Order)
                     .ToList();
-                if (order <= startupSteps.Count)
-                    return startupSteps[order - 1];
+                if (order <= orderedSteps.Count)
+                    return orderedSteps[order - 1];
             }
 
             return steps.FirstOrDefault(s => s.Order == order);
@@ -1332,23 +1404,18 @@ public class ServiceCommandProcessor
         service.Config.WorkingDirectory,
         service.Config.AutoStart,
         StepCount = service.Config.ScriptSteps.Count,
-        service.Config.PresetVariables,
+        ActionCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Action),
+        CompositeCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Composite),
         StepStates = service.Config.ScriptSteps.OrderBy(s => s.Order).Select(step => new
         {
             step.Id,
             step.Name,
+            step.Kind,
             step.UseVariable,
-            step.RunOnStart,
             step.OpenLogOnRun,
             step.StepVariables,
+            step.MemberStepIds,
             step.Order,
-            DisplayOrder = step.RunOnStart
-                ? service.Config.ScriptSteps
-                    .Where(s => s.RunOnStart)
-                    .OrderBy(s => s.Order)
-                    .TakeWhile(s => s.Id != step.Id)
-                    .Count() + 1
-                : (int?)null,
             Runtime = service.StepStates.TryGetValue(step.Id, out var state) ? state : null
         })
     };
@@ -1375,7 +1442,7 @@ public class ServiceCommandProcessor
         if (string.IsNullOrWhiteSpace(variable))
             return;
 
-        _variableUsageStore?.Remember(step.RunOnStart ? service.Id : step.Id, variable.Trim());
+        _variableUsageStore?.Remember(step.Id, variable.Trim());
     }
 
     private static string? ReadVariable(IReadOnlyList<string> args) =>
@@ -1408,14 +1475,15 @@ public class ServiceCommandProcessor
 
     private static IEnumerable<string> FormatStepList(IReadOnlyList<ScriptStep> steps)
     {
-        var startupNumber = 1;
         foreach (var step in steps.OrderBy(s => s.Order))
         {
-            var label = step.RunOnStart ? $"{startupNumber++}. {step.Name}" : step.Name;
-            var stepVariables = !step.RunOnStart && step.StepVariables.Count > 0
+            var members = step.Kind == StepKind.Composite && step.MemberStepIds.Count > 0
+                ? $" members={string.Join(",", step.MemberStepIds)}"
+                : string.Empty;
+            var stepVariables = step.StepVariables.Count > 0
                 ? $" stepVariables={step.StepVariables.Count}"
                 : string.Empty;
-            yield return $"{label} ({step.Id}) type={step.ScriptType} useVariable={step.UseVariable} runOnStart={step.RunOnStart} openLogOnRun={step.OpenLogOnRun}{stepVariables}";
+            yield return $"{step.Name} ({step.Id}) kind={step.Kind} type={step.ScriptType} useVariable={step.UseVariable} openLogOnRun={step.OpenLogOnRun}{stepVariables}{members}";
         }
     }
 

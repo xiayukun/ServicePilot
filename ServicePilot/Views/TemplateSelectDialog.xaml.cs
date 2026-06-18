@@ -49,7 +49,7 @@ public partial class TemplateSelectDialog : Window
 
         public string Summary => LocalizationService.Current.F(
             "TemplateSummary",
-            Template.ScriptSteps.Count,
-            Template.PresetVariables.Count);
+            Template.ScriptSteps.Count(s => s.Kind == StepKind.Action),
+            Template.ScriptSteps.Count(s => s.Kind == StepKind.Composite));
     }
 }

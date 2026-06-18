@@ -11,10 +11,13 @@ public class ConfigService
         Environment.GetEnvironmentVariable("SERVICEPILOT_CONFIG_DIR")
         ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ServicePilot");
 
-    private static readonly string ConfigPath = Path.Combine(ConfigDir, "config.json");
+    // v2 active config file. The legacy v1 file (config.json) is kept untouched after a one-time migration.
+    private static readonly string ConfigPath = Path.Combine(ConfigDir, "config.v2.json");
+    private static readonly string LegacyV1ConfigPath = Path.Combine(ConfigDir, "config.json");
 
     public string ConfigDirectory => ConfigDir;
     public string PathToConfig => ConfigPath;
+    public string LegacyV1Config => LegacyV1ConfigPath;
     public string LegacyLocalConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
 
     private static readonly JsonSerializerOptions Options = new()
@@ -29,12 +32,28 @@ public class ConfigService
         MigrateLegacyLocalConfigIfNeeded("config.json");
         MigrateLegacyLocalConfigIfNeeded("variable-usage-cache.json");
 
-        if (!File.Exists(ConfigPath))
-            return new AppConfig();
+        // Already migrated: load the v2 file directly.
+        if (File.Exists(ConfigPath))
+            return await ReadConfigAsync(ConfigPath);
 
+        // One-time migration: read the legacy v1 config, migrate to v2, and persist to the v2 file.
+        // The legacy config.json is intentionally left in place as a backup.
+        if (File.Exists(LegacyV1ConfigPath))
+        {
+            var legacy = await ReadConfigAsync(LegacyV1ConfigPath);
+            var migrated = ConfigMigrationService.Migrate(legacy);
+            await SaveAsync(migrated);
+            return migrated;
+        }
+
+        return new AppConfig();
+    }
+
+    private static async Task<AppConfig> ReadConfigAsync(string path)
+    {
         try
         {
-            var json = await File.ReadAllTextAsync(ConfigPath);
+            var json = await File.ReadAllTextAsync(path);
             return JsonSerializer.Deserialize<AppConfig>(json, Options) ?? new AppConfig();
         }
         catch

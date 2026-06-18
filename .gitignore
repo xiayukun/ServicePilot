@@ -10,5 +10,7 @@ TestResults/
 *.log
 *.tmp
 *.bak
+*.private.md
+Assets/screenshots/pending/
 *.nupkg
 *.snupkg

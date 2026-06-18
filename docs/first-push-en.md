@@ -21,7 +21,7 @@ The local repository already contains `README.md`, `.gitignore`, and `LICENSE`, 
 ## Local Git Settings
 
 ```powershell
-git config user.name "xiayukun"
+git config user.name "YOUR_GITHUB_USERNAME"
 git config user.email "YOUR_GITHUB_EMAIL"
 ```
 
@@ -36,7 +36,7 @@ git commit -m "Initial public release"
 ## Connect Remote
 
 ```powershell
-git remote add origin https://github.com/xiayukun/ServicePilot.git
+git remote add origin https://github.com/<owner>/ServicePilot.git
 git branch -M main
 git push -u origin main
 ```
