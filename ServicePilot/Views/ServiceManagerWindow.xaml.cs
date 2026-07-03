@@ -110,6 +110,13 @@ public partial class ServiceManagerWindow : Window
             ServicesGrid.SelectedItem = services.FirstOrDefault(service => service.Config.Id == selectedId.Value);
     }
 
+    public void RefreshAfterConfigChanged(Guid? selectedServiceId = null)
+    {
+        RefreshServicesGrid(selectedServiceId);
+        ServicesGrid.Items.Refresh();
+        UpdateActionButtons();
+    }
+
     private void RememberServiceUse(ServiceItemViewModel vm)
     {
         _variableUsageStore.RememberService(vm.Config.Id);

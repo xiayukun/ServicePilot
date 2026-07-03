@@ -4,22 +4,19 @@
 
 This document is for AI assistants, automation scripts, and maintainers. ServicePilot's CLI is designed so agents inspect current facts before taking explicit actions.
 
-## Recommended Prompt
+## Recommended AI Handoff
+
+After downloading and launching ServicePilot, ask the user to right-click the tray number and choose `Copy help for AI`, then paste the full window content into the AI assistant. The copied content includes the current absolute `ServicePilot.exe` path, recommended first commands, and safety guidance from the same source as `ai-help`, so the AI does not have to guess the exe location.
+
+If the tray window is not available yet, use this generic prompt, but replace `ServicePilot.exe` with the real absolute exe path:
 
 ```text
-You may use ServicePilot to manage my Windows local development services. Start by running:
-
-ServicePilot.exe ai-help
-ServicePilot.exe config-path
-ServicePilot.exe doctor --json
-ServicePilot.exe list --json
-ServicePilot.exe status all --json
-
-Use the JSON output as the source of truth. Do not guess service names, step names, or variables. Prefer ServicePilot.exe CLI commands for starting, stopping, restarting, running steps, and reading logs. Before deleting or overwriting configuration, state the exact target service/template name. For tests, set SERVICEPILOT_CONFIG_DIR first so my real configuration is not modified.
+You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, config-path, doctor --json, list --json, and status all --json, and use the real output as the source of truth. Do not guess service names, action names, variables, templates, or paths. Before deleting, overwriting, or renaming anything, state the exact target name or id. For tests, set SERVICEPILOT_CONFIG_DIR first so my real configuration is not modified.
 ```
 
 ## Agent Rules
 
+- If the tray instance is running, you may ask the user to copy `Copy help for AI` from the tray context menu first. That window includes the current absolute `ServicePilot.exe` path, recommended first commands, and safety guidance from the same source as `ai-help`.
 - Start with `ServicePilot.exe ai-help`.
 - Prefer `--json` for configuration and runtime state.
 - Run `doctor --json` before edits or startup when possible to catch missing directories, empty steps, duplicate names, and duplicate variables.
@@ -28,6 +25,7 @@ Use the JSON output as the source of truth. Do not guess service names, step nam
 - Before deleting services/templates or applying templates, identify the exact name or GUID.
 - Set `SERVICEPILOT_CONFIG_DIR` for automation tests.
 - When `SERVICEPILOT_CONFIG_DIR` is set, CLI commands do not connect to the global running tray instance by default. Set `SERVICEPILOT_ALLOW_TRAY_PIPE=1` only when pipe routing is intentional.
+- After a successful configuration change routed through the tray pipe, the tray menu, open service manager, open template manager, and related log windows refresh immediately.
 - Do not reintroduce `start all`; batch startup should be explicit in the caller.
 
 ## Initial Probe

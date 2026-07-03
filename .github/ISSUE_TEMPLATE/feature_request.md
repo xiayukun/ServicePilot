@@ -18,7 +18,7 @@ English template: [feature_request-en.md](feature_request-en.md)
 - [ ] 日志窗口
 - [ ] CLI / AI 自动化
 - [ ] 模板
-- [ ] 变量或步骤执行
+- [ ] 变量或动作执行
 
 ## 建议方案
 

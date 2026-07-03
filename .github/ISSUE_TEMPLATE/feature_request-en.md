@@ -18,7 +18,7 @@ assignees: ""
 - [ ] Log window
 - [ ] CLI / AI automation
 - [ ] Templates
-- [ ] Variables or step execution
+- [ ] Variables or action execution
 
 ## Proposed solution
 

@@ -26,9 +26,9 @@
 
 ## 发布前
 
-- 按 `docs/screenshot-guide.md` 准备中英文真实截图，并替换 `Assets/app-preview.png`。
+- 按 `docs/screenshot-guide.md` 准备中英文真实截图；README 首屏主图当前使用 `Assets/screenshots/tray-menu-zh.png`，社交预览图需要时再重新生成。
 - 确认发布制品名为 `ServicePilot.exe`。
-- 确认 README 的快速开始和 CLI 章节符合当前应用。
+- 确认 README 的下载、`复制给 AI 的帮助`、快速开始和 CLI 章节符合当前应用。
 - 确认 `LICENSE` 存在。
 - 确认 `PRIVACY.md` 存在，并解释仅本地运行。
 - 按 `docs/first-push.md` 创建空 GitHub 仓库并首次推送。
@@ -48,7 +48,7 @@
 低试用成本：
 
 - 用户可以下载一个制品。
-- 第一个命令或第一次点击显而易见。
+- 第一次点击显而易见：下载启动后，右键托盘数字并复制给 AI 的帮助；需要命令行时再看 `ai-help` / `doctor --json`。
 - 失败模式和局限性有文档说明。
 
 信任信号：

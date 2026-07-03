@@ -58,6 +58,17 @@ public partial class TemplateManagerWindow : Window
         PreviewBox.Text = string.Empty;
     }
 
+    public void RefreshAfterConfigChanged()
+    {
+        var selectedId = SelectedTemplate?.Id;
+        TemplatesGrid.ItemsSource = null;
+        var templates = _appConfig.ServiceTemplates.OrderBy(t => t.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        TemplatesGrid.ItemsSource = templates;
+        if (selectedId.HasValue)
+            TemplatesGrid.SelectedItem = templates.FirstOrDefault(t => t.Id == selectedId.Value);
+        RefreshPreview();
+    }
+
     private async void Add_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ServiceTemplateDialog { Owner = this };

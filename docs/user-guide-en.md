@@ -4,7 +4,7 @@
 
 ServicePilot is a tray-first Windows manager for local development services. It centralizes startup commands, utility scripts, environment switching, and logs across multiple project folders, while exposing one queryable CLI for AI agents and automation scripts.
 
-It is not only for "starting services". Anything the command line can do can usually be wrapped as a step or template: edit config files, switch backend URLs, pull or checkout Git refs, install dependencies, open IDEs or terminals, and run build/debug commands. A good AI workflow is to read `ai-help`, `doctor --json`, `list --json`, and `status --json` first, then generate services or templates from the current facts.
+It is not only for "starting services". Anything the command line can do can usually be wrapped as a step or template: edit config files, switch backend URLs, pull or checkout Git refs, install dependencies, open IDEs or terminals, and run build/debug commands. A good AI workflow is to use `Copy help for AI` from the tray menu, or read `ai-help`, `config-path`, `doctor --json`, `list --json`, and `status --json` first, then generate services or templates from the current facts.
 
 ## Basic Workflow
 
@@ -83,7 +83,7 @@ Startup failures, step failures, and system errors are written to the log and al
 
 ## CLI / AI Workflow
 
-Recommended first commands for AI agents:
+First copy `Copy help for AI` from the tray context menu and paste the prompt with the current absolute exe path into the AI assistant. The AI should then run:
 
 ```powershell
 ServicePilot.exe ai-help
@@ -94,6 +94,10 @@ ServicePilot.exe status all --json
 ```
 
 Use JSON output as the source of truth. Do not guess service names, step names, or variables.
+
+The tray menu item `Copy help for AI` opens a window with the current absolute `ServicePilot.exe` path, recommended first commands, and safety guidance from the same source as `ServicePilot.exe ai-help`. Copying that content to an AI assistant avoids guessing the exe location or command capabilities.
+
+When CLI configuration changes are routed through the running tray instance, the tray menu, open service manager, open template manager, and related log windows refresh immediately; you do not need to close and reopen them.
 
 Common commands:
 
@@ -209,14 +213,10 @@ Further reading:
 
 ## Prompt For AI Agents
 
+After downloading and launching ServicePilot, the recommended user flow is to choose `Copy help for AI` from the tray context menu and paste the full window content into the AI assistant. That content includes the current absolute `ServicePilot.exe` path, so the AI can run `ai-help`, `doctor --json`, `list --json`, and `status all --json` from facts before creating personalized services, templates, actions, and variables.
+
+If the tray window is not available, use this generic prompt temporarily and replace `ServicePilot.exe` with the real absolute exe path:
+
 ```text
-You may use ServicePilot to manage my Windows local development services. Start by running:
-
-ServicePilot.exe ai-help
-ServicePilot.exe config-path
-ServicePilot.exe doctor --json
-ServicePilot.exe list --json
-ServicePilot.exe status all --json
-
-Use the JSON output as the source of truth. Do not guess service names, step names, or variables. Prefer ServicePilot.exe CLI commands for starting, stopping, restarting, running steps, and reading logs. Before deleting or overwriting configuration, state the exact target service/template name. For tests, set SERVICEPILOT_CONFIG_DIR first so my real configuration is not modified.
+You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, config-path, doctor --json, list --json, and status all --json, and use the real output as the source of truth. Do not guess service names, action names, variables, templates, or paths. Before deleting, overwriting, or renaming anything, state the exact target name or id. For tests, set SERVICEPILOT_CONFIG_DIR first so my real configuration is not modified.
 ```

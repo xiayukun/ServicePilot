@@ -120,6 +120,12 @@ public partial class LogWindow : Window
         RefreshServiceTabHeader();
     }
 
+    public void RefreshAfterConfigChanged()
+    {
+        UpdateTitle();
+        UpdateActionButtons();
+    }
+
     public void LoadLogs(IEnumerable<LogEntry> entries)
     {
         var snapshot = entries.TakeLast(MaxLogEntries).ToList();

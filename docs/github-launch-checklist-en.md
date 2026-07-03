@@ -26,9 +26,9 @@ Good GitHub topics:
 
 ## Before Publishing
 
-- Prepare Chinese and English screenshots with `docs/screenshot-guide.md`, then replace `Assets/app-preview.png` with a real screenshot.
+- Prepare Chinese and English screenshots with `docs/screenshot-guide.md`; the README hero currently uses `Assets/screenshots/tray-menu-zh.png`, and the social preview image should be regenerated only when needed.
 - Confirm the release artifact is named `ServicePilot.exe`.
-- Confirm README quick start and CLI sections match the current app.
+- Confirm README download, `Copy help for AI`, quick start, and CLI sections match the current app.
 - Confirm `LICENSE` exists.
 - Confirm `PRIVACY.md` exists and explains local-only behavior.
 - Follow `docs/first-push.md` for the empty GitHub repository and first push.
@@ -48,7 +48,7 @@ Clear first screen:
 Low trial cost:
 
 - Users can download one artifact.
-- The first command or first click is obvious.
+- The first click is obvious: after download and launch, right-click the tray number and copy help for AI; command-line users can then check `ai-help` / `doctor --json`.
 - Failure modes and limitations are documented.
 
 Trust signals:

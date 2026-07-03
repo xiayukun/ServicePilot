@@ -23,6 +23,8 @@ public partial class App : Application
     private readonly Dictionary<Guid, LogWindow> _logWindows = new();
     private readonly Dictionary<Guid, List<LogEntry>> _logBuffers = new();
     private readonly Dictionary<Guid, DateTime> _lastErrorNotificationAt = new();
+    private readonly List<ServiceManagerWindow> _serviceManagerWindows = new();
+    private readonly List<TemplateManagerWindow> _templateManagerWindows = new();
 
     private Forms.NotifyIcon? _trayIcon;
     private MainViewModel? _mainViewModel;
@@ -40,6 +42,18 @@ public partial class App : Application
     private static readonly Drawing.Image RunningStatusDot = CreateStatusDotImage(Drawing.Color.FromArgb(255, 24, 155, 96));
     private static readonly Drawing.Image FailedStatusDot = CreateStatusDotImage(Drawing.Color.FromArgb(255, 220, 53, 69));
     private static readonly Drawing.Image WarningStatusDot = CreateStatusDotImage(Drawing.Color.FromArgb(255, 245, 158, 11));
+
+    [Flags]
+    private enum RuntimeRefreshScope
+    {
+        None = 0,
+        Services = 1,
+        Templates = 2,
+        RecentUsage = 4,
+        Tray = 8,
+        Logs = 16,
+        All = Services | Templates | RecentUsage | Tray | Logs
+    }
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -261,6 +275,10 @@ public partial class App : Application
         var manageTemplates = new Forms.ToolStripMenuItem(LocalizationService.Current.T("ManageTemplates"));
         manageTemplates.Click += (_, _) => OnManageTemplatesRequested();
         menu.Items.Add(manageTemplates);
+
+        var copyHelpForAi = new Forms.ToolStripMenuItem(LocalizationService.Current.T("CopyHelpForAi"));
+        copyHelpForAi.Click += (_, _) => OnCopyHelpForAiRequested();
+        menu.Items.Add(copyHelpForAi);
 
         var stopAll = new Forms.ToolStripMenuItem(LocalizationService.Current.T("StopAllServices"))
         {
@@ -870,13 +888,24 @@ public partial class App : Application
             OnViewLogRequested,
             RebuildTrayMenu,
             _variableUsageStore);
+        _serviceManagerWindows.Add(window);
+        window.Closed += (_, _) => _serviceManagerWindows.Remove(window);
         window.Show();
     }
 
     private void OnManageTemplatesRequested()
     {
         var window = new TemplateManagerWindow(_appConfig, _configService, RebuildTrayMenu);
+        _templateManagerWindows.Add(window);
+        window.Closed += (_, _) => _templateManagerWindows.Remove(window);
         window.Show();
+    }
+
+    private void OnCopyHelpForAiRequested()
+    {
+        var window = new AiHelpWindow();
+        window.Show();
+        window.Activate();
     }
 
     private void OnServiceAdded(ServiceItemViewModel vm)
@@ -1020,8 +1049,112 @@ public partial class App : Application
         if (_commandProcessor == null)
             return CommandResponse.Error("命令处理器尚未初始化。");
 
-        var operation = Dispatcher.InvokeAsync(() => _commandProcessor.ExecuteAsync(args));
+        var operation = Dispatcher.InvokeAsync(async () =>
+        {
+            var response = await _commandProcessor.ExecuteAsync(args);
+            if (response.ExitCode == 0)
+                RefreshAfterCommand(args);
+            return response;
+        });
         return await await operation.Task;
+    }
+
+    private void RefreshAfterCommand(string[] args)
+    {
+        var scope = ClassifyCommandRefresh(args);
+        if (scope == RuntimeRefreshScope.None || _isExiting)
+            return;
+
+        if (scope.HasFlag(RuntimeRefreshScope.Services) || scope.HasFlag(RuntimeRefreshScope.RecentUsage))
+        {
+            foreach (var window in _serviceManagerWindows.ToList())
+                window.RefreshAfterConfigChanged();
+        }
+
+        if (scope.HasFlag(RuntimeRefreshScope.Templates))
+        {
+            foreach (var window in _templateManagerWindows.ToList())
+                window.RefreshAfterConfigChanged();
+        }
+
+        if (scope.HasFlag(RuntimeRefreshScope.Logs) || scope.HasFlag(RuntimeRefreshScope.Services))
+        {
+            foreach (var window in _logWindows.Values.ToList())
+                window.RefreshAfterConfigChanged();
+        }
+
+        if (scope.HasFlag(RuntimeRefreshScope.Tray) ||
+            scope.HasFlag(RuntimeRefreshScope.Services) ||
+            scope.HasFlag(RuntimeRefreshScope.RecentUsage))
+        {
+            RebuildTrayMenu();
+        }
+    }
+
+    private static RuntimeRefreshScope ClassifyCommandRefresh(string[] args)
+    {
+        if (args.Length == 0)
+            return RuntimeRefreshScope.None;
+
+        var command = args[0].ToLowerInvariant();
+        var rest = args.Skip(1).ToArray();
+        return command switch
+        {
+            "add" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "remove" or "delete" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "start" or "stop" or "restart" => RuntimeRefreshScope.Services | RuntimeRefreshScope.RecentUsage | RuntimeRefreshScope.Tray,
+            "logs" or "log" => RuntimeRefreshScope.Services | RuntimeRefreshScope.RecentUsage | RuntimeRefreshScope.Tray,
+            "service" => ClassifyServiceCommandRefresh(rest),
+            "step" => ClassifyStepCommandRefresh(rest),
+            "template" => ClassifyTemplateCommandRefresh(rest),
+            _ => RuntimeRefreshScope.None
+        };
+    }
+
+    private static RuntimeRefreshScope ClassifyServiceCommandRefresh(string[] args)
+    {
+        if (args.Length == 0)
+            return RuntimeRefreshScope.None;
+
+        var subCommand = args[0].ToLowerInvariant();
+        var rest = args.Skip(1).ToArray();
+        return subCommand switch
+        {
+            "add" or "edit" or "remove" or "delete" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "start" or "stop" or "restart" or "logs" or "log" => RuntimeRefreshScope.Services | RuntimeRefreshScope.RecentUsage | RuntimeRefreshScope.Tray,
+            "step" => ClassifyStepCommandRefresh(rest),
+            _ => RuntimeRefreshScope.None
+        };
+    }
+
+    private static RuntimeRefreshScope ClassifyStepCommandRefresh(string[] args)
+    {
+        if (args.Length == 0)
+            return RuntimeRefreshScope.None;
+
+        var subCommand = args[0].ToLowerInvariant();
+        return subCommand switch
+        {
+            "run" => RuntimeRefreshScope.Services | RuntimeRefreshScope.RecentUsage | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "variable-add" or "var-add" or "variable-remove" or "variable-delete" or "var-remove" or "var-delete" or "variable-clear" or "var-clear" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            _ => RuntimeRefreshScope.None
+        };
+    }
+
+    private static RuntimeRefreshScope ClassifyTemplateCommandRefresh(string[] args)
+    {
+        if (args.Length == 0)
+            return RuntimeRefreshScope.None;
+
+        var subCommand = args[0].ToLowerInvariant();
+        return subCommand switch
+        {
+            "add" or "edit" or "remove" or "delete" or "import" or "save-from-service" => RuntimeRefreshScope.Templates | RuntimeRefreshScope.Tray,
+            "apply" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Templates | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "step-variable-add" or "step-var-add" or "step-variable-remove" or "step-variable-delete" or "step-var-remove" or "step-var-delete" or "step-variable-clear" or "step-var-clear" => RuntimeRefreshScope.Templates | RuntimeRefreshScope.Tray,
+            "create" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            _ => RuntimeRefreshScope.None
+        };
     }
 
     private async Task RequestExitFromCommandAsync()

@@ -7,7 +7,7 @@
 Exit any running `dist\ServicePilot.exe` before publishing to `dist`. Use `dist-staged` when you only need to validate the publish command.
 
 ```powershell
-dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
+rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
 ```
 
 The `Release` configuration in `ServicePilot.csproj` defaults to `win-x64`, self-contained, compressed single-file publish; `dist` should contain only `ServicePilot.exe`.
@@ -26,17 +26,19 @@ dist\ServicePilot.exe
 - Double-click `ServicePilot.exe`.
 - Confirm tray icon appears.
 - Confirm the tray context menu `Language` can switch between follow-system, Chinese, and English.
+- Confirm the tray context menu `Copy help for AI` opens its window and can copy all content or commands.
 - Add a test service and start it.
 - Confirm log output appears.
 - Stop and restart the service.
+- Run one CLI configuration change through the running tray instance and confirm the tray menu plus open manager/log windows refresh immediately.
 - Run `ServicePilot.exe shutdown` and confirm no child processes remain.
 
 ## GitHub Release
 
-- Tag: `v1.0.0`
-- Title: `ServicePilot 1.0.0`
+- Tag: `v2.1.0`
+- Title: `ServicePilot 2.1.0`
 - Artifact: `ServicePilot.exe`
-- Use release notes from `docs/release-notes-v1.0.0.md`.
+- Use release notes from `docs/release-notes-v2.1.0-en.md`.
 - Update `CHANGELOG.md` and `CHANGELOG-en.md` before publishing.
 - Confirm `.github/workflows/build.yml` passes for the tag or manual run and uploads `ServicePilot.exe`.
 - Update Chinese and English screenshots using `docs/screenshot-guide.md`.

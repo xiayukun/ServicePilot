@@ -4,6 +4,24 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.1.0 - 2026-07-03
+
+- Added `Copy help for AI` to the tray context menu. It copies an AI prompt with the current absolute `ServicePilot.exe` path.
+- `ServicePilot.exe ai-help` and the tray AI help window now use the same content source, reducing drift between CLI help and UI guidance.
+- After CLI configuration changes routed through the running tray instance, the tray menu, service manager, template manager, and related log windows refresh immediately.
+
+## 2.0.0 - 2026-06-18
+
+- Refactored the model to `Action` / `Composite`.
+- Moved active configuration to `%APPDATA%/ServicePilot/config.v2.json`; legacy `config.json` is preserved.
+- Migrated service-level preset variables to action-level `StepVariables`.
+- Service/template editors now support composite member orchestration.
+- Chinese UI/docs now use the action terminology consistently, and action-kind controls display localized `Action` / `Composite` labels.
+- The log window removed the separate Start button and now runs from the unified Run action menu; log tabs are created lazily per action and switch when an action enters Running.
+- The log window coalesces non-error webpack progress output at the display layer to reduce UI stalls from high-frequency build logs.
+- CLI `start` runs the first composite, and `step run` can run an action or a composite.
+- Template import/export preserves composite member relationships.
+
 ## 1.0.0 - 2026-06-10
 
 The first public release includes:
@@ -26,14 +44,3 @@ The first public release includes:
 - JSON output keeps Chinese text readable instead of escaping it by default.
 - Configuration stored in `%APPDATA%/ServicePilot/config.json`.
 - Variable last-use cache stored in `%APPDATA%/ServicePilot/variable-usage-cache.json`.
-## 2.0.0 - 2026-06-18
-
-- Refactored the model to `Action` / `Composite`.
-- Moved active configuration to `%APPDATA%/ServicePilot/config.v2.json`; legacy `config.json` is preserved.
-- Migrated service-level preset variables to action-level `StepVariables`.
-- Service/template editors now support composite member orchestration.
-- Chinese UI/docs now use the action terminology consistently, and action-kind controls display localized `Action` / `Composite` labels.
-- The log window removed the separate Start button and now runs from the unified Run action menu; log tabs are created lazily per action and switch when an action enters Running.
-- The log window coalesces non-error webpack progress output at the display layer to reduce UI stalls from high-frequency build logs.
-- CLI `start` runs the first composite, and `step run` can run an action or a composite.
-- Template import/export preserves composite member relationships.

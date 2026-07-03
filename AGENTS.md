@@ -23,7 +23,7 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `2.0.0`.
+- Public release version: `2.1.0`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
 - `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
 - After every successful package/build that produces `ServicePilot.exe`, also follow the local private copy target documented in `LOCAL_NOTES.private.md` when that file exists. Do not copy the target path into committed docs.
@@ -143,6 +143,7 @@ Execution path:
 - `ProcessRunner` treats `Win32Exception (6)` / invalid process handles as already exited during stop/dispose.
 - `CommandPipeServer.Dispose` is idempotent because exit paths can call it more than once.
 - CLI handlers that save config must stay async all the way through. Do not block async config writes with `.GetAwaiter().GetResult()` on the WPF startup path; it can deadlock command mode and leave `ServicePilot.exe` processes behind.
+- Successful CLI commands routed through the running tray instance should refresh relevant open UI surfaces immediately. `App.RefreshAfterCommand` classifies service/template/step changes and refreshes the tray menu plus open service manager, template manager, and log windows.
 - JSON CLI output uses `JavaScriptEncoder.UnsafeRelaxedJsonEscaping` so Chinese diagnostics remain directly readable.
 
 Tray and dialogs:
@@ -161,6 +162,7 @@ Tray and dialogs:
 - Service add/edit dialog: `Views\ServiceConfigDialog.xaml(.cs)`. It supports applying one full service template, saving an edited service draft as a template, editing actions, and editing action variables.
 - Service and template action editors display localized action kind labels (`动作` / `组合动作` in Chinese, `Action` / `Composite` in English). Do not show raw enum names in user-facing action-kind controls.
 - Service manager: `Views\ServiceManagerWindow.xaml(.cs)` supports service add/edit/delete/start/execute-step/stop/restart/logs/save-as-template. Start/restart use variable menus when presets exist. Its service grid binds to a sorted snapshot from `PresetVariableUsageStore.SortServices`, so the most recently used service is shown at the top without mutating `ServiceConfig.SortOrder`.
+- AI help window: `Views\AiHelpWindow.xaml(.cs)` is opened from the tray `复制给 AI 的帮助` / `Copy help for AI` item. It uses `AiHelpContentService` to display the current `ServicePilot.exe` path, recommended first commands, and copyable AI prompt content.
 - `ServiceManagerWindow` buttons must be enabled from the selected row's live `RuntimeState`: start only for stopped/error/start-failed/completed, stop for running/starting/stopping or running steps, and restart except while starting/stopping.
 - WPF `MenuItem.Header` treats underscores as access-key markers. When displaying user data such as variables or step labels in service manager or log-window context menus, wrap the string in a `TextBlock` rather than assigning it directly as `Header`.
 - Template manager: `Views\TemplateManagerWindow.xaml(.cs)` supports full service template CRUD plus import/export of shareable template JSON files.
@@ -178,6 +180,7 @@ Tray and dialogs:
 Command-line / AI control:
 
 - `CommandLineHost` handles argument mode and first tries to send commands to the running tray instance.
+- `AiHelpContentService` is the shared source for `ServicePilot.exe ai-help` and tray AI help prompt generation. Keep CLI guidance and tray-copy prompt in sync there rather than duplicating large help text elsewhere.
 - When `SERVICEPILOT_CONFIG_DIR` is set, `CommandLineHost` skips the global tray command pipe by default to protect isolated tests from touching the user's real config. Set `SERVICEPILOT_ALLOW_TRAY_PIPE=1` only for intentional pipe routing.
 - Start/stop/restart/step-run/log/shutdown commands require the tray instance to be running.
 - Offline commands such as `help`, `config-path`, `list`, `status`, `add`, and template/service config edits can operate from config where possible.

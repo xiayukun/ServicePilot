@@ -11,6 +11,7 @@ TestResults/
 *.tmp
 *.bak
 *.private.md
+.hermes/
 Assets/screenshots/pending/
 *.nupkg
 *.snupkg

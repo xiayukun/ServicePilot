@@ -83,21 +83,22 @@ Job Object
 
 ## README Above-The-Fold Points
 
-- AI agents can start with `ServicePilot.exe ai-help` and `ServicePilot.exe doctor --json`, then act through JSON status.
+- After download and launch, users can copy `Copy help for AI` from the tray context menu so agents get the current absolute `ServicePilot.exe` path and first inspection commands.
+- AI agents can start with `ServicePilot.exe ai-help`, `ServicePilot.exe doctor --json`, and JSON status, then safely create personalized services, templates, actions, and variables.
 - The tray number shows active service count and stays visible in the notification area.
-- Multiple projects, directories, and script steps can be managed from one place.
-- Startup variables and manual step variables make API/environment switching fast.
+- Multiple projects, directories, and script actions can be managed from one place.
+- Action variables make API/environment switching fast for both startup flows and manual actions.
 - It does not install Windows services or require admin rights.
 - Windows Job Object cleanup prevents orphan npm/Vite child processes and port leaks.
 
 ## Social Preview Text
 
 ```text
-ServicePilot helps developers and AI agents start, inspect, and stop Windows local development services from one tray icon and one JSON-friendly CLI.
+ServicePilot helps developers hand local Windows dev services to AI: copy tray AI help, inspect JSON state, then start, switch, log, and stop services safely.
 ```
 
 ## Launch Post Draft
 
 ```text
-I built ServicePilot, an AI-friendly Windows tray launcher for local development services. It brings npm/Vite, dotnet, Python, Batch, PowerShell, and Node.js scripts into one tray menu, with a JSON-friendly CLI so AI agents can start services, switch variables, inspect logs, and stop process trees safely.
+I built ServicePilot, an AI-friendly Windows tray launcher for local development services. After download and launch, copy “help for AI” from the tray so an agent gets the exact exe path and can inspect JSON state before managing npm/Vite, dotnet, Python, Batch, PowerShell, and Node.js scripts: start services, switch variables, inspect logs, and stop process trees safely.
 ```

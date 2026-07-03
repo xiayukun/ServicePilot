@@ -8,27 +8,21 @@
 
 Thanks to the linux.do community for the strong support.
 
-ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services**. It brings frontend apps, backend services, script steps, environment switching, and logs from multiple folders into one tray menu, with a CLI that AI agents and scripts can call safely.
+ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services**. It brings frontend apps, backend services, script actions, environment switching, and logs from multiple folders into one tray menu, with a CLI that AI agents and scripts can call safely.
 
 ServicePilot starts, monitors, and stops local development services from the Windows tray and CLI, so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
 
-**Drop this prompt into your AI agent: it will inspect state first, then generate services, templates, actions, and variables from facts.**
+**Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. The window includes the current absolute `ServicePilot.exe` path, recommended first commands, and safety guidance; paste that content into your AI assistant so it can inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables.
 
-**Copy this to your AI agent:**
-
-```text
-You may use ServicePilot to manage my Windows local development services. Start with ServicePilot.exe ai-help, doctor --json, list --json, and status all --json, then use the JSON output to understand existing services, steps, variables, and templates. When adding services or templates, prefer the built-in "Default developer actions" template where useful, or generate a project-specific multi-step service directly. Before deleting or overwriting configuration, state the exact target name.
-```
-
-Anything the command line can do can usually become a ServicePilot step: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. ServicePilot includes a general built-in template, "Default developer actions", with Git branch/tag actions, npm install/build steps, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
+Anything the command line can do can usually become a ServicePilot action: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. ServicePilot includes a general built-in template, "Default developer actions", with Git branch/tag actions, npm install/build actions, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
 
 **Download:** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [Latest release](https://github.com/xiayukun/ServicePilot/releases/latest) | [Full user guide](docs/user-guide-en.md)
 
 ![ServicePilot tray context menu](Assets/screenshots/tray-menu-zh.png)
 
-| Service editor and script steps | Live log window |
+| Service editor and script actions | Live log window |
 | --- | --- |
-| ![Service editor and script steps](Assets/screenshots/service-editor-zh.png) | ![Live log window](Assets/screenshots/log-window-zh.png) |
+| ![Service editor and script actions](Assets/screenshots/service-editor-zh.png) | ![Live log window](Assets/screenshots/log-window-zh.png) |
 
 | CLI / AI status checks | AI command help |
 | --- | --- |
@@ -39,21 +33,21 @@ Anything the command line can do can usually become a ServicePilot step: switch 
 1. Download [`ServicePilot.exe`](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe).
 2. Launch it. A numeric icon appears in the Windows notification area.
 3. Right-click the number and choose `Add service`, or open `Manage services`.
-4. Enter a service name, working directory, and script steps.
+4. Enter a service name, working directory, and script actions.
 5. Optionally add action variables such as local, test, or dev API URLs.
 6. Start services from the tray menu, service manager, log window, or CLI.
 
 ## Core Features
 
 - **Tray-first UI**: no extra desktop panel; the notification-area number is the main entry point.
-- **Multi-step services**: Batch, PowerShell, Python, and Node.js steps in one service.
+- **Multi-action services**: Batch, PowerShell, Python, and Node.js actions in one service.
 - **Actions and composites**: run single script actions or ordered composite actions.
 - **Variable switching**: choose action variables when starting, restarting, or running an action.
 - **Full service templates**: save names, descriptions, actions, composites, and variables while keeping each target working directory.
 - **Template sharing**: export templates as JSON files and import templates shared by others.
 - **Built-in general template**: first launch seeds editable "Default developer actions" with Git, npm, IDE, and terminal actions.
 - **Live logs**: per-action tabs, search, copy, horizontal scrolling, and bounded history.
-- **AI/script CLI**: JSON output for `list/status/service/step/template/logs`.
+- **AI/script CLI**: JSON output for `list/status/service/step/template/logs`; the tray can `Copy help for AI`, and CLI configuration changes refresh open manager/log windows.
 - **Reliable stop**: Windows Job Object cleanup reduces Vite/npm child processes that keep ports alive.
 - **Chinese/English UI**: follows Windows language by default, with a tray menu switch.
 

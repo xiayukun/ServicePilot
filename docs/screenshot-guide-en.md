@@ -30,7 +30,10 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 5. Template manager window  
    Show full service templates, descriptions, step counts, variable counts, and template preview.
 
-6. CLI / AI usage screenshot  
+6. Tray AI help window
+   Show the `Copy help for AI` window with the current exe path, recommended first commands, the multi-line copyable prompt, and the `Copy all` / `Copy commands` buttons. Avoid showing private real paths; use a test build directory when needed.
+
+7. CLI / AI usage screenshot
    Show these commands in a terminal:
 
    ```powershell
@@ -46,7 +49,7 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 - `Assets/screenshots/service-manager-overview-zh.png`: large service manager screenshot used as the hero source.
 - `Assets/screenshots/tray-menu-zh.png`: tray context menu.
 - `Assets/screenshots/service-manager-zh.png`: service manager window.
-- `Assets/screenshots/service-editor-zh.png`: service editor and script steps.
+- `Assets/screenshots/service-editor-zh.png`: service editor and script actions.
 - `Assets/screenshots/log-window-zh.png`: live log window.
 - `Assets/screenshots/ai-help-cli-zh.png`: `ai-help` command.
 - `Assets/screenshots/status-doctor-cli-zh.png`: `status all` and `doctor --json`.
@@ -54,7 +57,7 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 ## Optional Screenshots
 
 - Variable submenu showing recently used ordering and the `Add` entry.
-- Run-step submenu showing `Startup steps` and `Manual steps` groups.
+- Run-action submenu showing composites, single actions, variable submenus, and disabled running actions; do not show the old `Startup steps` / `Manual steps` groups.
 - Failure notification showing a tray balloon and the matching log summary.
 - GitHub Release download page showing the `ServicePilot.exe` artifact.
 

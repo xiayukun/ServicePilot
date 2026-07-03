@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-06-18
+Last updated: 2026-07-03
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
 
@@ -8,8 +8,9 @@ Chinese counterpart: [session-handoff.md](session-handoff.md)
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current mainline is ServicePilot 2.0:
+The current mainline is ServicePilot 2.1:
 
+- Project version properties should stay at `2.1.0` (`ServicePilot/ServicePilot.csproj`).
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.
@@ -35,6 +36,9 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - When `UseVariable=false`, the action runs directly and should not show a variable submenu.
 - Recent variable and recent service ordering is cached in `%APPDATA%\ServicePilot\variable-usage-cache.json`; it is not source-of-truth config.
 - `ai-help` is the AI/script entrypoint. Future CLI changes must let agents inspect state first through `doctor --json`, `list --json`, `status --json`, `step list --json`, and `logs --json`.
+- The tray context menu provides `Copy help for AI`; `Views/AiHelpWindow` displays the current absolute `ServicePilot.exe` path, recommended first commands, and a copyable prompt.
+- `AiHelpContentService` is the shared content service for `ServicePilot.exe ai-help` and the tray AI help prompt. Future AI guidance updates should start there.
+- Public docs, repository profile text, and release copy should direct GitHub download users to launch the exe first and copy help for AI from the tray, so agents do not have to guess the downloaded exe location.
 - AI-facing CLI output should stay structured, readable, and explicit about failures. Do not require agents to parse UI labels.
 
 ## UI State
@@ -48,6 +52,7 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - The log window coalesces non-error `[webpack.Progress] NN% ...` lines into one visible line with a text progress bar. This is display-layer compaction only; raw buffer and CLI JSON logs should remain intact.
 - Tray tooltip/status text should show only active count, total count, and failed count. Do not include service names or variable values there.
 - Tray and manager service lists are sorted by recent use first without mutating persisted `SortOrder`.
+- After CLI configuration changes are routed through the running tray instance, `App.RefreshAfterCommand` classifies the command and refreshes the tray menu, open service manager, open template manager, and related log windows.
 
 ## Packaging And Release
 
@@ -57,11 +62,13 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - If the running exe locks `dist`, publish to `dist-staged` first.
 - After successfully producing an exe, follow the local private copy target in `LOCAL_NOTES.private.md` when that file exists. Do not copy that target path into committed docs.
 - Current user instruction: produce local exe builds for testing only. Do not commit, tag, or publish a GitHub Release unless explicitly asked.
+- 2.1.0 public release-note drafts live in `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`; GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
 
 ## Documentation Rules
 
 - Chinese is the primary documentation language. English counterparts use `-en.md`.
 - When user-visible behavior changes, update `AGENTS.md`, this handoff, the English handoff, and related README / user guide / ai-usage / changelog files.
+- Current user-facing docs for new users should say actions/composites; keep step/步骤 only in historical release notes or compatibility CLI names.
 - Sensitive details must not be written into README files, user guides, handoff docs, AGENTS, release notes, or issue/PR templates.
 - If local deployment targets, private services, customer projects, or screenshot source details must be remembered, write them to `LOCAL_NOTES.private.md`.
 
