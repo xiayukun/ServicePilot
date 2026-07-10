@@ -8,20 +8,18 @@ Chinese counterpart: [session-handoff.md](session-handoff.md)
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current mainline is ServicePilot 2.2.0 (WIP — incomplete, build broken):
+The current mainline is ServicePilot 2.2.0:
 
 - CHANGELOG has a v2.2.0 entry: "Added step-level incremental edit CLI commands".
-- `ServiceCommandProcessor.cs` has routing entries for `add` / `edit` / `remove` / `move` in the `StepAsync` switch.
-- **4 methods (StepAddAsync/StepEditAsync/StepRemoveAsync/StepMoveAsync) are NOT implemented** — `dotnet build` fails with 4 CS0103 errors.
-- `AiHelpContentService.cs` CLI help text not updated for the new commands.
-- `AGENTS.md` command list not updated.
-- The workspace has 3 uncommitted files: CHANGELOG.md, CHANGELOG-en.md, ServiceCommandProcessor.cs.
-- To complete v2.2.0 in the current session, implement the 4 missing methods + update docs + pass build.
-- To defer, revert the workspace to avoid leaving a build-broken state.
+- All 4 service-side methods (StepAddAsync/StepEditAsync/StepRemoveAsync/StepMoveAsync) and 4 template-side methods (TemplateStepAddAsync/TemplateStepEditAsync/TemplateStepRemoveAsync/TemplateStepMoveAsync) are implemented. `dotnet build` passes with 0 errors 0 warnings.
+- All 8 methods support `--json` output.
+- `AiHelpContentService.cs` CLI help text includes step add/edit/remove/move examples.
+- `AGENTS.md` command list updated with new commands.
+- The workspace has modified files: ServiceCommandProcessor.cs, AiHelpContentService.cs, AGENTS.md, CHANGELOG.md, CHANGELOG-en.md, docs/user-guide.md, docs/user-guide-en.md, docs/session-handoff.md, docs/session-handoff-en.md, README.md, README-en.md, App.xaml.cs.
 
 The last fully released version is ServicePilot 2.1.1 (tag `v2.1.1`, commit `6b49baa`).
 
-- Project version properties are currently `2.1.1` (to be bumped to `2.2.0` once the WIP implementation is complete).
+- Project version properties are currently `2.2.0` (ServicePilot/ServicePilot.csproj).
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.

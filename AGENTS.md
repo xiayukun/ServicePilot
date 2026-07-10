@@ -23,7 +23,7 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `2.1.1` (v2.2.0 is WIP with build-broken state).
+- Public release version: `2.1.1` (v2.2.0 WIP: step add/edit/remove/move CLI + --json).
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
 - `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
 - After every successful package/build that produces `ServicePilot.exe`, also follow the local private copy target documented in `LOCAL_NOTES.private.md` when that file exists. Do not copy the target path into committed docs.
@@ -207,6 +207,10 @@ ServicePilot.exe step variables SERVICE STEP [--json]
 ServicePilot.exe step variable-add SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-remove SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-clear SERVICE STEP
+ServicePilot.exe step add SERVICE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--position end|N|after:STEP|before:STEP] [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE] [--into-composite COMPOSITE] [--json]
+ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script ...] [--use-variable ...] [--open-log-on-run ...] [--json]
+ServicePilot.exe step remove SERVICE STEP [--json]
+ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP [--json]
 ServicePilot.exe add --name NAME --dir DIR --step "Name|Batch|command" [--preset VALUE]
 ServicePilot.exe remove SERVICE
 ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
@@ -216,6 +220,10 @@ ServicePilot.exe template step-variables TEMPLATE STEP [--json]
 ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-clear TEMPLATE STEP
+ServicePilot.exe template step add TEMPLATE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--position end|N|after:STEP|before:STEP] [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE] [--into-composite COMPOSITE] [--json]
+ServicePilot.exe template step edit TEMPLATE STEP [--name NAME] [--type ...] [--script ...] [--use-variable ...] [--open-log-on-run ...] [--json]
+ServicePilot.exe template step remove TEMPLATE STEP [--json]
+ServicePilot.exe template step move TEMPLATE STEP --position N|after:STEP|before:STEP [--json]
 ServicePilot.exe templates [--json]
 ServicePilot.exe template create --template auto|node|dotnet|python --dir DIR [--name NAME] [--autostart]
 ServicePilot.exe shutdown

@@ -1225,6 +1225,20 @@ public class ServiceCommandProcessor
 
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
+        if (HasFlag(args, "--json"))
+            return Json(new
+            {
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                StepId = step.Id,
+                StepName = step.Name,
+                step.Kind,
+                step.ScriptType,
+                step.UseVariable,
+                step.OpenLogOnRun,
+                step.Order,
+                step.StepVariables
+            });
         return CommandResponse.Ok($"已更新模板动作: {step.Name} ({step.Id})");
     }
 
@@ -1248,6 +1262,15 @@ public class ServiceCommandProcessor
         ReorderSteps(template.ScriptSteps);
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
+        if (HasFlag(args, "--json"))
+            return Json(new
+            {
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                StepId = step.Id,
+                StepName = step.Name,
+                Removed = true
+            });
         return CommandResponse.Ok($"已删除模板动作: {step.Name} ({step.Id})");
     }
 
@@ -1274,6 +1297,16 @@ public class ServiceCommandProcessor
 
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
+        if (HasFlag(args, "--json"))
+            return Json(new
+            {
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                StepId = step.Id,
+                StepName = step.Name,
+                Position = position,
+                step.Order
+            });
         return CommandResponse.Ok($"已移动模板动作: {step.Name} 到位置 {position}");
     }
 

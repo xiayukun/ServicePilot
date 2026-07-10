@@ -16,13 +16,8 @@ ServicePilot 是一个 .NET 8 Windows 托盘优先的开发服务管理器。当
 - `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
 - 运行配置、私有服务名、本机路径、备份文件名、客户项目名、数据库/API 地址等机器专属信息不得写入可提交文档。
 - 本机私有交接信息放在仓库根目录的 `LOCAL_NOTES.private.md`；该文件已由 `.gitignore` 忽略，不应提交。
-- v2.2.0 新增 `step add` / `step edit` / `step remove` / `step move` CLI 命令，支持动作级增量编辑。
+- v2.2.0 新增 `step add` / `step edit` / `step remove` / `step move` CLI 命令，支持动作级增量编辑，涵盖 service 和 template 两端，全部支持 `--json` 输出。
 - 上一个已发布版本为 v2.1.1（tag `v2.1.1`，commit `6b49baa`）。
-- 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
-- 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
-- `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
-- 运行配置、私有服务名、本机路径、备份文件名、客户项目名、数据库/API 地址等机器专属信息不得写入可提交文档。
-- 本机私有交接信息放在仓库根目录的 `LOCAL_NOTES.private.md`；该文件已由 `.gitignore` 忽略，不应提交。
 
 ## 2.0 模型
 
