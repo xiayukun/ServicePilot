@@ -4,6 +4,10 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.2.0 - 2026-07-10
+
+- Added step-level incremental edit CLI commands for fine-grained add, delete, and modify operations on action steps.
+
 ## 2.1.1 - 2026-07-10
 
 - Fixed inaccurate AI prompts in ai-help and tray context menu "Copy help for AI".

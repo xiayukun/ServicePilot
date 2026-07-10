@@ -8,9 +8,16 @@ English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
 ServicePilot 是一个 .NET 8 Windows 托盘优先的开发服务管理器。当前产品方向是托盘菜单、WPF 管理窗口、日志窗口和 CLI，不再提供桌面悬浮模式。
 
-当前主线版本为 ServicePilot 2.1.1：
+当前主线版本为 ServicePilot 2.2.0：
 
-- 项目版本属性当前为 `2.1.1`（`ServicePilot/ServicePilot.csproj`）。
+- 项目版本属性当前为 `2.2.0`（`ServicePilot/ServicePilot.csproj`）。
+- 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
+- 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
+- `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
+- 运行配置、私有服务名、本机路径、备份文件名、客户项目名、数据库/API 地址等机器专属信息不得写入可提交文档。
+- 本机私有交接信息放在仓库根目录的 `LOCAL_NOTES.private.md`；该文件已由 `.gitignore` 忽略，不应提交。
+- v2.2.0 新增 `step add` / `step edit` / `step remove` / `step move` CLI 命令，支持动作级增量编辑。
+- 上一个已发布版本为 v2.1.1（tag `v2.1.1`，commit `6b49baa`）。
 - 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
 - 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
 - `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
@@ -62,7 +69,7 @@ ServicePilot 2.0 使用 `Action` / `Composite` 模型：
 - 如果运行中的 exe 锁定 `dist`，先发布到 `dist-staged`。
 - 每次成功产出 exe 后，如果 `LOCAL_NOTES.private.md` 存在，按其中的本机私有复制目标处理；不要把目标路径写入可提交文档。
 - 当前阶段用户要求：先产出 exe 给用户测试，不提交、不打 tag、不发 GitHub Release，除非用户明确要求。
-- v2.1.0 已发布（tag `v2.1.0`），v2.1.1 为补丁版本，修复 AI 提示语不准确问题（本地工作区已改未提交）。
+- v2.1.0 已发布（tag `v2.1.0`），v2.1.1 已提交并打 tag（tag `v2.1.1`，commit `6b49baa`），但尚未 push 到 remote 或发布 GitHub Release。
 - 发布说明草稿位于 `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`；v2.1.1 的可选发布说明待定。
 - GitHub Release 页面已有标题，发布 notes body 不要再额外加重复一级标题。
 

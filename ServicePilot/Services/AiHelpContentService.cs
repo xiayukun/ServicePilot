@@ -74,7 +74,7 @@ public static class AiHelpContentService
         return """
                ServicePilot AI 操作指南
 
-               ServicePilot 2.1 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择“复制给 AI 的帮助”，复制带有当前 ServicePilot.exe 绝对路径的提示词。
+               ServicePilot 2.2 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择“复制给 AI 的帮助”，复制带有当前 ServicePilot.exe 绝对路径的提示词。
                2.x 模型:
                  - Action: 一个可执行脚本命令。
                  - Composite: 按顺序编排多个 Action；Composite 不能嵌套 Composite。
@@ -103,12 +103,19 @@ public static class AiHelpContentService
                  - start SERVICE 会运行该服务的第一个 Composite。
                  - step run 可以运行单个 Action，也可以运行一个 Composite。
                  - SERVICE、STEP、TEMPLATE 可以使用名称或 GUID；自动化优先使用名称或 GUID。
+                 - 通过托盘管道修改配置立即生效，无需重启托盘实例。添加/编辑服务或模板后，正在运行的托盘菜单及已打开的管理/日志窗口都会自动刷新。
                  - 变量现在属于 Action 的 StepVariables；服务级预设变量只是 v1 迁移遗留。
                  - 维护 Action 变量:
                     ServicePilot.exe step variables "SERVICE" "STEP" --json
                     ServicePilot.exe step variable-add "SERVICE" "STEP" --variable "VALUE"
                     ServicePilot.exe step variable-remove "SERVICE" "STEP" --variable "VALUE"
                     ServicePilot.exe step variable-clear "SERVICE" "STEP"
+                 - 维护 Action 本身（增、改、删、排序）:
+                    ServicePilot.exe step add "SERVICE" --name "Check Node" --type Batch --script "node --version" --position after:"STEP"
+                    ServicePilot.exe step add "SERVICE" --name "Build" --type Batch --script "npm run build" --into-composite "Start"
+                    ServicePilot.exe step edit "SERVICE" "STEP" --name "New Name" --script "npm run dev"
+                    ServicePilot.exe step remove "SERVICE" "STEP"
+                    ServicePilot.exe step move "SERVICE" "STEP" --position end
                  - 模板动作变量也可由 CLI 维护:
                     ServicePilot.exe template step-variables "TEMPLATE" "STEP" --json
                     ServicePilot.exe template step-variable-add "TEMPLATE" "STEP" --variable "VALUE"
@@ -131,6 +138,14 @@ public static class AiHelpContentService
                  ServicePilot.exe template apply "Vite Frontend" --service "Frontend"
                  ServicePilot.exe template export "Vite Frontend" --file ".\vite-frontend.servicepilot-template.json"
                  ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json"
+                 ServicePilot.exe step add "MyService" --name "HealthCheck" --type PowerShell --script "curl localhost:8080/health" --position after:Start
+                 ServicePilot.exe step edit "MyService" "HealthCheck" --use-variable false --open-log-on-run true
+                 ServicePilot.exe step remove "MyService" "HealthCheck"
+                 ServicePilot.exe step move "MyService" "HealthCheck" --position 1
+                 ServicePilot.exe template step add "MyTemplate" --name "LogStart" --type Batch --script "echo started" --position end
+                 ServicePilot.exe template step edit "MyTemplate" "LogStart" --name "Init"
+                 ServicePilot.exe template step remove "MyTemplate" "Init"
+                 ServicePilot.exe template step move "MyTemplate" "Init" --position after:Start
 
                机器可读优先:
                  list --json

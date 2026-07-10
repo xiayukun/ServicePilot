@@ -118,6 +118,10 @@ ServicePilot.exe logs SERVICE [--tail N] [--json]
 ServicePilot.exe service list|get|add|edit|remove|start|stop|restart|logs ...
 ServicePilot.exe step list SERVICE [--json]
 ServicePilot.exe step run SERVICE STEP [--variable VALUE]
+ServicePilot.exe step add SERVICE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE]... [--position end|N|after:STEP|before:STEP] [--into-composite COMPOSITE]
+ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script ...] [--use-variable true|false] [--open-log-on-run true|false]
+ServicePilot.exe step remove SERVICE STEP
+ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP
 ServicePilot.exe step variables SERVICE STEP [--json]
 ServicePilot.exe step variable-add SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-remove SERVICE STEP --variable VALUE

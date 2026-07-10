@@ -1136,6 +1136,7 @@ public partial class App : Application
         return subCommand switch
         {
             "run" => RuntimeRefreshScope.Services | RuntimeRefreshScope.RecentUsage | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
+            "add" or "edit" or "remove" or "delete" or "move" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
             "variable-add" or "var-add" or "variable-remove" or "variable-delete" or "var-remove" or "var-delete" or "variable-clear" or "var-clear" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
             _ => RuntimeRefreshScope.None
         };

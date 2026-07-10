@@ -8,9 +8,20 @@ Chinese counterpart: [session-handoff.md](session-handoff.md)
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current mainline is ServicePilot 2.1.1:
+The current mainline is ServicePilot 2.2.0 (WIP — incomplete, build broken):
 
-- Project version properties are now `2.1.1` (`ServicePilot/ServicePilot.csproj`).
+- CHANGELOG has a v2.2.0 entry: "Added step-level incremental edit CLI commands".
+- `ServiceCommandProcessor.cs` has routing entries for `add` / `edit` / `remove` / `move` in the `StepAsync` switch.
+- **4 methods (StepAddAsync/StepEditAsync/StepRemoveAsync/StepMoveAsync) are NOT implemented** — `dotnet build` fails with 4 CS0103 errors.
+- `AiHelpContentService.cs` CLI help text not updated for the new commands.
+- `AGENTS.md` command list not updated.
+- The workspace has 3 uncommitted files: CHANGELOG.md, CHANGELOG-en.md, ServiceCommandProcessor.cs.
+- To complete v2.2.0 in the current session, implement the 4 missing methods + update docs + pass build.
+- To defer, revert the workspace to avoid leaving a build-broken state.
+
+The last fully released version is ServicePilot 2.1.1 (tag `v2.1.1`, commit `6b49baa`).
+
+- Project version properties are currently `2.1.1` (to be bumped to `2.2.0` once the WIP implementation is complete).
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.
@@ -62,7 +73,7 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - If the running exe locks `dist`, publish to `dist-staged` first.
 - After successfully producing an exe, follow the local private copy target in `LOCAL_NOTES.private.md` when that file exists. Do not copy that target path into committed docs.
 - Current user instruction: produce local exe builds for testing only. Do not commit, tag, or publish a GitHub Release unless explicitly asked.
-- v2.1.0 is released (tag `v2.1.0`). v2.1.1 is a patch release fixing inaccurate AI prompts (local workspace, not yet committed).
+- v2.1.0 is released (tag `v2.1.0`). v2.1.1 is committed and tagged (tag `v2.1.1`, commit `6b49baa`), but not yet pushed to remote or published as a GitHub Release.
 - Release note drafts live in `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`; v2.1.1 optional release notes TBD.
 - GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
 
