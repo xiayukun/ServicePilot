@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-07-03
+Last updated: 2026-07-10
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
 
@@ -8,9 +8,9 @@ Chinese counterpart: [session-handoff.md](session-handoff.md)
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current mainline is ServicePilot 2.1:
+The current mainline is ServicePilot 2.1.1:
 
-- Project version properties should stay at `2.1.0` (`ServicePilot/ServicePilot.csproj`).
+- Project version properties are now `2.1.1` (`ServicePilot/ServicePilot.csproj`).
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.
@@ -62,7 +62,9 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - If the running exe locks `dist`, publish to `dist-staged` first.
 - After successfully producing an exe, follow the local private copy target in `LOCAL_NOTES.private.md` when that file exists. Do not copy that target path into committed docs.
 - Current user instruction: produce local exe builds for testing only. Do not commit, tag, or publish a GitHub Release unless explicitly asked.
-- 2.1.0 public release-note drafts live in `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`; GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
+- v2.1.0 is released (tag `v2.1.0`). v2.1.1 is a patch release fixing inaccurate AI prompts (local workspace, not yet committed).
+- Release note drafts live in `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`; v2.1.1 optional release notes TBD.
+- GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
 
 ## Documentation Rules
 

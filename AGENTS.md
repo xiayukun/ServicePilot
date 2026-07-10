@@ -23,7 +23,7 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `2.1.0`.
+- Public release version: `2.1.1`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
 - `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
 - After every successful package/build that produces `ServicePilot.exe`, also follow the local private copy target documented in `LOCAL_NOTES.private.md` when that file exists. Do not copy the target path into committed docs.

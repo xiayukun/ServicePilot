@@ -4,6 +4,10 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.1.1 - 2026-07-10
+
+- Fixed inaccurate AI prompts in ai-help and tray context menu "Copy help for AI".
+
 ## 2.1.0 - 2026-07-03
 
 - Added `Copy help for AI` to the tray context menu. It copies an AI prompt with the current absolute `ServicePilot.exe` path.

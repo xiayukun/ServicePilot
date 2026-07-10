@@ -42,6 +42,8 @@ public static class AiHelpContentService
             return $"""
                    You may use ServicePilot to manage my Windows local development services.
 
+                   **IMPORTANT**: All configuration changes via the tray pipe take effect immediately — no restart is needed. After adding/editing a service or template, the running tray menu and open windows refresh instantly.
+
                    Current ServicePilot.exe path:
                    {QuoteExePath(exePath)}
 
@@ -54,6 +56,8 @@ public static class AiHelpContentService
 
         return $"""
                你可以使用 ServicePilot 管理我的 Windows 本地开发服务。
+
+               **重要提示**：通过托盘管道修改配置立即生效，无需重启托盘。添加/编辑服务或模板后，正在运行的托盘菜单及已打开的管理/日志窗口都会自动刷新。
 
                当前 ServicePilot.exe 路径：
                {QuoteExePath(exePath)}
@@ -117,7 +121,7 @@ public static class AiHelpContentService
                  - ServicePilot 没有 start all。可以 stop all，但批量启动必须由调用方逐个服务显式启动。
                  - 自动化测试请先设置 SERVICEPILOT_CONFIG_DIR，避免写入用户真实配置。
                  - 设置 SERVICEPILOT_CONFIG_DIR 后，CLI 默认不会连接正在运行的全局托盘实例；只有明确需要控制托盘管道时才设置 SERVICEPILOT_ALLOW_TRAY_PIPE=1。
-                 - 通过托盘管道成功修改配置后，运行中的托盘菜单和已打开的管理/日志窗口会即时刷新。
+                 - 通过托盘管道成功修改配置后，运行中的托盘菜单和已打开的管理/日志窗口会即时刷新，**不需要重启托盘实例**。
                  - 活跃配置是 config.v2.json；旧 config.json 只作为迁移来源保留。
 
                常用新增/编辑:

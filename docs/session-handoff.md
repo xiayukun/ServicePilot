@@ -1,6 +1,6 @@
 # 会话交接
 
-最后更新：2026-07-03
+最后更新：2026-07-10
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
@@ -8,9 +8,9 @@ English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
 ServicePilot 是一个 .NET 8 Windows 托盘优先的开发服务管理器。当前产品方向是托盘菜单、WPF 管理窗口、日志窗口和 CLI，不再提供桌面悬浮模式。
 
-当前主线正在推进 ServicePilot 2.1：
+当前主线版本为 ServicePilot 2.1.1：
 
-- 项目版本属性应保持 `2.1.0`（`ServicePilot/ServicePilot.csproj`）。
+- 项目版本属性当前为 `2.1.1`（`ServicePilot/ServicePilot.csproj`）。
 - 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
 - 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
 - `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
@@ -62,7 +62,9 @@ ServicePilot 2.0 使用 `Action` / `Composite` 模型：
 - 如果运行中的 exe 锁定 `dist`，先发布到 `dist-staged`。
 - 每次成功产出 exe 后，如果 `LOCAL_NOTES.private.md` 存在，按其中的本机私有复制目标处理；不要把目标路径写入可提交文档。
 - 当前阶段用户要求：先产出 exe 给用户测试，不提交、不打 tag、不发 GitHub Release，除非用户明确要求。
-- 2.1.0 对外发布文案草稿位于 `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`；GitHub Release 页面已有标题，发布 notes body 不要再额外加重复一级标题。
+- v2.1.0 已发布（tag `v2.1.0`），v2.1.1 为补丁版本，修复 AI 提示语不准确问题（本地工作区已改未提交）。
+- 发布说明草稿位于 `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`；v2.1.1 的可选发布说明待定。
+- GitHub Release 页面已有标题，发布 notes body 不要再额外加重复一级标题。
 
 ## 文档规则
 
