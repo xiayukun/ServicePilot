@@ -44,13 +44,17 @@ public static class AiHelpContentService
 
                    **IMPORTANT**: All configuration changes via the tray pipe take effect immediately — no restart is needed. After adding/editing a service or template, the running tray menu and open windows refresh instantly.
 
-                   Current ServicePilot.exe path:
-                   {QuoteExePath(exePath)}
+                   Configuration file path: %APPDATA%/ServicePilot/config.v2.json
+                   JSON structure overview:
+                     - Root object has a "Services" array and a "ServiceTemplates" array.
+                     - Each Service has: Id (GUID), Name, WorkingDirectory, AutoStart, SortOrder, CreatedAt, PresetVariables (string[]), ScriptSteps (array).
+                     - Each ScriptStep has: Id (GUID), Name, Kind ("Action" or "Composite"), Order, ScriptType ("Batch"/"PowerShell"/"Python"/"Node"), Content (script text), UseVariable (bool), OpenLogOnRun (bool), StepVariables (string[]), MemberStepIds (GUID[], only for Composite).
+                     - Action steps carry executable scripts; Composite steps orchestrate multiple Actions via MemberStepIds.
+                     - Composite cannot nest another Composite.
 
-                   Please run these commands first and use their real output as source of truth. Do not guess service names, action names, variables, templates, or paths:
                    {commandBlock}
 
-                   Then decide the next step from JSON output. Before adding a service/template, inspect existing configuration. Before deleting, overwriting, or renaming anything, state the exact target name or id. When running actions, prefer step list, service get, template list/get, and logs --json to confirm state.
+                   Use their real output as source of truth. Do not guess service names, action names, variables, templates, or paths. Before adding a service/template, inspect existing configuration. Before deleting, overwriting, or renaming anything, state the exact target name or id. When running actions, prefer step list, service get, template list/get, and logs --json to confirm state.
                    """;
         }
 
@@ -59,13 +63,17 @@ public static class AiHelpContentService
 
                **重要提示**：通过托盘管道修改配置立即生效，无需重启托盘。添加/编辑服务或模板后，正在运行的托盘菜单及已打开的管理/日志窗口都会自动刷新。
 
-               当前 ServicePilot.exe 路径：
-               {QuoteExePath(exePath)}
+               配置文件路径：%APPDATA%/ServicePilot/config.v2.json
+               JSON 结构概要：
+                 - 根对象包含 "Services" 数组和 "ServiceTemplates" 数组。
+                 - 每个 Service 有：Id (GUID)、Name、WorkingDirectory、AutoStart、SortOrder、CreatedAt、PresetVariables (string[])、ScriptSteps (数组)。
+                 - 每个 ScriptStep 有：Id (GUID)、Name、Kind ("Action" 或 "Composite")、Order、ScriptType ("Batch"/"PowerShell"/"Python"/"Node")、Content (脚本内容)、UseVariable (bool)、OpenLogOnRun (bool)、StepVariables (string[])、MemberStepIds (GUID[]，仅 Composite 有)。
+                 - Action 步骤承载可执行脚本；Composite 步骤通过 MemberStepIds 编排多个 Action。
+                 - Composite 不能嵌套另一个 Composite。
 
-               请先运行下面这些命令读取事实，并把真实输出作为依据。不要猜服务名、动作名、变量、模板或路径：
                {commandBlock}
 
-               然后基于 JSON 输出再决定下一步。新增服务/模板前先检查现有配置；删除、覆盖或重命名前说明明确目标名称或 id；需要执行动作时优先使用 step list、service get、template list/get 和 logs --json 确认状态。
+               把真实输出作为依据，不要猜服务名、动作名、变量、模板或路径。新增服务/模板前先检查现有配置；删除、覆盖或重命名前说明明确目标名称或 id；需要执行动作时优先使用 step list、service get、template list/get 和 logs --json 确认状态。
                """;
     }
 
@@ -74,12 +82,20 @@ public static class AiHelpContentService
         return """
                ServicePilot AI 操作指南
 
-               ServicePilot 2.3.1 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
+               ServicePilot 2.4.0 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
                2.x 模型:
                  - Action: 一个可执行脚本命令。
                  - Composite: 按顺序编排多个 Action；Composite 不能嵌套 Composite。
 
                术语说明：step = Action = 动作，指同一个概念。CLI 命令用 step，模型层叫 Action，中文界面叫动作。
+
+               配置文件路径：%APPDATA%/ServicePilot/config.v2.json
+               JSON 结构概要：
+                 - 根对象包含 "Services" 数组和 "ServiceTemplates" 数组。
+                 - 每个 Service 有：Id (GUID)、Name、WorkingDirectory、AutoStart、SortOrder、CreatedAt、PresetVariables (string[])、ScriptSteps (数组)。
+                 - 每个 ScriptStep 有：Id (GUID)、Name、Kind ("Action" 或 "Composite")、Order、ScriptType ("Batch"/"PowerShell"/"Python"/"Node")、Content (脚本内容)、UseVariable (bool)、OpenLogOnRun (bool)、StepVariables (string[])、MemberStepIds (GUID[]，仅 Composite 有)。
+                 - Action 步骤承载可执行脚本；Composite 步骤通过 MemberStepIds 编排多个 Action。
+                 - Composite 不能嵌套另一个 Composite。
 
                推荐工作流:
                  1. 先读取帮助和配置路径:

@@ -4,6 +4,18 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.4.0 - 2026-07-14
+
+- Editing an action now preserves its Id; composite member references no longer become dangling.
+- Added `config reload` command to notify the tray to reload the config file into memory without restarting.
+- Added `config apply --file PATH` command to validate and apply an external JSON config, with automatic rollback to cached config on failure.
+- `step move --position` now supports `first`/`0` for top position; clarified 0-based position index semantics.
+- `doctor` COMPOSITE_MEMBER_MISSING now reports the specific dangling member Ids.
+- `ai-help` and "Copy help for AI" now include config file path and JSON structure overview.
+- "Copy help for AI" no longer includes the exe path and "run first" paragraphs; only core operation guide remains.
+- COMPOSITE_VARIABLE_MEMBER_MULTIPLE now only counts valid members; no longer false-positives when dangling references exist.
+- Saving config now automatically purges dangling composite member references.
+
 ## 2.3.1 - 2026-07-14
 
 - `step add --use-variable` now defaults to false (previously true, which caused UseVariable=True+VarCount=0 contradiction).

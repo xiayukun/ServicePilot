@@ -24,6 +24,7 @@ public class ServiceCommandProcessor
     private readonly Func<Guid, IReadOnlyList<LogEntry>>? _logProvider;
     private readonly Func<Task>? _shutdownRequested;
     private readonly PresetVariableUsageStore? _variableUsageStore;
+    private readonly Func<Task<CommandResponse>>? _reloadRequested;
 
     private sealed record DiagnosticIssue(string Severity, string Code, string Target, string Message);
 
@@ -34,7 +35,8 @@ public class ServiceCommandProcessor
         MainViewModel? mainViewModel = null,
         Func<Guid, IReadOnlyList<LogEntry>>? logProvider = null,
         Func<Task>? shutdownRequested = null,
-        PresetVariableUsageStore? variableUsageStore = null)
+        PresetVariableUsageStore? variableUsageStore = null,
+        Func<Task<CommandResponse>>? reloadRequested = null)
     {
         _configService = configService;
         _appConfig = appConfig;
@@ -43,6 +45,7 @@ public class ServiceCommandProcessor
         _logProvider = logProvider;
         _shutdownRequested = shutdownRequested;
         _variableUsageStore = variableUsageStore;
+        _reloadRequested = reloadRequested;
     }
 
     public async Task<CommandResponse> ExecuteAsync(string[] args)
@@ -59,6 +62,7 @@ public class ServiceCommandProcessor
             "version" or "--version" or "-v" => Version(),
             "ai-help" or "agent-help" => AiHelp(),
             "config-path" => CommandResponse.Ok(_configService.PathToConfig),
+            "config" => await ConfigAsync(rest),
             "doctor" or "check" => Doctor(rest),
             "list" or "ls" => List(rest),
             "status" or "state" => Status(rest),
@@ -80,6 +84,111 @@ public class ServiceCommandProcessor
 
     private static CommandResponse Help() => CommandResponse.Ok(HelpText());
 
+    private async Task<CommandResponse> ConfigAsync(string[] args)
+    {
+        if (args.Length == 0)
+            return CommandResponse.Error("用法: config reload | config apply --file PATH", 2);
+
+        var subCommand = args[0].ToLowerInvariant();
+        return subCommand switch
+        {
+            "reload" => await ConfigReloadAsync(),
+            "apply" => await ConfigApplyAsync(args.Skip(1).ToArray()),
+            _ => CommandResponse.Error($"未知 config 命令: {args[0]}\n用法: config reload | config apply --file PATH", 2)
+        };
+    }
+
+    private async Task<CommandResponse> ConfigReloadAsync()
+    {
+        if (_reloadRequested == null)
+            return TrayRequired();
+
+        return await _reloadRequested();
+    }
+
+    private async Task<CommandResponse> ConfigApplyAsync(string[] args)
+    {
+        var filePath = ReadFileOption(args);
+        if (string.IsNullOrWhiteSpace(filePath))
+            return CommandResponse.Error("缺少 --file PATH。用法: config apply --file PATH", 2);
+
+        if (!File.Exists(filePath))
+            return CommandResponse.Error($"文件不存在: {filePath}", 2);
+
+        // Read and validate the new config
+        AppConfig newConfig;
+        try
+        {
+            var json = await File.ReadAllTextAsync(filePath);
+            newConfig = JsonSerializer.Deserialize<AppConfig>(json, new JsonSerializerOptions
+            {
+                Converters = { new JsonStringEnumConverter() }
+            }) ?? throw new JsonException("反序列化结果为 null");
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            return CommandResponse.Error($"配置文件校验不通过: {ex.Message}", 2);
+        }
+
+        // Cache current config before overwriting
+        var cacheDir = Path.Combine(_configService.ConfigDirectory, "config-cache");
+        Directory.CreateDirectory(cacheDir);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+        var cachePath = Path.Combine(cacheDir, $"config.v2.{timestamp}.json");
+
+        try
+        {
+            // Cache the current config
+            if (File.Exists(_configService.PathToConfig))
+                File.Copy(_configService.PathToConfig, cachePath, overwrite: true);
+
+            // Save the new config
+            await _configService.SaveAsync(newConfig);
+        }
+        catch (Exception ex)
+        {
+            // Roll back if we managed to write but something went wrong
+            if (File.Exists(cachePath))
+            {
+                try
+                {
+                    File.Copy(cachePath, _configService.PathToConfig, overwrite: true);
+                }
+                catch
+                {
+                    // Best-effort rollback
+                }
+            }
+            return CommandResponse.Error($"写入配置失败: {ex.Message}", 2);
+        }
+
+        // Trigger tray reload
+        if (_reloadRequested != null)
+        {
+            var reloadResult = await _reloadRequested();
+            if (reloadResult.ExitCode != 0)
+            {
+                // Reload failed — roll back
+                var failedTimestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+                var failedPath = Path.Combine(cacheDir, $"config.v2.{failedTimestamp}.failed.json");
+                try
+                {
+                    if (File.Exists(_configService.PathToConfig))
+                        File.Move(_configService.PathToConfig, failedPath);
+                    if (File.Exists(cachePath))
+                        File.Copy(cachePath, _configService.PathToConfig, overwrite: true);
+                }
+                catch
+                {
+                    // Best-effort rollback
+                }
+                return CommandResponse.Error($"校验不通过，已回滚到缓存配置，失败文件保存为 {failedPath}");
+            }
+        }
+
+        return CommandResponse.Ok("已应用配置");
+    }
+
     private static string HelpText() =>
         """
         ServicePilot command line
@@ -89,6 +198,8 @@ public class ServiceCommandProcessor
           ServicePilot.exe version
           ServicePilot.exe ai-help
           ServicePilot.exe config-path
+          ServicePilot.exe config reload
+          ServicePilot.exe config apply --file PATH
           ServicePilot.exe doctor [--json]
           ServicePilot.exe list [--json]
           ServicePilot.exe status [all|SERVICE] [--json]
@@ -107,7 +218,7 @@ public class ServiceCommandProcessor
           ServicePilot.exe step add SERVICE --name NAME --type SCRIPT_TYPE --script \"...\" [--position end|N|after:STEP|before:STEP] [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE] [--into-composite COMPOSITE]
           ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe step remove SERVICE STEP
-          ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP
+          ServicePilot.exe step move SERVICE STEP --position 0|first|end|N|after:STEP|before:STEP
           ServicePilot.exe step set-members SERVICE COMPOSITE --member STEP [--member STEP ...]
           ServicePilot.exe step add-member SERVICE COMPOSITE --member STEP
           ServicePilot.exe step remove-member SERVICE COMPOSITE --member STEP
@@ -123,7 +234,7 @@ public class ServiceCommandProcessor
           ServicePilot.exe template step add TEMPLATE --name NAME --type SCRIPT_TYPE --script \"...\" [--position end|N|after:STEP|before:STEP] [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE] [--into-composite COMPOSITE]
           ServicePilot.exe template step edit TEMPLATE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe template step remove TEMPLATE STEP
-          ServicePilot.exe template step move TEMPLATE STEP --position N|after:STEP|before:STEP
+          ServicePilot.exe template step move TEMPLATE STEP --position 0|first|end|N|after:STEP|before:STEP
           ServicePilot.exe template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]
           ServicePilot.exe template step add-member TEMPLATE COMPOSITE --member STEP
           ServicePilot.exe template step remove-member TEMPLATE COMPOSITE --member STEP
@@ -255,14 +366,15 @@ public class ServiceCommandProcessor
                 issues.Add(new DiagnosticIssue("Error", "ACTION_CONTENT_EMPTY", stepTarget, "动作命令不能为空。"));
             if (step.Kind == StepKind.Composite)
             {
+                var missingIds = step.MemberStepIds.Where(id => !byId.ContainsKey(id)).ToList();
                 var members = step.MemberStepIds
                     .Where(byId.ContainsKey)
                     .Select(id => byId[id])
                     .ToList();
-                if (members.Count == 0)
+                if (members.Count == 0 && missingIds.Count == 0)
                     issues.Add(new DiagnosticIssue("Error", "COMPOSITE_MEMBERS_EMPTY", stepTarget, "组合动作至少需要一个有效成员动作。"));
-                if (step.MemberStepIds.Any(id => !byId.ContainsKey(id)))
-                    issues.Add(new DiagnosticIssue("Error", "COMPOSITE_MEMBER_MISSING", stepTarget, "组合动作引用了不存在的成员动作。"));
+                if (missingIds.Count > 0)
+                    issues.Add(new DiagnosticIssue("Error", "COMPOSITE_MEMBER_MISSING", stepTarget, $"组合动作引用了不存在的成员动作: {string.Join(", ", missingIds)}"));
                 if (members.Any(m => m.Kind == StepKind.Composite))
                     issues.Add(new DiagnosticIssue("Error", "COMPOSITE_NESTED", stepTarget, "组合动作不能包含另一个组合动作。"));
                 if (members.Count(m => m.UseVariable) > 1)
@@ -983,7 +1095,9 @@ public class ServiceCommandProcessor
         var updated = ScriptDefinitionService.CloneService(service);
         var step = FindStep(updated, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+            return HasAmbiguousNameMatch(updated.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
 
         // Remove from ScriptSteps
         updated.ScriptSteps.RemoveAll(s => s.Id == step.Id);
@@ -1009,7 +1123,7 @@ public class ServiceCommandProcessor
     private async Task<CommandResponse> StepMoveAsync(string[] args)
     {
         if (args.Length < 2)
-            return CommandResponse.Error("用法: step move SERVICE STEP --position N|after:STEP|before:STEP", 2);
+            return CommandResponse.Error("用法: step move SERVICE STEP --position 0|first|end|N|after:STEP|before:STEP", 2);
 
         var service = FindConfig(args[0]);
         if (service == null)
@@ -1017,7 +1131,7 @@ public class ServiceCommandProcessor
 
         var position = ReadOption(args, "--position");
         if (string.IsNullOrWhiteSpace(position))
-            return CommandResponse.Error("缺少 --position。用法: --position N|after:STEP|before:STEP", 2);
+            return CommandResponse.Error("缺少 --position。用法: --position 0|first|end|N|after:STEP|before:STEP", 2);
 
         var updated = ScriptDefinitionService.CloneService(service);
         var step = FindStep(updated, args[1]);
@@ -1157,6 +1271,12 @@ public class ServiceCommandProcessor
         if (string.Equals(position, "end", StringComparison.OrdinalIgnoreCase))
         {
             steps.Add(step);
+            return;
+        }
+
+        if (string.Equals(position, "first", StringComparison.OrdinalIgnoreCase))
+        {
+            steps.Insert(0, step);
             return;
         }
 
@@ -1415,7 +1535,9 @@ public class ServiceCommandProcessor
 
         var step = FindStep(template.ScriptSteps, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
+            return HasAmbiguousNameMatch(template.ScriptSteps, args[1])
+                ? CommandResponse.Error($"模板动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
 
         bool changed = false;
         var newName = ReadOption(args, "--name");
@@ -1485,7 +1607,9 @@ public class ServiceCommandProcessor
 
         var step = FindStep(template.ScriptSteps, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
+            return HasAmbiguousNameMatch(template.ScriptSteps, args[1])
+                ? CommandResponse.Error($"模板动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
 
         template.ScriptSteps.RemoveAll(s => s.Id == step.Id);
         foreach (var composite in template.ScriptSteps.Where(s => s.Kind == StepKind.Composite))
@@ -1509,7 +1633,7 @@ public class ServiceCommandProcessor
     private async Task<CommandResponse> TemplateStepMoveAsync(string[] args)
     {
         if (args.Length < 2)
-            return CommandResponse.Error("用法: template step move TEMPLATE STEP --position N|after:STEP|before:STEP", 2);
+            return CommandResponse.Error("用法: template step move TEMPLATE STEP --position 0|first|end|N|after:STEP|before:STEP", 2);
 
         var template = FindTemplate(args[0]);
         if (template == null)
@@ -2087,7 +2211,7 @@ public class ServiceCommandProcessor
                 Name = parts[0],
                 Kind = StepKind.Action,
                 ScriptType = type,
-                UseVariable = parts.Length < 4 || !bool.TryParse(parts[2], out var useVariable) || useVariable,
+                UseVariable = parts.Length >= 4 && bool.TryParse(parts[2], out var useVariable) && useVariable,
                 OpenLogOnRun = parts.Length >= 6 && bool.TryParse(parts[4], out var openLogOnRun) && openLogOnRun,
                 Content = parts.Length == 6 ? parts[5] : parts.Length == 5 ? parts[4] : parts.Length == 4 ? parts[3] : parts[2],
                 Order = result.Count

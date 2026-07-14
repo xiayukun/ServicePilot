@@ -4,6 +4,18 @@
 
 本文只记录公开发布版本的用户可见变化。
 
+## 2.4.0 - 2026-07-14
+
+- 编辑动作后 Id 保持恒定，不再重新分配，组合成员引用不再悬空。
+- 新增 `config reload` 命令，通知托盘重新加载配置文件到内存，无需重启。
+- 新增 `config apply --file PATH` 命令，校验并应用外部 JSON 配置，失败时自动回滚到缓存配置。
+- `step move --position` 支持 `first`/`0` 表示置顶，明确 0-based 位置序号语义。
+- `doctor` COMPOSITE_MEMBER_MISSING 报告具体悬空成员 Id 列表。
+- `ai-help` 和"复制给 AI 的帮助"增加配置文件路径和 JSON 结构概要说明。
+- "复制给 AI 的帮助"去除程序路径和建议先运行段落，只保留核心操作指南。
+- COMPOSITE_VARIABLE_MEMBER_MULTIPLE 只统计有效成员，有悬空引用时不再误报。
+- 保存配置时自动剔除悬空的组合成员引用。
+
 ## 2.3.1 - 2026-07-14
 
 - `step add --use-variable` 默认改为 false（原默认 true 导致 UseVariable=True+VarCount=0 矛盾）。

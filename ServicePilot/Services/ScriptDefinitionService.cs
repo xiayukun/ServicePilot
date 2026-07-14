@@ -10,7 +10,7 @@ public static class ScriptDefinitionService
     {
         return new ScriptStep
         {
-            Id = Guid.NewGuid(),
+            Id = source.Id,
             Name = source.Name,
             Kind = source.Kind,
             ScriptType = source.ScriptType,
@@ -53,8 +53,10 @@ public static class ScriptDefinitionService
 
         foreach (var source in ordered)
         {
+            var newId = Guid.NewGuid();
+            idMap[source.Id] = newId;
             var clone = CloneStep(source);
-            idMap[source.Id] = clone.Id;
+            clone.Id = newId;
             clones.Add(clone);
         }
 
@@ -153,10 +155,9 @@ public static class ScriptDefinitionService
             .Replace("{{变量}}", variable, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static ScriptStep CloneStepPreserveId(ScriptStep source)
-    {
-        var clone = CloneStep(source);
-        clone.Id = source.Id;
-        return clone;
-    }
+    /// <summary>
+    /// Clones a step preserving its original id. Since <see cref="CloneStep"/> now preserves
+    /// the source id by default, this method is kept for readability at call sites.
+    /// </summary>
+    private static ScriptStep CloneStepPreserveId(ScriptStep source) => CloneStep(source);
 }

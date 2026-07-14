@@ -64,11 +64,33 @@ public class ConfigService
 
     public async Task SaveAsync(AppConfig config)
     {
+        // Clean up dangling composite member references before saving
+        PurgeDanglingMembers(config);
+
         Directory.CreateDirectory(ConfigDir);
         var json = JsonSerializer.Serialize(config, Options);
         var tempPath = ConfigPath + ".tmp";
         await File.WriteAllTextAsync(tempPath, json);
         File.Move(tempPath, ConfigPath, overwrite: true);
+    }
+
+    /// <summary>
+    /// Removes member ids from composite steps that reference non-existent steps within the same service/template.
+    /// </summary>
+    private static void PurgeDanglingMembers(AppConfig config)
+    {
+        foreach (var service in config.Services)
+            PurgeDanglingMembers(service.ScriptSteps);
+
+        foreach (var template in config.ServiceTemplates)
+            PurgeDanglingMembers(template.ScriptSteps);
+    }
+
+    private static void PurgeDanglingMembers(List<ScriptStep> steps)
+    {
+        var validIds = new HashSet<Guid>(steps.Select(s => s.Id));
+        foreach (var composite in steps.Where(s => s.Kind == StepKind.Composite))
+            composite.MemberStepIds.RemoveAll(id => !validIds.Contains(id));
     }
 
     private static void MigrateLegacyLocalConfigIfNeeded(string fileName)

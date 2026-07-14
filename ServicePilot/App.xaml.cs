@@ -110,7 +110,8 @@ public partial class App : Application
                 _mainViewModel,
                 GetBufferedLogs,
                 RequestExitFromCommandAsync,
-                _variableUsageStore);
+                _variableUsageStore,
+                ReloadConfigAsync);
             _commandPipeServer = new CommandPipeServer(HandlePipeCommandAsync);
             _commandPipeServer.Start();
 
@@ -1107,6 +1108,7 @@ public partial class App : Application
             "service" => ClassifyServiceCommandRefresh(rest),
             "step" => ClassifyStepCommandRefresh(rest),
             "template" => ClassifyTemplateCommandRefresh(rest),
+            "config" => RuntimeRefreshScope.All,
             _ => RuntimeRefreshScope.None
         };
     }
@@ -1156,6 +1158,51 @@ public partial class App : Application
             "create" => RuntimeRefreshScope.Services | RuntimeRefreshScope.Tray | RuntimeRefreshScope.Logs,
             _ => RuntimeRefreshScope.None
         };
+    }
+
+    private async Task<CommandResponse> ReloadConfigAsync()
+    {
+        if (_processManager == null || _mainViewModel == null)
+            return CommandResponse.Error("托盘实例尚未初始化。", 2);
+
+        try
+        {
+            var reloadedConfig = await _configService.LoadAsync();
+
+            // Update the in-memory AppConfig
+            _appConfig.Services.Clear();
+            _appConfig.Services.AddRange(reloadedConfig.Services);
+            _appConfig.ServiceTemplates.Clear();
+            _appConfig.ServiceTemplates.AddRange(reloadedConfig.ServiceTemplates);
+            _appConfig.Settings = reloadedConfig.Settings ?? new AppSettings();
+
+            // Refresh ProcessManager: reload service configs
+            _processManager.LoadConfigs(_appConfig.Services);
+
+            // Refresh MainViewModel: rebuild the Services collection
+            _mainViewModel.Services.Clear();
+            foreach (var state in _processManager.Services)
+            {
+                var vm = new ServiceItemViewModel(state, _processManager);
+                vm.LogRequested += OnViewLogRequested;
+                _mainViewModel.Services.Add(vm);
+            }
+
+            // Refresh UI
+            RebuildTrayMenu();
+            foreach (var window in _serviceManagerWindows.ToList())
+                window.RefreshAfterConfigChanged();
+            foreach (var window in _templateManagerWindows.ToList())
+                window.RefreshAfterConfigChanged();
+            foreach (var window in _logWindows.Values.ToList())
+                window.RefreshAfterConfigChanged();
+
+            return CommandResponse.Ok("已重新加载配置");
+        }
+        catch (Exception ex)
+        {
+            return CommandResponse.Error($"重新加载配置失败: {ex.Message}", 2);
+        }
     }
 
     private async Task RequestExitFromCommandAsync()
