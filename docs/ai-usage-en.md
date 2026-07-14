@@ -99,6 +99,39 @@ ServicePilot.exe template step-variables "Vite Frontend" "Set API URL" --json
 ServicePilot.exe template step-variable-add "Vite Frontend" "Set API URL" --variable "https://test.example.com/api"
 ```
 
+Template import supports `--on-conflict` to control name/ID collision strategy:
+
+```powershell
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json"                    # default: rename
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json" --on-conflict overwrite
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json" --on-conflict skip
+```
+
+## Composite Member Management
+
+CLI can directly manage composite action member lists:
+
+```powershell
+ServicePilot.exe step set-members "Frontend" "Start" --member "Set API URL" --member "Start Server"
+ServicePilot.exe step add-member "Frontend" "Start" --member "Health Check"
+ServicePilot.exe step remove-member "Frontend" "Start" --member "Health Check"
+ServicePilot.exe template step set-members "Vite Frontend" "Start" --member "Set API URL" --member "Start Server"
+ServicePilot.exe template step add-member "Vite Frontend" "Start" --member "Health Check"
+ServicePilot.exe template step remove-member "Vite Frontend" "Start" --member "Health Check"
+```
+
+## --json Output And Encoding
+
+`--json` output is forced to UTF-8 encoding; errors also go to stdout (exit code semantics unchanged), so `| python` / `| jq` pipes never garble Chinese text:
+
+```powershell
+ServicePilot.exe step edit "Frontend" "Set API URL" --name "Set API" --json
+ServicePilot.exe step remove "Frontend" "Old Step" --json
+ServicePilot.exe step move "Frontend" "Set API" --position 1 --json
+```
+
+`service edit` / `step edit` etc. return "no changes detected" when no actual modification is made, preventing AI agents from repeatedly writing empty changes.
+
 ## Isolated Tests
 
 ```powershell

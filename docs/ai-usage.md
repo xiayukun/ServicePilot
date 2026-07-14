@@ -108,6 +108,39 @@ ServicePilot.exe template step-variables "Vite Frontend" "Set API URL" --json
 ServicePilot.exe template step-variable-add "Vite Frontend" "Set API URL" --variable "https://test.example.com/api"
 ```
 
+模板导入支持 `--on-conflict` 控制同名/同 ID 冲突策略：
+
+```powershell
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json"                    # 默认 rename
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json" --on-conflict overwrite
+ServicePilot.exe template import --file ".\vite-frontend.servicepilot-template.json" --on-conflict skip
+```
+
+## 组合动作成员维护
+
+CLI 可直接操作组合动作（Composite）的成员列表：
+
+```powershell
+ServicePilot.exe step set-members "Frontend" "Start" --member "Set API URL" --member "Start Server"
+ServicePilot.exe step add-member "Frontend" "Start" --member "Health Check"
+ServicePilot.exe step remove-member "Frontend" "Start" --member "Health Check"
+ServicePilot.exe template step set-members "Vite Frontend" "Start" --member "Set API URL" --member "Start Server"
+ServicePilot.exe template step add-member "Vite Frontend" "Start" --member "Health Check"
+ServicePilot.exe template step remove-member "Vite Frontend" "Start" --member "Health Check"
+```
+
+## --json 输出与编码
+
+`--json` 输出强制 UTF-8 编码，错误也走 stdout（exit code 保持语义），管道 `| python` / `| jq` 不会因中文乱码：
+
+```powershell
+ServicePilot.exe step edit "Frontend" "Set API URL" --name "Set API" --json
+ServicePilot.exe step remove "Frontend" "Old Step" --json
+ServicePilot.exe step move "Frontend" "Set API" --position 1 --json
+```
+
+`service edit` / `step edit` 等命令无实质变更时返回"未检测到变更"，避免 AI 反复空写。
+
 ## 测试隔离
 
 ```powershell

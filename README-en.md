@@ -47,8 +47,8 @@ Anything the command line can do can usually become a ServicePilot action: switc
 - **Template sharing**: export templates as JSON files and import templates shared by others.
 - **Built-in general template**: first launch seeds editable "Default developer actions" with Git, npm, IDE, and terminal actions.
 - **Live logs**: per-action tabs, search, copy, horizontal scrolling, and bounded history.
-- **AI/script CLI**: JSON output for `list/status/service/step/template/logs`; the tray can `Copy help for AI`, and CLI configuration changes refresh open manager/log windows.
-- **Step-level incremental editing**: `step add/edit/remove/move` adds, edits, removes, and reorders individual action steps without recreating whole services; changes propagate to the tray menu and open manager/log windows via the tray pipe.
+- **AI/script CLI**: JSON output for `list/status/service/step/template/logs`; `--json` errors also go to stdout with forced UTF-8 encoding for clean pipe consumption; the tray can `Copy help for AI`, and CLI configuration changes refresh open manager/log windows.
+- **Step-level incremental editing**: `step add/edit/remove/move` adds, edits, removes, and reorders individual action steps; `step set-members/add-member/remove-member` directly manages composite action members; `template import --on-conflict` controls name-collision strategy; changes propagate to the tray menu and open manager/log windows via the tray pipe.
 - **Reliable stop**: Windows Job Object cleanup reduces Vite/npm child processes that keep ports alive.
 - **Chinese/English UI**: follows Windows language by default, with a tray menu switch.
 
@@ -66,6 +66,9 @@ ServicePilot.exe step add "Frontend" --name "Check Node" --type Batch --script "
 ServicePilot.exe step edit "Frontend" "Check Node" --name "Node Version Check"
 ServicePilot.exe step remove "Frontend" "Node Version Check"
 ServicePilot.exe step move "Frontend" "Set API URL" --position end
+ServicePilot.exe step set-members "Frontend" "Start" --member "Set API URL" --member "Start Server"
+ServicePilot.exe step add-member "Frontend" "Start" --member "Health Check"
+ServicePilot.exe template import --file ".\my-template.servicepilot-template.json" --on-conflict skip
 ServicePilot.exe logs "Frontend" --tail 200 --json
 ServicePilot.exe stop "Frontend"
 ```

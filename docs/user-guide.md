@@ -118,10 +118,13 @@ ServicePilot.exe logs SERVICE [--tail N] [--json]
 ServicePilot.exe service list|get|add|edit|remove|start|stop|restart|logs ...
 ServicePilot.exe step list SERVICE [--json]
 ServicePilot.exe step run SERVICE STEP [--variable VALUE]
-ServicePilot.exe step add SERVICE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE]... [--position end|N|after:STEP|before:STEP] [--into-composite COMPOSITE]
-ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script ...] [--use-variable true|false] [--open-log-on-run true|false]
-ServicePilot.exe step remove SERVICE STEP
-ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP
+ServicePilot.exe step add SERVICE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE]... [--position end|N|after:STEP|before:STEP] [--into-composite COMPOSITE] [--json]
+ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script ...] [--use-variable true|false] [--open-log-on-run true|false] [--json]
+ServicePilot.exe step remove SERVICE STEP [--json]
+ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP [--json]
+ServicePilot.exe step set-members SERVICE COMPOSITE --member STEP [--member STEP ...]
+ServicePilot.exe step add-member SERVICE COMPOSITE --member STEP
+ServicePilot.exe step remove-member SERVICE COMPOSITE --member STEP
 ServicePilot.exe step variables SERVICE STEP [--json]
 ServicePilot.exe step variable-add SERVICE STEP --variable VALUE
 ServicePilot.exe step variable-remove SERVICE STEP --variable VALUE
@@ -129,11 +132,18 @@ ServicePilot.exe step variable-clear SERVICE STEP
 
 ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
 ServicePilot.exe template export TEMPLATE --file FILE
-ServicePilot.exe template import --file FILE
+ServicePilot.exe template import --file FILE [--on-conflict rename|overwrite|skip]
 ServicePilot.exe template step-variables TEMPLATE STEP [--json]
 ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
 ServicePilot.exe template step-variable-clear TEMPLATE STEP
+ServicePilot.exe template step add TEMPLATE --name NAME --type Batch|PowerShell|Python|Node --script "..." [--position end|N|after:STEP|before:STEP] [--use-variable true|false] [--open-log-on-run true|false] [--variable VALUE] [--into-composite COMPOSITE] [--json]
+ServicePilot.exe template step edit TEMPLATE STEP [--name NAME] [--type ...] [--script ...] [--use-variable ...] [--open-log-on-run ...] [--json]
+ServicePilot.exe template step remove TEMPLATE STEP [--json]
+ServicePilot.exe template step move TEMPLATE STEP --position N|after:STEP|before:STEP [--json]
+ServicePilot.exe template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]
+ServicePilot.exe template step add-member TEMPLATE COMPOSITE --member STEP
+ServicePilot.exe template step remove-member TEMPLATE COMPOSITE --member STEP
 ServicePilot.exe shutdown
 ```
 

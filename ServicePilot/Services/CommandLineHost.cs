@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -16,9 +17,17 @@ public static class CommandLineHost
     {
         AttachConsole(AttachParentProcess);
 
+        // Force UTF-8 output encoding so that --json pipe consumers (python, jq) receive clean UTF-8
+        // instead of the Windows console default code page (e.g. GBK) which corrupts Chinese characters.
+        try { Console.OutputEncoding = Encoding.UTF8; } catch { /* ignore if console not available */ }
+
         var response = await TrySendToTrayAsync(args) ?? await RunOfflineAsync(args);
 
-        WriteStandard(response.IsError ? StdErrorHandle : StdOutputHandle, response.Output + Environment.NewLine);
+        // When --json is specified, always write to stdout (even for errors) so that pipe consumers
+        // can capture the full JSON output. Exit code still reflects error status.
+        var isJson = args.Any(a => string.Equals(a, "--json", StringComparison.OrdinalIgnoreCase));
+        var handle = isJson ? StdOutputHandle : (response.IsError ? StdErrorHandle : StdOutputHandle);
+        WriteStandard(handle, response.Output + Environment.NewLine);
 
         return response.ExitCode;
     }

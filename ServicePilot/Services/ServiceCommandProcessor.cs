@@ -108,10 +108,13 @@ public class ServiceCommandProcessor
           ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe step remove SERVICE STEP
           ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP
+          ServicePilot.exe step set-members SERVICE COMPOSITE --member STEP [--member STEP ...]
+          ServicePilot.exe step add-member SERVICE COMPOSITE --member STEP
+          ServicePilot.exe step remove-member SERVICE COMPOSITE --member STEP
 
           ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...
           ServicePilot.exe template export TEMPLATE --file FILE
-          ServicePilot.exe template import --file FILE
+          ServicePilot.exe template import --file FILE [--on-conflict rename|overwrite|skip]
           ServicePilot.exe template step-variables TEMPLATE STEP [--json]
           ServicePilot.exe template step-variable-add TEMPLATE STEP --variable VALUE
           ServicePilot.exe template step-variable-remove TEMPLATE STEP --variable VALUE
@@ -121,6 +124,9 @@ public class ServiceCommandProcessor
           ServicePilot.exe template step edit TEMPLATE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe template step remove TEMPLATE STEP
           ServicePilot.exe template step move TEMPLATE STEP --position N|after:STEP|before:STEP
+          ServicePilot.exe template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]
+          ServicePilot.exe template step add-member TEMPLATE COMPOSITE --member STEP
+          ServicePilot.exe template step remove-member TEMPLATE COMPOSITE --member STEP
           Legacy: add, remove, templates, template create
           ServicePilot.exe shutdown
 
@@ -308,16 +314,23 @@ public class ServiceCommandProcessor
     {
         var services = ConfigServices();
         if (HasFlag(args, "--json"))
-            return Json(services.Select(s => new
+            return Json(services.Select(s =>
             {
-                s.Id,
-                s.Name,
-                s.WorkingDirectory,
-                s.AutoStart,
-                s.SortOrder,
-                StepCount = s.ScriptSteps.Count,
-                ActionCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Action),
-                CompositeCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Composite)
+                var firstComposite = s.ScriptSteps
+                    .OrderBy(step => step.Order)
+                    .FirstOrDefault(step => step.Kind == StepKind.Composite);
+                return new
+                {
+                    s.Id,
+                    s.Name,
+                    s.WorkingDirectory,
+                    s.AutoStart,
+                    s.SortOrder,
+                    StepCount = s.ScriptSteps.Count,
+                    ActionCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Action),
+                    CompositeCount = s.ScriptSteps.Count(step => step.Kind == StepKind.Composite),
+                    DefaultStartStep = firstComposite != null ? new { firstComposite.Id, firstComposite.Name } : null
+                };
             }));
 
         if (services.Count == 0)
@@ -495,8 +508,36 @@ public class ServiceCommandProcessor
             return CommandResponse.Error($"找不到服务: {args[0]}", 2);
 
         if (HasFlag(args, "--json"))
-            return Json(service);
+        {
+            var firstComposite = service.ScriptSteps
+                .OrderBy(s => s.Order)
+                .FirstOrDefault(s => s.Kind == StepKind.Composite);
+            return Json(new
+            {
+                service.Id,
+                service.Name,
+                service.WorkingDirectory,
+                service.AutoStart,
+                ScriptSteps = service.ScriptSteps.OrderBy(s => s.Order).Select(s => new
+                {
+                    s.Id,
+                    s.Name,
+                    s.Kind,
+                    s.ScriptType,
+                    s.UseVariable,
+                    s.OpenLogOnRun,
+                    s.StepVariables,
+                    s.MemberStepIds,
+                    s.Order,
+                    s.Content,
+                    IsDefaultStartStep = s.Kind == StepKind.Composite && firstComposite != null && s.Id == firstComposite.Id
+                })
+            });
+        }
 
+        var firstCompositeId = service.ScriptSteps
+            .OrderBy(s => s.Order)
+            .FirstOrDefault(s => s.Kind == StepKind.Composite)?.Id;
         var steps = service.ScriptSteps
             .OrderBy(s => s.Order)
             .Select(s =>
@@ -504,7 +545,10 @@ public class ServiceCommandProcessor
                 var members = s.Kind == StepKind.Composite && s.MemberStepIds.Count > 0
                     ? $" members={string.Join(",", s.MemberStepIds)}"
                     : string.Empty;
-                return $"{s.Name} kind={s.Kind} type={s.ScriptType} useVariable={s.UseVariable} openLogOnRun={s.OpenLogOnRun} stepVariables={s.StepVariables.Count}{members}";
+                var defaultStart = s.Kind == StepKind.Composite && s.Id == firstCompositeId
+                    ? " (default start)"
+                    : string.Empty;
+                return $"{s.Name} kind={s.Kind} type={s.ScriptType} useVariable={s.UseVariable} openLogOnRun={s.OpenLogOnRun} stepVariables={s.StepVariables.Count}{members}{defaultStart}";
             });
         return CommandResponse.Ok(
             $"{service.Name} ({service.Id})\ndir=\"{service.WorkingDirectory}\"\nautostart={service.AutoStart}\nactions={service.ScriptSteps.Count(s => s.Kind == StepKind.Action)} composites={service.ScriptSteps.Count(s => s.Kind == StepKind.Composite)}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
@@ -520,6 +564,7 @@ public class ServiceCommandProcessor
             return CommandResponse.Error($"找不到服务: {args[0]}", 2);
 
         var updated = ScriptDefinitionService.CloneService(service);
+        bool changed = false;
         var newName = ReadOption(args, "--name");
         if (!string.IsNullOrWhiteSpace(newName))
         {
@@ -529,6 +574,7 @@ public class ServiceCommandProcessor
                 return CommandResponse.Error($"服务名称已存在: {newName.Trim()}", 2);
 
             updated.Name = newName.Trim();
+            changed = true;
         }
 
         var dir = ReadOption(args, "--dir") ?? ReadOption(args, "--working-directory");
@@ -538,21 +584,30 @@ public class ServiceCommandProcessor
                 return CommandResponse.Error($"工作目录不存在: {dir}", 2);
 
             updated.WorkingDirectory = dir.Trim();
+            changed = true;
         }
 
         var autoStart = ReadBoolOption(args, "--autostart");
         if (autoStart.HasValue)
+        {
             updated.AutoStart = autoStart.Value;
+            changed = true;
+        }
 
         var steps = ParseSteps(args);
         if (steps.Count > 0)
+        {
             updated.ScriptSteps = steps;
+            changed = true;
+        }
 
         if (HasAnyOption(args, "--preset", "--preset-variable") || HasFlag(args, "--clear-presets"))
             return CommandResponse.Error("ServicePilot 2.0 已移除服务级预设变量；请使用 step variable-add 维护动作变量。", 2);
 
         await UpdateConfigAsync(updated);
-        return CommandResponse.Ok($"已更新服务: {updated.Name}");
+        return changed
+            ? CommandResponse.Ok($"已更新服务: {updated.Name}")
+            : CommandResponse.Ok("未检测到变更，服务保持不变");
     }
 
     private async Task<CommandResponse> AddAsync(string[] args)
@@ -595,7 +650,7 @@ public class ServiceCommandProcessor
     private async Task<CommandResponse> StepAsync(string[] args)
     {
         if (args.Length == 0)
-            return CommandResponse.Error("用法: step list|add|edit|remove|move|run|variables|variable-add|variable-remove|variable-clear SERVICE ... [--json]等", 2);
+            return CommandResponse.Error("用法: step list|add|edit|remove|move|run|variables|variable-add|variable-remove|variable-clear|set-members|add-member|remove-member SERVICE ... [--json]等", 2);
 
         var subCommand = args[0].ToLowerInvariant();
         return subCommand switch
@@ -610,6 +665,9 @@ public class ServiceCommandProcessor
             "edit" => await StepEditAsync(args.Skip(1).ToArray()),
             "remove" or "delete" => await StepRemoveAsync(args.Skip(1).ToArray()),
             "move" => await StepMoveAsync(args.Skip(1).ToArray()),
+            "set-members" => await StepSetMembersAsync(args.Skip(1).ToArray()),
+            "add-member" => await StepAddMemberAsync(args.Skip(1).ToArray()),
+            "remove-member" => await StepRemoveMemberAsync(args.Skip(1).ToArray()),
             _ => CommandResponse.Error($"未知 step 命令: {args[0]}", 2)
         };
     }
@@ -846,29 +904,48 @@ public class ServiceCommandProcessor
         if (step == null)
             return CommandResponse.Error($"找不到动作: {args[1]}", 2);
 
+        bool changed = false;
         var newName = ReadOption(args, "--name");
         if (!string.IsNullOrWhiteSpace(newName))
+        {
             step.Name = newName.Trim();
+            changed = true;
+        }
 
         var typeText = ReadOption(args, "--type");
         if (!string.IsNullOrWhiteSpace(typeText) && Enum.TryParse<ScriptType>(typeText, ignoreCase: true, out var parsedType))
+        {
             step.ScriptType = parsedType;
+            changed = true;
+        }
 
         var script = ReadOption(args, "--script") ?? ReadOption(args, "--script-file");
         if (!string.IsNullOrWhiteSpace(script))
+        {
             step.Content = script;
+            changed = true;
+        }
 
         var useVariable = ReadBoolOption(args, "--use-variable");
         if (useVariable.HasValue)
+        {
             step.UseVariable = useVariable.Value;
+            changed = true;
+        }
 
         var runOnStart = ReadBoolOption(args, "--run-on-start");
         if (runOnStart.HasValue)
+        {
             step.RunOnStart = runOnStart.Value;
+            changed = true;
+        }
 
         var openLogOnRun = ReadBoolOption(args, "--open-log-on-run");
         if (openLogOnRun.HasValue)
+        {
             step.OpenLogOnRun = openLogOnRun.Value;
+            changed = true;
+        }
 
         await UpdateConfigAsync(updated);
         if (HasFlag(args, "--json"))
@@ -885,7 +962,9 @@ public class ServiceCommandProcessor
                 step.Order,
                 step.StepVariables
             });
-        return CommandResponse.Ok($"已更新动作: {step.Name} ({step.Id})");
+        return changed
+            ? CommandResponse.Ok($"已更新动作: {step.Name} ({step.Id})")
+            : CommandResponse.Ok("未检测到变更，动作保持不变");
     }
 
     private async Task<CommandResponse> StepRemoveAsync(string[] args)
@@ -960,6 +1039,113 @@ public class ServiceCommandProcessor
                 step.Order
             });
         return CommandResponse.Ok($"已移动动作: {step.Name} 到位置 {position}");
+    }
+
+    private async Task<CommandResponse> StepSetMembersAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: step set-members SERVICE COMPOSITE --member STEP [--member STEP ...]", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+        var composite = FindStep(updated.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法设置成员。", 2);
+
+        var memberNames = ReadOptions(args, "--member");
+        if (memberNames.Count == 0)
+            return CommandResponse.Error("缺少 --member STEP。至少指定一个成员动作。", 2);
+
+        var oldMembers = composite.MemberStepIds.Select(id => updated.ScriptSteps.FirstOrDefault(s => s.Id == id)).Where(s => s != null).Select(s => s!.Name).ToList();
+        var newMemberIds = new List<Guid>();
+        var resolvedNames = new List<string>();
+        foreach (var name in memberNames)
+        {
+            var member = FindStep(updated.ScriptSteps, name);
+            if (member == null)
+                return CommandResponse.Error($"找不到成员动作: {name}", 2);
+            if (member.Kind != StepKind.Action)
+                return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作（类型为 {member.Kind}），组合动作只能包含可执行动作。", 2);
+            if (member.Id == composite.Id)
+                return CommandResponse.Error("组合动作不能包含自身。", 2);
+            newMemberIds.Add(member.Id);
+            resolvedNames.Add(member.Name);
+        }
+
+        composite.MemberStepIds = newMemberIds;
+        await UpdateConfigAsync(updated);
+        return CommandResponse.Ok($"已设置组合动作成员: {composite.Name} [{string.Join(", ", oldMembers)}] → [{string.Join(", ", resolvedNames)}]");
+    }
+
+    private async Task<CommandResponse> StepAddMemberAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: step add-member SERVICE COMPOSITE --member STEP", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+        var composite = FindStep(updated.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法添加成员。", 2);
+
+        var memberName = ReadOption(args, "--member");
+        if (string.IsNullOrWhiteSpace(memberName))
+            return CommandResponse.Error("缺少 --member STEP。", 2);
+
+        var member = FindStep(updated.ScriptSteps, memberName);
+        if (member == null)
+            return CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+        if (member.Kind != StepKind.Action)
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作。", 2);
+        if (member.Id == composite.Id)
+            return CommandResponse.Error("组合动作不能包含自身。", 2);
+        if (composite.MemberStepIds.Contains(member.Id))
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 已在组合动作 \"{composite.Name}\" 中。", 2);
+
+        composite.MemberStepIds = composite.MemberStepIds.Append(member.Id).ToList();
+        await UpdateConfigAsync(updated);
+        return CommandResponse.Ok($"已添加组合动作成员: {composite.Name} + {member.Name}");
+    }
+
+    private async Task<CommandResponse> StepRemoveMemberAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: step remove-member SERVICE COMPOSITE --member STEP", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+        var composite = FindStep(updated.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法移除成员。", 2);
+
+        var memberName = ReadOption(args, "--member");
+        if (string.IsNullOrWhiteSpace(memberName))
+            return CommandResponse.Error("缺少 --member STEP。", 2);
+
+        var member = FindStep(updated.ScriptSteps, memberName);
+        if (member == null)
+            return CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+        if (!composite.MemberStepIds.Contains(member.Id))
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 不在组合动作 \"{composite.Name}\" 中。", 2);
+
+        composite.MemberStepIds = composite.MemberStepIds.Where(id => id != member.Id).ToList();
+        await UpdateConfigAsync(updated);
+        return CommandResponse.Ok($"已移除组合动作成员: {composite.Name} - {member.Name}");
     }
 
     private static void InsertStepAtPosition(List<ScriptStep> steps, ScriptStep step, string position)
@@ -1043,7 +1229,24 @@ public class ServiceCommandProcessor
     private CommandResponse Templates(string[] args)
     {
         if (HasFlag(args, "--json"))
-            return Json(_appConfig.ServiceTemplates);
+            return Json(_appConfig.ServiceTemplates.Select(t =>
+            {
+                var firstComposite = t.ScriptSteps
+                    .OrderBy(step => step.Order)
+                    .FirstOrDefault(step => step.Kind == StepKind.Composite);
+                return new
+                {
+                    t.Id,
+                    t.Name,
+                    t.Description,
+                    t.CreatedAt,
+                    t.UpdatedAt,
+                    StepCount = t.ScriptSteps.Count,
+                    ActionCount = t.ScriptSteps.Count(step => step.Kind == StepKind.Action),
+                    CompositeCount = t.ScriptSteps.Count(step => step.Kind == StepKind.Composite),
+                    DefaultStartStep = firstComposite != null ? new { firstComposite.Id, firstComposite.Name } : null
+                };
+            }));
 
         if (_appConfig.ServiceTemplates.Count == 0)
             return CommandResponse.Ok("没有服务模板。");
@@ -1088,7 +1291,7 @@ public class ServiceCommandProcessor
     private async Task<CommandResponse> TemplateStepAsync(string[] args)
     {
         if (args.Length == 0)
-            return CommandResponse.Error("用法: template step TEMPLATE add|edit|remove|move|list ...", 2);
+            return CommandResponse.Error("用法: template step TEMPLATE add|edit|remove|move|list|set-members|add-member|remove-member ...", 2);
 
         var subCommand = args[0].ToLowerInvariant();
         var rest = args.Skip(1).ToArray();
@@ -1099,6 +1302,9 @@ public class ServiceCommandProcessor
             "edit" => await TemplateStepEditAsync(rest),
             "remove" or "delete" => await TemplateStepRemoveAsync(rest),
             "move" => await TemplateStepMoveAsync(rest),
+            "set-members" => await TemplateStepSetMembersAsync(rest),
+            "add-member" => await TemplateStepAddMemberAsync(rest),
+            "remove-member" => await TemplateStepRemoveMemberAsync(rest),
             _ => CommandResponse.Error($"未知 template step 命令: {args[0]}", 2)
         };
     }
@@ -1203,25 +1409,41 @@ public class ServiceCommandProcessor
         if (step == null)
             return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
 
+        bool changed = false;
         var newName = ReadOption(args, "--name");
         if (!string.IsNullOrWhiteSpace(newName))
+        {
             step.Name = newName.Trim();
+            changed = true;
+        }
 
         var typeText = ReadOption(args, "--type");
         if (!string.IsNullOrWhiteSpace(typeText) && Enum.TryParse<ScriptType>(typeText, ignoreCase: true, out var parsedType))
+        {
             step.ScriptType = parsedType;
+            changed = true;
+        }
 
         var script = ReadOption(args, "--script") ?? ReadOption(args, "--script-file");
         if (!string.IsNullOrWhiteSpace(script))
+        {
             step.Content = script;
+            changed = true;
+        }
 
         var useVariable = ReadBoolOption(args, "--use-variable");
         if (useVariable.HasValue)
+        {
             step.UseVariable = useVariable.Value;
+            changed = true;
+        }
 
         var openLogOnRun = ReadBoolOption(args, "--open-log-on-run");
         if (openLogOnRun.HasValue)
+        {
             step.OpenLogOnRun = openLogOnRun.Value;
+            changed = true;
+        }
 
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
@@ -1239,7 +1461,9 @@ public class ServiceCommandProcessor
                 step.Order,
                 step.StepVariables
             });
-        return CommandResponse.Ok($"已更新模板动作: {step.Name} ({step.Id})");
+        return changed
+            ? CommandResponse.Ok($"已更新模板动作: {step.Name} ({step.Id})")
+            : CommandResponse.Ok("未检测到变更，动作保持不变");
     }
 
     private async Task<CommandResponse> TemplateStepRemoveAsync(string[] args)
@@ -1310,6 +1534,113 @@ public class ServiceCommandProcessor
         return CommandResponse.Ok($"已移动模板动作: {step.Name} 到位置 {position}");
     }
 
+    private async Task<CommandResponse> TemplateStepSetMembersAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]", 2);
+
+        var template = FindTemplate(args[0]);
+        if (template == null)
+            return CommandResponse.Error($"找不到模板: {args[0]}", 2);
+
+        var composite = FindStep(template.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法设置成员。", 2);
+
+        var memberNames = ReadOptions(args, "--member");
+        if (memberNames.Count == 0)
+            return CommandResponse.Error("缺少 --member STEP。至少指定一个成员动作。", 2);
+
+        var oldMembers = composite.MemberStepIds.Select(id => template.ScriptSteps.FirstOrDefault(s => s.Id == id)).Where(s => s != null).Select(s => s!.Name).ToList();
+        var newMemberIds = new List<Guid>();
+        var resolvedNames = new List<string>();
+        foreach (var name in memberNames)
+        {
+            var member = FindStep(template.ScriptSteps, name);
+            if (member == null)
+                return CommandResponse.Error($"找不到成员动作: {name}", 2);
+            if (member.Kind != StepKind.Action)
+                return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作，组合动作只能包含可执行动作。", 2);
+            if (member.Id == composite.Id)
+                return CommandResponse.Error("组合动作不能包含自身。", 2);
+            newMemberIds.Add(member.Id);
+            resolvedNames.Add(member.Name);
+        }
+
+        composite.MemberStepIds = newMemberIds;
+        template.UpdatedAt = DateTime.Now;
+        await _configService.SaveAsync(_appConfig);
+        return CommandResponse.Ok($"已设置组合动作成员: {composite.Name} [{string.Join(", ", oldMembers)}] → [{string.Join(", ", resolvedNames)}]");
+    }
+
+    private async Task<CommandResponse> TemplateStepAddMemberAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: template step add-member TEMPLATE COMPOSITE --member STEP", 2);
+
+        var template = FindTemplate(args[0]);
+        if (template == null)
+            return CommandResponse.Error($"找不到模板: {args[0]}", 2);
+
+        var composite = FindStep(template.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法添加成员。", 2);
+
+        var memberName = ReadOption(args, "--member");
+        if (string.IsNullOrWhiteSpace(memberName))
+            return CommandResponse.Error("缺少 --member STEP。", 2);
+
+        var member = FindStep(template.ScriptSteps, memberName);
+        if (member == null)
+            return CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+        if (member.Kind != StepKind.Action)
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作。", 2);
+        if (member.Id == composite.Id)
+            return CommandResponse.Error("组合动作不能包含自身。", 2);
+        if (composite.MemberStepIds.Contains(member.Id))
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 已在组合动作 \"{composite.Name}\" 中。", 2);
+
+        composite.MemberStepIds = composite.MemberStepIds.Append(member.Id).ToList();
+        template.UpdatedAt = DateTime.Now;
+        await _configService.SaveAsync(_appConfig);
+        return CommandResponse.Ok($"已添加组合动作成员: {composite.Name} + {member.Name}");
+    }
+
+    private async Task<CommandResponse> TemplateStepRemoveMemberAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: template step remove-member TEMPLATE COMPOSITE --member STEP", 2);
+
+        var template = FindTemplate(args[0]);
+        if (template == null)
+            return CommandResponse.Error($"找不到模板: {args[0]}", 2);
+
+        var composite = FindStep(template.ScriptSteps, args[1]);
+        if (composite == null)
+            return CommandResponse.Error($"找不到模板动作: {args[1]}", 2);
+        if (composite.Kind != StepKind.Composite)
+            return CommandResponse.Error($"动作 \"{composite.Name}\" 不是组合动作，无法移除成员。", 2);
+
+        var memberName = ReadOption(args, "--member");
+        if (string.IsNullOrWhiteSpace(memberName))
+            return CommandResponse.Error("缺少 --member STEP。", 2);
+
+        var member = FindStep(template.ScriptSteps, memberName);
+        if (member == null)
+            return CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+        if (!composite.MemberStepIds.Contains(member.Id))
+            return CommandResponse.Error($"成员动作 \"{member.Name}\" 不在组合动作 \"{composite.Name}\" 中。", 2);
+
+        composite.MemberStepIds = composite.MemberStepIds.Where(id => id != member.Id).ToList();
+        template.UpdatedAt = DateTime.Now;
+        await _configService.SaveAsync(_appConfig);
+        return CommandResponse.Ok($"已移除组合动作成员: {composite.Name} - {member.Name}");
+    }
+
     #endregion
 
     // template create handler
@@ -1347,9 +1678,50 @@ public class ServiceCommandProcessor
             return CommandResponse.Error($"找不到模板: {args[0]}", 2);
 
         if (HasFlag(args, "--json"))
-            return Json(template);
+        {
+            var firstComposite = template.ScriptSteps
+                .OrderBy(s => s.Order)
+                .FirstOrDefault(s => s.Kind == StepKind.Composite);
+            return Json(new
+            {
+                template.Id,
+                template.Name,
+                template.Description,
+                template.CreatedAt,
+                template.UpdatedAt,
+                template.PresetVariables,
+                ScriptSteps = template.ScriptSteps.OrderBy(s => s.Order).Select(s => new
+                {
+                    s.Id,
+                    s.Name,
+                    s.Kind,
+                    s.ScriptType,
+                    s.UseVariable,
+                    s.OpenLogOnRun,
+                    s.StepVariables,
+                    s.MemberStepIds,
+                    s.Order,
+                    s.Content,
+                    IsDefaultStartStep = s.Kind == StepKind.Composite && firstComposite != null && s.Id == firstComposite.Id
+                })
+            });
+        }
 
-        var steps = FormatStepList(template.ScriptSteps.OrderBy(s => s.Order).ToList());
+        var firstCompositeId = template.ScriptSteps
+            .OrderBy(s => s.Order)
+            .FirstOrDefault(s => s.Kind == StepKind.Composite)?.Id;
+        var steps = template.ScriptSteps
+            .OrderBy(s => s.Order)
+            .Select(s =>
+            {
+                var members = s.Kind == StepKind.Composite && s.MemberStepIds.Count > 0
+                    ? $" members={string.Join(",", s.MemberStepIds)}"
+                    : string.Empty;
+                var defaultStart = s.Kind == StepKind.Composite && s.Id == firstCompositeId
+                    ? " (default start)"
+                    : string.Empty;
+                return $"{s.Name} kind={s.Kind} type={s.ScriptType} useVariable={s.UseVariable} openLogOnRun={s.OpenLogOnRun} stepVariables={s.StepVariables.Count}{members}{defaultStart}";
+            });
         return CommandResponse.Ok($"{template.Name} ({template.Id})\n{template.Description}\nactions={template.ScriptSteps.Count(s => s.Kind == StepKind.Action)} composites={template.ScriptSteps.Count(s => s.Kind == StepKind.Composite)}\nsteps:\n{string.Join(Environment.NewLine, steps)}");
     }
 
@@ -1390,6 +1762,7 @@ public class ServiceCommandProcessor
         if (template == null)
             return CommandResponse.Error($"找不到模板: {args[0]}", 2);
 
+        bool changed = false;
         var name = ReadOption(args, "--name");
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -1397,22 +1770,31 @@ public class ServiceCommandProcessor
                                                       string.Equals(t.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
                 return CommandResponse.Error($"模板名称已存在: {name.Trim()}", 2);
             template.Name = name.Trim();
+            changed = true;
         }
 
         var description = ReadOption(args, "--description");
         if (description != null)
+        {
             template.Description = description;
+            changed = true;
+        }
 
         var steps = ParseSteps(args);
         if (steps.Count > 0)
+        {
             template.ScriptSteps = EnsureDefaultComposite(steps);
+            changed = true;
+        }
 
         if (HasAnyOption(args, "--preset", "--preset-variable") || HasFlag(args, "--clear-presets"))
             return CommandResponse.Error("ServicePilot 2.0 已移除模板级预设变量；请使用 template step-variable-add 维护动作变量。", 2);
 
         template.UpdatedAt = DateTime.Now;
         await _configService.SaveAsync(_appConfig);
-        return CommandResponse.Ok($"已更新模板: {template.Name}");
+        return changed
+            ? CommandResponse.Ok($"已更新模板: {template.Name}")
+            : CommandResponse.Ok("未检测到变更，模板保持不变");
     }
 
     private async Task<CommandResponse> TemplateRemoveAsync(string[] args)
@@ -1498,15 +1880,47 @@ public class ServiceCommandProcessor
         var file = ReadFileOption(args) ??
                    args.FirstOrDefault(arg => !arg.StartsWith("--", StringComparison.Ordinal));
         if (string.IsNullOrWhiteSpace(file))
-            return CommandResponse.Error("用法: template import --file FILE", 2);
+            return CommandResponse.Error("用法: template import --file FILE [--on-conflict rename|overwrite|skip]", 2);
+
+        var conflictMode = ReadOption(args, "--on-conflict")?.ToLowerInvariant() switch
+        {
+            "overwrite" => ImportConflictMode.Overwrite,
+            "skip" => ImportConflictMode.Skip,
+            _ => ImportConflictMode.Rename // Default: backward compatible
+        };
 
         try
         {
-            var imported = await TemplateExchangeService.ImportAsync(file, _appConfig.ServiceTemplates);
-            _appConfig.ServiceTemplates.AddRange(imported);
+            var (imported, skipped) = await TemplateExchangeService.ImportAsync(file, _appConfig.ServiceTemplates, conflictMode);
+            _appConfig.ServiceTemplates.AddRange(imported.Where(i => i.Mode != ImportConflictMode.Overwrite).Select(i => i.Template));
             await _configService.SaveAsync(_appConfig);
-            var names = string.Join(", ", imported.Select(template => template.Name));
-            return CommandResponse.Ok($"已导入 {imported.Count} 个模板: {names}");
+
+            var fullPath = Path.GetFullPath(file);
+            var lines = new List<string>();
+
+            foreach (var info in imported)
+            {
+                if (info.Mode == ImportConflictMode.Overwrite)
+                {
+                    lines.Add($"已导入模板（覆盖）: {info.Template.Name} → 替换原 Id: {info.ReplacedId}");
+                }
+                else if (info.WasRenamed)
+                {
+                    lines.Add($"已导入模板（新建，重命名）: {info.Template.Name} → 原名 \"{info.OriginalName}\" 已存在，重命名为 \"{info.Template.Name}\" → 分配新 Id: {info.Template.Id}");
+                }
+                else
+                {
+                    lines.Add($"已导入模板（新建）: {info.Template.Name} → 分配新 Id: {info.Template.Id}");
+                }
+            }
+
+            foreach (var s in skipped)
+            {
+                lines.Add($"已跳过同名模板: {s.Name}");
+            }
+
+            lines.Add($"← 文件: {fullPath}");
+            return CommandResponse.Ok(string.Join(Environment.NewLine, lines));
         }
         catch (Exception ex)
         {
@@ -1831,32 +2245,39 @@ public class ServiceCommandProcessor
             .FirstOrDefault(s => string.Equals(s.Name, selector, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static object ToStatusDto(ServiceRuntimeState service) => new
+    private static object ToStatusDto(ServiceRuntimeState service)
     {
-        service.Config.Id,
-        service.Config.Name,
-        service.State,
-        service.StartTime,
-        service.LastError,
-        service.ActiveVariable,
-        service.Config.WorkingDirectory,
-        service.Config.AutoStart,
-        StepCount = service.Config.ScriptSteps.Count,
-        ActionCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Action),
-        CompositeCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Composite),
-        StepStates = service.Config.ScriptSteps.OrderBy(s => s.Order).Select(step => new
+        var firstComposite = service.Config.ScriptSteps
+            .OrderBy(s => s.Order)
+            .FirstOrDefault(s => s.Kind == StepKind.Composite);
+        return new
         {
-            step.Id,
-            step.Name,
-            step.Kind,
-            step.UseVariable,
-            step.OpenLogOnRun,
-            step.StepVariables,
-            step.MemberStepIds,
-            step.Order,
-            Runtime = service.StepStates.TryGetValue(step.Id, out var state) ? state : null
-        })
-    };
+            service.Config.Id,
+            service.Config.Name,
+            service.State,
+            service.StartTime,
+            service.LastError,
+            service.ActiveVariable,
+            service.Config.WorkingDirectory,
+            service.Config.AutoStart,
+            StepCount = service.Config.ScriptSteps.Count,
+            ActionCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Action),
+            CompositeCount = service.Config.ScriptSteps.Count(step => step.Kind == StepKind.Composite),
+            DefaultStartStep = firstComposite != null ? new { firstComposite.Name, firstComposite.Id } : null,
+            StepStates = service.Config.ScriptSteps.OrderBy(s => s.Order).Select(step => new
+            {
+                step.Id,
+                step.Name,
+                step.Kind,
+                step.UseVariable,
+                step.OpenLogOnRun,
+                step.StepVariables,
+                step.MemberStepIds,
+                step.Order,
+                Runtime = service.StepStates.TryGetValue(step.Id, out var state) ? state : null
+            })
+        };
+    }
 
     private static string FormatStatus(ServiceRuntimeState service)
     {

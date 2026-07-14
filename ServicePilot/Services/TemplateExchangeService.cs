@@ -6,6 +6,22 @@ using ServicePilot.Models;
 
 namespace ServicePilot.Services;
 
+public enum ImportConflictMode
+{
+    Rename,    // Default: always create new, rename on name conflict (v2.2 behavior)
+    Overwrite, // Overwrite existing template by Id match
+    Skip       // Skip templates with conflicting Id or name
+}
+
+public sealed class ImportedTemplateInfo
+{
+    public required ServiceTemplate Template { get; init; }
+    public required ImportConflictMode Mode { get; init; }
+    public required bool WasRenamed { get; init; }
+    public string? OriginalName { get; init; }
+    public Guid? ReplacedId { get; init; }
+}
+
 public sealed class TemplateExportPackage
 {
     public string Format { get; set; } = "ServicePilot.TemplateExport";
@@ -46,7 +62,8 @@ public static class TemplateExchangeService
         await File.WriteAllTextAsync(fullPath, json);
     }
 
-    public static async Task<List<ServiceTemplate>> ImportAsync(string path, IReadOnlyCollection<ServiceTemplate> existingTemplates)
+    public static async Task<(List<ImportedTemplateInfo> Imported, List<ServiceTemplate> Skipped)> ImportAsync(
+        string path, IReadOnlyCollection<ServiceTemplate> existingTemplates, ImportConflictMode conflictMode = ImportConflictMode.Rename)
     {
         if (string.IsNullOrWhiteSpace(path))
             throw new ArgumentException("Import path is required.", nameof(path));
@@ -64,16 +81,105 @@ public static class TemplateExchangeService
             .Select(t => t.Name)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var imported = new List<ServiceTemplate>();
+
+        var existingById = existingTemplates
+            .Where(t => t.Id != Guid.Empty)
+            .ToDictionary(t => t.Id);
+
+        var imported = new List<ImportedTemplateInfo>();
+        var skipped = new List<ServiceTemplate>();
 
         foreach (var template in templates)
         {
-            var normalized = NormalizeImportedTemplate(template, usedNames);
-            usedNames.Add(normalized.Name);
-            imported.Add(normalized);
+            switch (conflictMode)
+            {
+                case ImportConflictMode.Overwrite:
+                {
+                    var matchById = template.Id != Guid.Empty && existingById.TryGetValue(template.Id, out var byId) ? byId : null;
+                    var matchByName = existingTemplates.FirstOrDefault(t =>
+                        string.Equals(t.Name, template.Name, StringComparison.OrdinalIgnoreCase));
+
+                    var target = matchById ?? matchByName;
+                    if (target != null)
+                    {
+                        var replacedId = target.Id;
+                        ApplyImportedFields(target, template);
+                        imported.Add(new ImportedTemplateInfo
+                        {
+                            Template = target,
+                            Mode = ImportConflictMode.Overwrite,
+                            WasRenamed = false,
+                            OriginalName = template.Name,
+                            ReplacedId = replacedId
+                        });
+                        usedNames.Add(target.Name);
+                    }
+                    else
+                    {
+                        var normalized = NormalizeImportedTemplate(template, usedNames);
+                        imported.Add(new ImportedTemplateInfo
+                        {
+                            Template = normalized,
+                            Mode = ImportConflictMode.Rename,
+                            WasRenamed = normalized.Name != template.Name?.Trim(),
+                            OriginalName = template.Name,
+                        });
+                        usedNames.Add(normalized.Name);
+                    }
+                    break;
+                }
+
+                case ImportConflictMode.Skip:
+                {
+                    var hasIdConflict = template.Id != Guid.Empty && existingById.ContainsKey(template.Id);
+                    var hasNameConflict = usedNames.Contains(template.Name?.Trim() ?? "");
+
+                    if (hasIdConflict || hasNameConflict)
+                    {
+                        skipped.Add(template);
+                    }
+                    else
+                    {
+                        var normalized = NormalizeImportedTemplate(template, usedNames);
+                        imported.Add(new ImportedTemplateInfo
+                        {
+                            Template = normalized,
+                            Mode = ImportConflictMode.Rename,
+                            WasRenamed = normalized.Name != template.Name?.Trim(),
+                            OriginalName = template.Name,
+                        });
+                        usedNames.Add(normalized.Name);
+                    }
+                    break;
+                }
+
+                default: // Rename
+                {
+                    var normalized = NormalizeImportedTemplate(template, usedNames);
+                    imported.Add(new ImportedTemplateInfo
+                    {
+                        Template = normalized,
+                        Mode = ImportConflictMode.Rename,
+                        WasRenamed = normalized.Name != template.Name?.Trim(),
+                        OriginalName = template.Name,
+                    });
+                    usedNames.Add(normalized.Name);
+                    break;
+                }
+            }
         }
 
-        return imported;
+        return (imported, skipped);
+    }
+
+    public static string ResolvedPath(string path) => Path.GetFullPath(path);
+
+    private static void ApplyImportedFields(ServiceTemplate target, ServiceTemplate source)
+    {
+        target.Name = source.Name?.Trim() ?? target.Name;
+        target.Description = source.Description ?? target.Description;
+        target.UpdatedAt = DateTime.Now;
+        target.ScriptSteps = CloneImportedSteps(source.ScriptSteps);
     }
 
     private static List<ServiceTemplate> DeserializeTemplates(string json)

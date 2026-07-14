@@ -599,9 +599,9 @@ public partial class App : Application
         var text = activeCount > 99 ? "99+" : activeCount.ToString();
         var fontSize = text.Length switch
         {
-            1 => 21f,
-            2 => 17f,
-            _ => 11.5f
+            1 => 17f,
+            2 => 14f,
+            _ => 10f
         };
 
         using var font = new Drawing.Font("Segoe UI", fontSize, Drawing.FontStyle.Bold, Drawing.GraphicsUnit.Point);

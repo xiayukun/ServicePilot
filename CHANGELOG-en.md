@@ -4,6 +4,17 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.3.0 - 2026-07-14
+
+- `template import` adds `--on-conflict` option (`rename`/`overwrite`/`skip`); feedback distinguishes new, overwrite, skip, and rename, and shows the resolved file path and template Id.
+- `--json` output is forced to UTF-8 and goes to stdout (even on Error), fixing Chinese garbled text in `| python` / `| jq` pipes; exit code semantics unchanged.
+- Added `step set-members`/`add-member`/`remove-member` and `template step set-members`/`add-member`/`remove-member` fine-grained commands to directly manage composite action member lists.
+- `service edit`/`template edit`/`step edit`/`template step edit` return "no changes detected" instead of "updated" when no actual modification is made.
+- `service get`/`status` annotate the default start composite action (`DefaultStartStep`/`IsDefaultStartStep`), making it clear which composite `start SERVICE` runs.
+- Tray icon number is smaller: 1-digit 17pt → 2-digit 14pt → 99+ 10pt.
+- GitHub README main screenshot updated to show the right-click context menu.
+- Added `--json` return to template step CLI commands (`step edit`, `step remove`, `step move`) for easier script and AI parsing.
+
 ## 2.2.0 - 2026-07-10
 
 - Added step-level incremental edit CLI commands for fine-grained add, delete, and modify operations on action steps.

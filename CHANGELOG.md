@@ -4,6 +4,17 @@
 
 本文只记录公开发布版本的用户可见变化。
 
+## 2.3.0 - 2026-07-14
+
+- `template import` 增加 `--on-conflict` 选项（`rename`/`overwrite`/`skip`），反馈区分新建、覆盖、跳过、重命名，并回显文件绝对路径和模板 Id。
+- `--json` 输出强制 UTF-8 编码且走 stdout（即使有 Error），解决管道 `| python` / `| jq` 中文乱码问题；exit code 保持语义不变。
+- 新增 `step set-members`/`add-member`/`remove-member` 和 `template step set-members`/`add-member`/`remove-member` 细粒度命令，可直接操作组合动作的成员列表。
+- `service edit`/`template edit`/`step edit`/`template step edit` 无实质变更时返回"未检测到变更"而非"已更新"。
+- `service get`/`status` 标注默认启动组合动作（`DefaultStartStep`/`IsDefaultStartStep`），`start SERVICE` 运行哪个组合动作一目了然。
+- 托盘图标数字变小，1 位 17pt → 2 位 14pt → 99+ 10pt。
+- GitHub README 主图更新为包含右键上下文菜单的新截图。
+- 模板动作 CLI 命令 `step edit`、`step remove`、`step move` 新增 `--json` 返回，方便脚本和 AI 解析操作结果。
+
 ## 2.2.0 - 2026-07-10
 
 - 新增 step 级增量编辑 CLI 命令，支持对动作步骤进行细粒度的增、删、改操作。

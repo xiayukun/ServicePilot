@@ -178,12 +178,15 @@ public partial class TemplateManagerWindow : Window
 
         try
         {
-            var imported = await TemplateExchangeService.ImportAsync(dialog.FileName, _appConfig.ServiceTemplates);
-            _appConfig.ServiceTemplates.AddRange(imported);
+            var (imported, skipped) = await TemplateExchangeService.ImportAsync(dialog.FileName, _appConfig.ServiceTemplates);
+            _appConfig.ServiceTemplates.AddRange(imported.Select(i => i.Template));
             await _configService.SaveAsync(_appConfig);
             Refresh();
             _changed();
-            MessageBox.Show(LocalizationService.Current.F("TemplateImported", imported.Count), "ServicePilot",
+
+            var names = string.Join(", ", imported.Select(i => i.Template.Name));
+            var skipMsg = skipped.Count > 0 ? $"\n{LocalizationService.Current.F("TemplateImportSkipped", skipped.Count)}" : "";
+            MessageBox.Show($"{LocalizationService.Current.F("TemplateImported", imported.Count)}: {names}{skipMsg}", "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
