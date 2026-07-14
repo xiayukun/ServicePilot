@@ -4,6 +4,16 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.3.1 - 2026-07-14
+
+- `step add --use-variable` now defaults to false (previously true, which caused UseVariable=True+VarCount=0 contradiction).
+- `step add` rejects duplicate step names within the same service/template.
+- `step edit` now echoes key fields (UseVariable/Variables/Type) after update, eliminating the need for a follow-up list to verify.
+- `doctor` exits 0 as long as it successfully produces a report; issue severity is expressed via JSON Counts.Errors/Warnings.
+- `doctor` adds UseVariable=True+VarCount=0 warning (STEP_USEVARIABLE_NO_VARS).
+- Using a name to locate edit/remove now errors when multiple steps share the same name, requiring a GUID instead.
+- `ai-help` unified terminology (step=Action=动作), listed all --type enum values, documented defaults and semantics.
+
 ## 2.3.0 - 2026-07-14
 
 - `template import` adds `--on-conflict` option (`rename`/`overwrite`/`skip`); feedback distinguishes new, overwrite, skip, and rename, and shows the resolved file path and template Id.

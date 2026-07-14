@@ -176,9 +176,7 @@ public class ServiceCommandProcessor
         if (HasFlag(args, "--json"))
         {
             var json = JsonSerializer.Serialize(payload, JsonOptions);
-            return errorCount > 0
-                ? CommandResponse.Error(json, 2)
-                : CommandResponse.Ok(json);
+            return CommandResponse.Ok(json);
         }
 
         if (issues.Count == 0)
@@ -191,9 +189,7 @@ public class ServiceCommandProcessor
         };
         lines.AddRange(issues.Select(issue => $"[{issue.Severity}] {issue.Code} {issue.Target} - {issue.Message}"));
         var output = string.Join(Environment.NewLine, lines);
-        return errorCount > 0
-            ? CommandResponse.Error(output, 2)
-            : CommandResponse.Ok(output);
+        return CommandResponse.Ok(output);
     }
 
     private List<DiagnosticIssue> BuildDiagnostics()
@@ -274,6 +270,8 @@ public class ServiceCommandProcessor
             }
             if (step.Kind == StepKind.Action && step.UseVariable)
                 AddDuplicateVariablesIssue(issues, step.StepVariables, stepTarget, "STEP_VARIABLE_DUPLICATE", "动作变量重复。");
+            if (step.Kind == StepKind.Action && step.UseVariable && step.StepVariables.Count == 0)
+                issues.Add(new DiagnosticIssue("Warning", "STEP_USEVARIABLE_NO_VARS", stepTarget, "启用了变量但变量列表为空，建议添加变量或关闭 UseVariable。"));
         }
     }
 
@@ -833,14 +831,18 @@ public class ServiceCommandProcessor
         if (string.IsNullOrWhiteSpace(name))
             return CommandResponse.Error("缺少 --name。", 2);
 
+        // Reject duplicate step names within the same service
+        if (service.ScriptSteps.Any(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return CommandResponse.Error($"服务 \"{service.Name}\" 已存在同名动作: {name.Trim()}（请使用不同名称，或用 GUID 定位后 step edit/step remove）", 2);
+
         var script = ReadOption(args, "--script") ?? ReadOption(args, "--script-file");
         if (string.IsNullOrWhiteSpace(script))
             return CommandResponse.Error("缺少 --script 或 --script-file。", 2);
 
         var updated = ScriptDefinitionService.CloneService(service);
         var type = ReadScriptType(args);
-        var useVariable = ReadBoolOption(args, "--use-variable") ?? true;
-        var runOnStart = ReadBoolOption(args, "--run-on-start") ?? true;
+        var useVariable = ReadBoolOption(args, "--use-variable") ?? false;
+        var runOnStart = ReadBoolOption(args, "--run-on-start") ?? false;
         var openLogOnRun = ReadBoolOption(args, "--open-log-on-run") ?? false;
 
         var newStep = new ScriptStep
@@ -902,7 +904,9 @@ public class ServiceCommandProcessor
         var updated = ScriptDefinitionService.CloneService(service);
         var step = FindStep(updated, args[1]);
         if (step == null)
-            return CommandResponse.Error($"找不到动作: {args[1]}", 2);
+            return HasAmbiguousNameMatch(updated.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
 
         bool changed = false;
         var newName = ReadOption(args, "--name");
@@ -963,7 +967,7 @@ public class ServiceCommandProcessor
                 step.StepVariables
             });
         return changed
-            ? CommandResponse.Ok($"已更新动作: {step.Name} ({step.Id})")
+            ? CommandResponse.Ok($"已更新动作: {step.Name} ({step.Id}) UseVariable={step.UseVariable} Variables={step.StepVariables.Count} Type={step.ScriptType}")
             : CommandResponse.Ok("未检测到变更，动作保持不变");
     }
 
@@ -1342,12 +1346,16 @@ public class ServiceCommandProcessor
         if (string.IsNullOrWhiteSpace(name))
             return CommandResponse.Error("缺少 --name。", 2);
 
+        // Reject duplicate step names within the same template
+        if (template.ScriptSteps.Any(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return CommandResponse.Error($"模板 \"{template.Name}\" 已存在同名动作: {name.Trim()}（请使用不同名称，或用 GUID 定位后 template step edit/remove）", 2);
+
         var script = ReadOption(args, "--script") ?? ReadOption(args, "--script-file");
         if (string.IsNullOrWhiteSpace(script))
             return CommandResponse.Error("缺少 --script 或 --script-file。", 2);
 
         var type = ReadScriptType(args);
-        var useVariable = ReadBoolOption(args, "--use-variable") ?? true;
+        var useVariable = ReadBoolOption(args, "--use-variable") ?? false;
         var openLogOnRun = ReadBoolOption(args, "--open-log-on-run") ?? false;
 
         var newStep = new ScriptStep
@@ -1462,7 +1470,7 @@ public class ServiceCommandProcessor
                 step.StepVariables
             });
         return changed
-            ? CommandResponse.Ok($"已更新模板动作: {step.Name} ({step.Id})")
+            ? CommandResponse.Ok($"已更新模板动作: {step.Name} ({step.Id}) UseVariable={step.UseVariable} Variables={step.StepVariables.Count} Type={step.ScriptType}")
             : CommandResponse.Ok("未检测到变更，动作保持不变");
     }
 
@@ -2094,7 +2102,7 @@ public class ServiceCommandProcessor
                 Name = ReadOption(args, "--step-name") ?? "Main",
                 Kind = StepKind.Action,
                 ScriptType = ReadScriptType(args),
-                UseVariable = ReadBoolOption(args, "--use-variable") ?? true,
+                UseVariable = ReadBoolOption(args, "--use-variable") ?? false,
                 OpenLogOnRun = ReadBoolOption(args, "--open-log-on-run") ?? false,
                 Content = content,
                 Order = 0
@@ -2241,9 +2249,20 @@ public class ServiceCommandProcessor
             return steps.FirstOrDefault(s => s.Order == order);
         }
 
-        return steps
-            .FirstOrDefault(s => string.Equals(s.Name, selector, StringComparison.OrdinalIgnoreCase));
+        // When matching by name, reject ambiguous matches (multiple steps with same name)
+        var nameMatches = steps
+            .Where(s => string.Equals(s.Name, selector, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (nameMatches.Count > 1)
+            return null; // Ambiguous — caller should report and ask for GUID
+        return nameMatches.FirstOrDefault();
     }
+
+    /// <summary>Checks if a name selector matches multiple steps (for better error messages when FindStep returns null).</summary>
+    private static bool HasAmbiguousNameMatch(IReadOnlyList<ScriptStep> steps, string selector) =>
+        !Guid.TryParse(selector, out _) &&
+        !int.TryParse(selector, out _) &&
+        steps.Count(s => string.Equals(s.Name, selector, StringComparison.OrdinalIgnoreCase)) > 1;
 
     private static object ToStatusDto(ServiceRuntimeState service)
     {

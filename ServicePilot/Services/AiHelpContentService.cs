@@ -74,10 +74,12 @@ public static class AiHelpContentService
         return """
                ServicePilot AI 操作指南
 
-               ServicePilot 2.3 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
+               ServicePilot 2.3.1 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
                2.x 模型:
                  - Action: 一个可执行脚本命令。
                  - Composite: 按顺序编排多个 Action；Composite 不能嵌套 Composite。
+
+               术语说明：step = Action = 动作，指同一个概念。CLI 命令用 step，模型层叫 Action，中文界面叫动作。
 
                推荐工作流:
                  1. 先读取帮助和配置路径:
@@ -112,6 +114,9 @@ public static class AiHelpContentService
                     ServicePilot.exe step variable-clear "SERVICE" "STEP"
                  - 维护 Action 本身（增、改、删、排序）:
                     ServicePilot.exe step add "SERVICE" --name "Check Node" --type Batch --script "node --version" --position after:"STEP"
+                    合法 --type 值：Batch、PowerShell、Python、Node。
+                    --use-variable 默认为 false。
+                    step add 同名动作会被拒绝，不允许重名。
                     ServicePilot.exe step add "SERVICE" --name "Build" --type Batch --script "npm run build" --into-composite "Start"
                     ServicePilot.exe step edit "SERVICE" "STEP" --name "New Name" --script "npm run dev"
                     ServicePilot.exe step remove "SERVICE" "STEP"
@@ -132,6 +137,8 @@ public static class AiHelpContentService
                  - --variable 会注入环境变量 SERVICEPILOT_VARIABLE，并替换脚本里的 {{variable}} / {{变量}}，前提是目标 Action 启用了 UseVariable。
                  - 不要猜配置。修改前先用 --json 查看当前服务、动作、变量和模板。
                  - 修改配置前可以运行 doctor --json，先处理缺失目录、空动作、组合成员缺失、组合嵌套、重名等问题。
+                 - doctor 成功产出报告即 exit 0，体检结果通过 JSON 的 Counts.Errors/Warnings 表达。
+                 - 用名称定位 edit/remove 时，如果同名有多个，会报错要求用 GUID。
                  - 删除服务或模板时必须指定明确名称或 id。
                  - ServicePilot 没有 start all。可以 stop all，但批量启动必须由调用方逐个服务显式启动。
                  - 自动化测试请先设置 SERVICEPILOT_CONFIG_DIR，避免写入用户真实配置。

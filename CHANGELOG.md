@@ -4,6 +4,16 @@
 
 本文只记录公开发布版本的用户可见变化。
 
+## 2.3.1 - 2026-07-14
+
+- `step add --use-variable` 默认改为 false（原默认 true 导致 UseVariable=True+VarCount=0 矛盾）。
+- `step add` 同名动作直接拒绝，不允许重名。
+- `step edit` 回显生效后关键字段（UseVariable/Variables/Type），省去改完后再 list 校验。
+- `doctor` 成功产出报告即 exit 0，体检结果通过 JSON Counts 表达。
+- `doctor` 新增 UseVariable=True+VarCount=0 告警（STEP_USEVARIABLE_NO_VARS）。
+- 用名称定位 edit/remove 时同名多个会报错要求用 GUID。
+- `ai-help` 统一术语说明（step=Action=动作）、列全 --type 枚举、说明默认值和语义。
+
 ## 2.3.0 - 2026-07-14
 
 - `template import` 增加 `--on-conflict` 选项（`rename`/`overwrite`/`skip`），反馈区分新建、覆盖、跳过、重命名，并回显文件绝对路径和模板 Id。
