@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>ServicePilot</RootNamespace>
     <AssemblyName>ServicePilot</AssemblyName>
-    <Version>2.4.0</Version>
+    <Version>2.4.1</Version>
             <AssemblyVersion>2.4.0.0</AssemblyVersion>
             <FileVersion>2.4.0.0</FileVersion>
             <InformationalVersion>2.4.0</InformationalVersion>

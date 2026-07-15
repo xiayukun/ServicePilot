@@ -8,8 +8,6 @@
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -20,45 +18,7 @@
                    FontSize="14"
                    Margin="0,0,0,10"/>
 
-        <Border Grid.Row="1" Background="#182A2A3C" BorderBrush="#44FFFFFF" BorderThickness="1" Padding="10" Margin="0,0,0,10">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="ExePathLabel" Grid.Row="0" Grid.Column="0"
-                           Foreground="#BBFFFFFF"
-                           VerticalAlignment="Center"
-                           Margin="0,0,10,6"/>
-                <TextBox x:Name="ExePathBox" Grid.Row="0" Grid.Column="1"
-                         IsReadOnly="True"
-                         Background="#22FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"
-                         FontFamily="Consolas" FontSize="12"
-                         Margin="0,0,0,6"/>
-                <TextBlock x:Name="CommandsLabel" Grid.Row="1" Grid.Column="0"
-                           Foreground="#BBFFFFFF"
-                           VerticalAlignment="Top"
-                           Margin="0,2,10,0"/>
-                <TextBox x:Name="CommandsBox" Grid.Row="1" Grid.Column="1"
-                         IsReadOnly="True" AcceptsReturn="True"
-                         Background="#22FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"
-                         FontFamily="Consolas" FontSize="12"
-                         MinHeight="94"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Auto"/>
-            </Grid>
-        </Border>
-
-        <TextBlock x:Name="PrivacyNoteText" Grid.Row="2"
-                   Foreground="#FFFFD166"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,8"/>
-
-        <TextBox x:Name="PromptBox" Grid.Row="3"
+        <TextBox x:Name="PromptBox" Grid.Row="1"
                  IsReadOnly="True" AcceptsReturn="True" AcceptsTab="True"
                  TextWrapping="Wrap"
                  Background="#221E1E2E" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"
@@ -66,7 +26,7 @@
                  VerticalScrollBarVisibility="Auto"
                  HorizontalScrollBarVisibility="Auto"/>
 
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
             <Button x:Name="CopyAllButton" Width="96" Height="30" Margin="0,0,8,0" Click="CopyAll_Click"/>
             <Button x:Name="CopyCommandsButton" Width="104" Height="30" Margin="0,0,8,0" Click="CopyCommands_Click"/>
             <Button x:Name="CloseButton" Width="82" Height="30" Click="Close_Click"/>

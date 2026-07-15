@@ -34,21 +34,16 @@ public partial class AiHelpWindow : Window
     {
         Title = LocalizationService.Current.T("CopyServicePilotHelpForAi");
         IntroText.Text = LocalizationService.Current.T("AiHelpIntro");
-        ExePathLabel.Text = LocalizationService.Current.T("AiHelpExePath");
-        CommandsLabel.Text = LocalizationService.Current.T("AiHelpCommands");
-        PrivacyNoteText.Text = LocalizationService.Current.T("AiHelpPrivacyNote");
         CopyAllButton.Content = LocalizationService.Current.T("CopyAll");
         CopyCommandsButton.Content = LocalizationService.Current.T("CopyCommands");
         CloseButton.Content = LocalizationService.Current.T("Close");
 
-        ExePathBox.Text = _exePath;
-        CommandsBox.Text = _commandsText;
         PromptBox.Text = AiHelpContentService.BuildPrompt(_exePath);
     }
 
     private void CopyAll_Click(object sender, RoutedEventArgs e) => CopyToClipboard(PromptBox.Text);
 
-    private void CopyCommands_Click(object sender, RoutedEventArgs e) => CopyToClipboard(CommandsBox.Text);
+    private void CopyCommands_Click(object sender, RoutedEventArgs e) => CopyToClipboard(_commandsText);
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 

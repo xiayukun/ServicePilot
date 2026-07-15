@@ -35,8 +35,6 @@ public static class AiHelpContentService
 
     public static string BuildPrompt(string exePath)
     {
-        var commands = BuildCommandList(exePath);
-        var commandBlock = string.Join(Environment.NewLine, commands);
         if (LocalizationService.Current.IsEnglish)
         {
             return $"""
@@ -51,8 +49,6 @@ public static class AiHelpContentService
                      - Each ScriptStep has: Id (GUID), Name, Kind ("Action" or "Composite"), Order, ScriptType ("Batch"/"PowerShell"/"Python"/"Node"), Content (script text), UseVariable (bool), OpenLogOnRun (bool), StepVariables (string[]), MemberStepIds (GUID[], only for Composite).
                      - Action steps carry executable scripts; Composite steps orchestrate multiple Actions via MemberStepIds.
                      - Composite cannot nest another Composite.
-
-                   {commandBlock}
 
                    Use their real output as source of truth. Do not guess service names, action names, variables, templates, or paths. Before adding a service/template, inspect existing configuration. Before deleting, overwriting, or renaming anything, state the exact target name or id. When running actions, prefer step list, service get, template list/get, and logs --json to confirm state.
                    """;
@@ -70,8 +66,6 @@ public static class AiHelpContentService
                  - 每个 ScriptStep 有：Id (GUID)、Name、Kind ("Action" 或 "Composite")、Order、ScriptType ("Batch"/"PowerShell"/"Python"/"Node")、Content (脚本内容)、UseVariable (bool)、OpenLogOnRun (bool)、StepVariables (string[])、MemberStepIds (GUID[]，仅 Composite 有)。
                  - Action 步骤承载可执行脚本；Composite 步骤通过 MemberStepIds 编排多个 Action。
                  - Composite 不能嵌套另一个 Composite。
-
-               {commandBlock}
 
                把真实输出作为依据，不要猜服务名、动作名、变量、模板或路径。新增服务/模板前先检查现有配置；删除、覆盖或重命名前说明明确目标名称或 id；需要执行动作时优先使用 step list、service get、template list/get 和 logs --json 确认状态。
                """;
