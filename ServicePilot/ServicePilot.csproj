@@ -10,9 +10,9 @@
     <RootNamespace>ServicePilot</RootNamespace>
     <AssemblyName>ServicePilot</AssemblyName>
     <Version>2.4.2</Version>
-            <AssemblyVersion>2.4.0.0</AssemblyVersion>
-            <FileVersion>2.4.0.0</FileVersion>
-            <InformationalVersion>2.4.0</InformationalVersion>
+            <AssemblyVersion>2.4.2.0</AssemblyVersion>
+            <FileVersion>2.4.2.0</FileVersion>
+            <InformationalVersion>2.4.2</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
