@@ -34,7 +34,11 @@ public class ConfigService
 
         // Already migrated: load the v2 file directly.
         if (File.Exists(ConfigPath))
-            return await ReadConfigAsync(ConfigPath);
+        {
+            var config = await ReadConfigAsync(ConfigPath);
+            NormalizeOrder(config);
+            return config;
+        }
 
         // One-time migration: read the legacy v1 config, migrate to v2, and persist to the v2 file.
         // The legacy config.json is intentionally left in place as a backup.
@@ -42,6 +46,7 @@ public class ConfigService
         {
             var legacy = await ReadConfigAsync(LegacyV1ConfigPath);
             var migrated = ConfigMigrationService.Migrate(legacy);
+            NormalizeOrder(migrated);
             await SaveAsync(migrated);
             return migrated;
         }
@@ -91,6 +96,30 @@ public class ConfigService
         var validIds = new HashSet<Guid>(steps.Select(s => s.Id));
         foreach (var composite in steps.Where(s => s.Kind == StepKind.Composite))
             composite.MemberStepIds.RemoveAll(id => !validIds.Contains(id));
+    }
+
+    /// <summary>
+    /// Normalizes the Order property of all ScriptSteps across services and templates.
+    /// Sorts by Order then reassigns 0-based incrementing values, fixing negative,
+    /// duplicate, or non-continuous order numbers that may result from manual JSON editing.
+    /// </summary>
+    private static void NormalizeOrder(AppConfig config)
+    {
+        foreach (var service in config.Services)
+            NormalizeStepOrder(service.ScriptSteps);
+
+        foreach (var template in config.ServiceTemplates)
+            NormalizeStepOrder(template.ScriptSteps);
+    }
+
+    private static void NormalizeStepOrder(List<ScriptStep> steps)
+    {
+        if (steps == null || steps.Count == 0)
+            return;
+
+        var ordered = steps.OrderBy(s => s.Order).ToList();
+        for (int i = 0; i < ordered.Count; i++)
+            ordered[i].Order = i;
     }
 
     private static void MigrateLegacyLocalConfigIfNeeded(string fileName)

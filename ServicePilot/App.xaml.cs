@@ -1167,6 +1167,9 @@ public partial class App : Application
 
         try
         {
+            // P0: Ensure any pending CLI modifications are persisted to disk before reloading.
+            await _configService.SaveAsync(_appConfig);
+
             var reloadedConfig = await _configService.LoadAsync();
 
             // Update the in-memory AppConfig

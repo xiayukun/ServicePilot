@@ -4,6 +4,11 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 2.4.2 - 2026-07-15
+
+- **P0 fix**: Persist in-memory config to disk before `config reload` to prevent CLI modifications from being overwritten by stale disk config.
+- **P1 improvement**: Normalize ScriptStep Order values on config load (sort then reassign 0-based consecutive numbers), fixing negative/duplicate order entries from manual JSON editing.
+
 ## 2.4.1 - 2026-07-14
 
 - "Copy help for AI" window no longer includes the exe path and "run first" paragraphs; only core operation guide remains.
