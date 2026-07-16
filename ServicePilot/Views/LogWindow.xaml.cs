@@ -14,7 +14,7 @@ using ServicePilot.ViewModels;
 
 namespace ServicePilot.Views;
 
-public partial class LogWindow : Window
+public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 {
     private const int MaxLogEntries = 5000;
     private const string ServiceLogsKey = "__service__";
@@ -508,6 +508,9 @@ public partial class LogWindow : Window
         if (sender is FrameworkElement element)
         {
             menu.PlacementTarget = element;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.HorizontalOffset = 0;
+            menu.VerticalOffset = 2;
             element.ContextMenu = menu;
         }
 

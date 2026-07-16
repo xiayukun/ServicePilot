@@ -4,7 +4,7 @@ using ServicePilot.Services;
 
 namespace ServicePilot.Views;
 
-public partial class AiHelpWindow : Window
+public partial class AiHelpWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly string _exePath;
     private readonly string _commandsText;

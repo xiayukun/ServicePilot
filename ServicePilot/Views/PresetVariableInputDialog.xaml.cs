@@ -2,7 +2,7 @@ using System.Windows;
 
 namespace ServicePilot.Views;
 
-public partial class PresetVariableInputDialog : Window
+public partial class PresetVariableInputDialog : Wpf.Ui.Controls.FluentWindow
 {
     public PresetVariableInputDialog(string? defaultValue)
     {
@@ -31,7 +31,7 @@ public partial class PresetVariableInputDialog : Window
     {
         if (string.IsNullOrWhiteSpace(Variable))
         {
-            MessageBox.Show(ServicePilot.Services.LocalizationService.Current.T("VariableRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(ServicePilot.Services.LocalizationService.Current.T("VariableRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

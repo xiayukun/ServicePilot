@@ -1,11 +1,11 @@
-<Window x:Class="ServicePilot.Views.ServiceConfigDialog"
+<ui:FluentWindow x:Class="ServicePilot.Views.ServiceConfigDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:converters="clr-namespace:ServicePilot.Converters"
         Title="Service configuration" Height="700" Width="1080"
-        WindowStartupLocation="CenterScreen"
-        Background="#FF1E1E2E">
+        WindowStartupLocation="CenterScreen">
     <Window.Resources>
         <converters:StepKindDisplayConverter x:Key="StepKindDisplay"/>
     </Window.Resources>
@@ -22,18 +22,15 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                <TextBlock x:Name="ServiceNameLabel" Text="Service name" Foreground="#DDFFFFFF" FontSize="12" Margin="0,0,0,4"/>
-                <TextBox x:Name="NameBox" Height="30" Padding="6,4"
-                         Background="#33FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"/>
+                <TextBlock x:Name="ServiceNameLabel" Text="Service name" FontSize="12" Margin="0,0,0,4"/>
+                <ui:TextBox x:Name="NameBox" Height="30"/>
             </StackPanel>
             <StackPanel Grid.Column="1">
-                <TextBlock x:Name="WorkingDirectoryLabel" Text="Working directory" Foreground="#DDFFFFFF" FontSize="12" Margin="0,0,0,4"/>
+                <TextBlock x:Name="WorkingDirectoryLabel" Text="Working directory" FontSize="12" Margin="0,0,0,4"/>
                 <DockPanel>
-                    <Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Browse" Width="72" Height="30"
-                            Margin="6,0,0,0" Click="Browse_Click"
-                            Background="#44FFFFFF" Foreground="#DDFFFFFF" BorderBrush="#55FFFFFF"/>
-                    <TextBox x:Name="DirBox" Height="30" Padding="6,4"
-                             Background="#33FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"/>
+                    <ui:Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Browse" Width="72" Height="30"
+                            Margin="6,0,0,0" Click="Browse_Click"/>
+                    <ui:TextBox x:Name="DirBox" Height="30"/>
                 </DockPanel>
             </StackPanel>
         </Grid>
@@ -53,24 +50,23 @@
                 </Grid.RowDefinitions>
 
                 <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                    <TextBlock x:Name="ScriptStepsLabel" Text="Actions" Foreground="#DDFFFFFF" FontSize="12" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ScriptStepsLabel" Text="Actions" FontSize="12" VerticalAlignment="Center"/>
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <Button x:Name="ApplyTemplateButton" Content="Apply template" Width="98" Height="24" Margin="2,0" Click="ApplyTemplate_Click"/>
-                        <Button Content="+" Width="28" Height="24" Margin="2,0" Click="AddStep_Click"/>
-                        <Button Content="Up" Width="34" Height="24" Margin="2,0" Click="MoveUp_Click"/>
-                        <Button Content="Dn" Width="34" Height="24" Margin="2,0" Click="MoveDown_Click"/>
-                        <Button x:Name="DeleteStepButton" Content="Del" Width="38" Height="24" Margin="2,0" Click="DeleteStep_Click"/>
+                        <ui:Button x:Name="ApplyTemplateButton" Content="Apply template" Width="98" Height="30" Margin="2,0" Click="ApplyTemplate_Click"/>
+                        <ui:Button Content="+" Width="32" Height="30" Margin="2,0" Click="AddStep_Click"/>
+                        <ui:Button Content="Up" Width="46" Height="30" Margin="2,0" Click="MoveUp_Click"/>
+                        <ui:Button Content="Dn" Width="46" Height="30" Margin="2,0" Click="MoveDown_Click"/>
+                        <ui:Button x:Name="DeleteStepButton" Content="Del" Width="46" Height="30" Margin="2,0" Click="DeleteStep_Click"/>
                     </StackPanel>
                 </DockPanel>
 
                 <ListBox x:Name="StepsList" Grid.Row="1"
-                         Background="#33FFFFFF" BorderBrush="#55FFFFFF" Foreground="#EEFFFFFF"
                          SelectionChanged="StepsList_SelectionChanged">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding DisplayLabel}" Foreground="#EEFFFFFF"/>
-                                <TextBlock Foreground="#77FFFFFF">
+                                <TextBlock Text="{Binding DisplayLabel}"/>
+                                <TextBlock>
                                     <TextBlock.Text>
                                         <MultiBinding StringFormat=" ({0})">
                                             <Binding Path="Kind" Converter="{StaticResource StepKindDisplay}"/>
@@ -83,16 +79,15 @@
                 </ListBox>
 
                 <StackPanel Grid.Row="2" Margin="0,12,0,6">
-                    <TextBlock x:Name="VariablesTitleText" Text="Action variables" Foreground="#DDFFFFFF" FontSize="12"/>
-                    <TextBlock x:Name="VariablesHelpText" Text="One variable per line" Foreground="#88FFFFFF" FontSize="11" Margin="0,2,0,0"/>
+                    <TextBlock x:Name="VariablesTitleText" Text="Action variables" FontSize="12"/>
+                    <TextBlock x:Name="VariablesHelpText" Text="One variable per line" FontSize="11" Margin="0,2,0,0"/>
                 </StackPanel>
 
-                <TextBox x:Name="VariablesBox" Grid.Row="3"
-                         AcceptsReturn="True" TextWrapping="NoWrap"
-                         Background="#33FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"/>
+                <ui:TextBox x:Name="VariablesBox" Grid.Row="3"
+                         AcceptsReturn="True" TextWrapping="NoWrap"/>
             </Grid>
 
-            <Border Grid.Column="1" Background="#33FFFFFF" CornerRadius="6" Padding="12">
+            <Border Grid.Column="1" CornerRadius="6" Padding="12">
                 <Grid x:Name="StepEditor" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -102,21 +97,20 @@
                     </Grid.RowDefinitions>
                     <WrapPanel Grid.Row="0" Margin="0,0,0,8">
                         <StackPanel Margin="0,0,10,0">
-                            <TextBlock x:Name="StepNameLabel" Text="Name" Foreground="#BBFFFFFF" FontSize="11"/>
-                            <TextBox x:Name="StepNameBox" Width="220" Height="28" Margin="0,2,0,0"
-                                     Background="#22FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"/>
+                            <TextBlock x:Name="StepNameLabel" Text="Name" FontSize="11"/>
+                            <ui:TextBox x:Name="StepNameBox" Width="180" Height="28" Margin="0,2,0,0"/>
                         </StackPanel>
                         <StackPanel Margin="0,0,10,0">
-                            <TextBlock x:Name="StepKindLabel" Text="Kind" Foreground="#BBFFFFFF" FontSize="11"/>
-                            <ComboBox x:Name="StepKindCombo" Width="130" Height="28" Margin="0,2,0,0"
+                            <TextBlock x:Name="StepKindLabel" Text="Kind" FontSize="11"/>
+                            <ComboBox x:Name="StepKindCombo" Width="110" Height="28" Margin="0,2,0,0"
                                       SelectionChanged="StepKindCombo_SelectionChanged">
                                 <ComboBoxItem Content="Action"/>
                                 <ComboBoxItem Content="Composite"/>
                             </ComboBox>
                         </StackPanel>
                         <StackPanel x:Name="ScriptTypePanel" Margin="0,0,10,0">
-                            <TextBlock x:Name="ScriptTypeLabel" Text="Script type" Foreground="#BBFFFFFF" FontSize="11"/>
-                            <ComboBox x:Name="ScriptTypeCombo" Width="130" Height="28" Margin="0,2,0,0">
+                            <TextBlock x:Name="ScriptTypeLabel" Text="Script type" FontSize="11"/>
+                            <ComboBox x:Name="ScriptTypeCombo" Width="110" Height="28" Margin="0,2,0,0">
                                 <ComboBoxItem Content="Batch"/>
                                 <ComboBoxItem Content="PowerShell"/>
                                 <ComboBoxItem Content="Python"/>
@@ -126,12 +120,10 @@
                         <CheckBox x:Name="UseVariableCheck"
                                   Content="Use variable"
                                   IsChecked="True"
-                                  Foreground="#BBFFFFFF"
                                   VerticalAlignment="Bottom"
                                   Margin="12,0,0,5"/>
                         <CheckBox x:Name="OpenLogOnRunCheck"
                                   Content="Open log"
-                                  Foreground="#BBFFFFFF"
                                   VerticalAlignment="Bottom"
                                   Margin="12,0,0,5"/>
                     </WrapPanel>
@@ -142,44 +134,38 @@
                             <RowDefinition Height="120"/>
                         </Grid.RowDefinitions>
                         <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                            <TextBlock x:Name="MembersLabel" Text="Members" Foreground="#BBFFFFFF" FontSize="11" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="MembersLabel" Text="Members" FontSize="11" VerticalAlignment="Center"/>
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                 <ComboBox x:Name="MemberCandidateCombo" Width="240" Height="26" DisplayMemberPath="Name" Margin="0,0,4,0"/>
-                                <Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
-                                <Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
-                                <Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
-                                <Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
+                                <ui:Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
+                                <ui:Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
+                                <ui:Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
+                                <ui:Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
                             </StackPanel>
                         </DockPanel>
                         <ListBox x:Name="MembersList" Grid.Row="1"
-                                 Background="#22FFFFFF" Foreground="#EEFFFFFF" BorderBrush="#55FFFFFF"
                                  DisplayMemberPath="Name"/>
                     </Grid>
 
-                    <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" Foreground="#BBFFFFFF" FontSize="11" Margin="0,0,0,4"/>
+                    <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
                     <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
                                            FontFamily="Consolas" FontSize="13"
-                                           ShowLineNumbers="True"
-                                           Background="#FF1E1E2E"
-                                           Foreground="#DDDDDDDD"/>
+                                           ShowLineNumbers="True"/>
                 </Grid>
             </Border>
         </Grid>
 
         <DockPanel Grid.Row="2" Margin="0,12,0,0">
             <CheckBox x:Name="AutoStartCheck" Content="Autostart this service when ServicePilot starts"
-                      Foreground="#BBFFFFFF" VerticalAlignment="Center"/>
+                      VerticalAlignment="Center"/>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="SaveTemplateButton" Content="Save as template" Width="108" Height="34" Margin="0,0,8,0"
-                        Background="#44FFFFFF" Foreground="#DDFFFFFF" BorderBrush="#55FFFFFF"
+                <ui:Button x:Name="SaveTemplateButton" Content="Save as template" Width="108" Height="34" Margin="0,0,8,0"
                         Click="SaveTemplate_Click"/>
-                <Button x:Name="CancelButton" Content="Cancel" Width="80" Height="34" Margin="0,0,8,0"
-                        Background="#44FFFFFF" Foreground="#DDFFFFFF" BorderBrush="#55FFFFFF"
+                <ui:Button x:Name="CancelButton" Content="Cancel" Width="80" Height="34" Margin="0,0,8,0"
                         Click="Cancel_Click"/>
-                <Button x:Name="SaveButton" Content="Save" Width="80" Height="34"
-                        Background="#444CAF50" Foreground="#EEFFFFFF" BorderBrush="#554CAF50"
+                <ui:Button x:Name="SaveButton" Content="Save" Width="80" Height="34"
                         Click="Save_Click"/>
             </StackPanel>
         </DockPanel>
     </Grid>
-</Window>
+</ui:FluentWindow>

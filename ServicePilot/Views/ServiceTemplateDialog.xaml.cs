@@ -6,7 +6,7 @@ using ServicePilot.Services;
 
 namespace ServicePilot.Views;
 
-public partial class ServiceTemplateDialog : Window
+public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
 {
     private readonly ObservableCollection<ScriptStep> _steps = new();
     private readonly ServiceTemplate? _editingTemplate;
@@ -198,12 +198,12 @@ public partial class ServiceTemplateDialog : Window
         UpdateOrders();
         if (string.IsNullOrWhiteSpace(NameBox.Text))
         {
-            MessageBox.Show(LocalizationService.Current.T("EnterTemplateName"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("EnterTemplateName"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (_steps.Count == 0)
         {
-            MessageBox.Show(LocalizationService.Current.T("AddOneStepPrompt"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("AddOneStepPrompt"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (!ValidateSteps())
@@ -367,7 +367,7 @@ public partial class ServiceTemplateDialog : Window
             {
                 if (string.IsNullOrWhiteSpace(step.Content))
                 {
-                    MessageBox.Show(LocalizationService.Current.T("ActionContentRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    WpfMessageBoxHelper.Show(LocalizationService.Current.T("ActionContentRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
                 continue;
@@ -379,19 +379,19 @@ public partial class ServiceTemplateDialog : Window
                 .ToList();
             if (members.Count == 0)
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeMembersRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeMembersRequired"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             if (members.Any(m => m.Kind != StepKind.Action))
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeCannotNest"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeCannotNest"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             if (members.Count(m => m.UseVariable) > 1)
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeOneVariableMember"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeOneVariableMember"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
         }

@@ -7,7 +7,7 @@ using ServicePilot.Services;
 
 namespace ServicePilot.Views;
 
-public partial class TemplateManagerWindow : Window
+public partial class TemplateManagerWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly AppConfig _appConfig;
     private readonly ConfigService _configService;
@@ -77,7 +77,7 @@ public partial class TemplateManagerWindow : Window
 
         if (_appConfig.ServiceTemplates.Any(t => string.Equals(t.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -99,7 +99,7 @@ public partial class TemplateManagerWindow : Window
         if (_appConfig.ServiceTemplates.Any(t => t.Id != template.Id &&
                                                   string.Equals(t.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -117,7 +117,7 @@ public partial class TemplateManagerWindow : Window
         var template = SelectedTemplate;
         if (template == null) return;
 
-        var confirm = MessageBox.Show(LocalizationService.Current.F("ConfirmDeleteTemplate", template.Name), "ServicePilot",
+        var confirm = WpfMessageBoxHelper.Show(LocalizationService.Current.F("ConfirmDeleteTemplate", template.Name), "ServicePilot",
             MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
@@ -133,7 +133,7 @@ public partial class TemplateManagerWindow : Window
         var template = SelectedTemplate;
         if (template == null)
         {
-            MessageBox.Show(LocalizationService.Current.T("SelectTemplatePrompt"), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("SelectTemplatePrompt"), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -153,12 +153,12 @@ public partial class TemplateManagerWindow : Window
         try
         {
             await TemplateExchangeService.ExportAsync(template, dialog.FileName);
-            MessageBox.Show(LocalizationService.Current.F("TemplateExported", dialog.FileName), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateExported", dialog.FileName), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateExportFailed", ex.Message), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateExportFailed", ex.Message), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
@@ -186,12 +186,12 @@ public partial class TemplateManagerWindow : Window
 
             var names = string.Join(", ", imported.Select(i => i.Template.Name));
             var skipMsg = skipped.Count > 0 ? $"\n{LocalizationService.Current.F("TemplateImportSkipped", skipped.Count)}" : "";
-            MessageBox.Show($"{LocalizationService.Current.F("TemplateImported", imported.Count)}: {names}{skipMsg}", "ServicePilot",
+            WpfMessageBoxHelper.Show($"{LocalizationService.Current.F("TemplateImported", imported.Count)}: {names}{skipMsg}", "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateImportFailed", ex.Message), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateImportFailed", ex.Message), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }

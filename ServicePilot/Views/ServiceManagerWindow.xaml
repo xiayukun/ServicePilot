@@ -1,82 +1,84 @@
-<Window x:Class="ServicePilot.Views.ServiceManagerWindow"
+<ui:FluentWindow x:Class="ServicePilot.Views.ServiceManagerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="管理服务" Height="560" Width="960"
-        WindowStartupLocation="CenterScreen"
-        Background="#FF1E1E2E">
-    <Window.Resources>
-        <Style x:Key="DarkGridColumnHeader" TargetType="{x:Type DataGridColumnHeader}">
-            <Setter Property="Background" Value="#FF2A2A3C"/>
-            <Setter Property="Foreground" Value="#EEFFFFFF"/>
-            <Setter Property="BorderBrush" Value="#44FFFFFF"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Padding" Value="8,6"/>
-        </Style>
-        <Style x:Key="DarkGridCell" TargetType="{x:Type DataGridCell}">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="#EEFFFFFF"/>
-            <Setter Property="BorderBrush" Value="#22FFFFFF"/>
-            <Setter Property="Padding" Value="8,4"/>
-            <Style.Triggers>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#FF2F78A8"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-        <Style x:Key="DarkGridRow" TargetType="{x:Type DataGridRow}">
-            <Setter Property="Background" Value="#222A2A3C"/>
-            <Setter Property="Foreground" Value="#EEFFFFFF"/>
-            <Style.Triggers>
-                <Trigger Property="AlternationIndex" Value="1">
-                    <Setter Property="Background" Value="#182A2A3C"/>
-                </Trigger>
-                <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#FF2F78A8"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </Window.Resources>
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="180" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-    <Grid Margin="14">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-        <WrapPanel Grid.Row="0" Margin="0,0,0,8">
-            <Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click"/>
-            <Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click"/>
-            <Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,14,0" Click="Delete_Click"/>
-            <Button x:Name="RunActionButton" Content="运行动作" Width="92" Height="28" Margin="0,0,6,0" Click="RunAction_Click"/>
-            <Button x:Name="StopButton" Content="停止" Width="76" Height="28" Margin="0,0,6,0" Click="Stop_Click"/>
-            <Button x:Name="LogsButton" Content="查看日志" Width="86" Height="28" Margin="0,0,14,0" Click="Logs_Click"/>
-            <Button x:Name="SaveTemplateButton" Content="存为模板" Width="116" Height="28" Margin="0,0,6,0" Click="SaveTemplate_Click"/>
-        </WrapPanel>
+        <!-- Left navigation sidebar -->
+        <Grid Grid.Column="0" Margin="0,8,0,8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="服务管理" FontSize="14" FontWeight="SemiBold"
+                       Margin="14,12,14,8" Foreground="{ui:ThemeResource TextFillColorPrimaryBrush}" />
+            <ListBox x:Name="FilterList" Grid.Row="1"
+                     Margin="8,0,8,0"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     SelectionChanged="FilterList_SelectionChanged">
+                <ListBoxItem x:Name="FilterAll" IsSelected="True">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Margin="0,0,10,0" />
+                        <TextBlock Text="全部服务" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem x:Name="FilterRunning">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Margin="0,0,10,0" />
+                        <TextBlock Text="运行中" />
+                    </StackPanel>
+                </ListBoxItem>
+                <ListBoxItem x:Name="FilterStopped">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                   Margin="0,0,10,0" />
+                        <TextBlock Text="已停止" />
+                    </StackPanel>
+                </ListBoxItem>
+            </ListBox>
+        </Grid>
 
-        <DataGrid x:Name="ServicesGrid" Grid.Row="1"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  SelectionChanged="ServicesGrid_SelectionChanged"
-                  HeadersVisibility="Column"
-                  AlternationCount="2"
-                  Background="#FF252536"
-                  Foreground="#EEFFFFFF"
-                  RowBackground="#222A2A3C"
-                  AlternatingRowBackground="#182A2A3C"
-                  BorderBrush="#55FFFFFF"
-                  GridLinesVisibility="Horizontal"
-                  HorizontalGridLinesBrush="#22FFFFFF"
-                  ColumnHeaderStyle="{StaticResource DarkGridColumnHeader}"
-                  RowStyle="{StaticResource DarkGridRow}"
-                  CellStyle="{StaticResource DarkGridCell}">
-            <DataGrid.Columns>
-                <DataGridTextColumn x:Name="StatusColumn" Header="状态" Binding="{Binding StatusText}" Width="100"/>
-                <DataGridTextColumn x:Name="NameColumn" Header="名称" Binding="{Binding Name}" Width="160"/>
-                <DataGridTextColumn x:Name="WorkingDirectoryColumn" Header="工作目录" Binding="{Binding Config.WorkingDirectory}" Width="*"/>
-                <DataGridTextColumn x:Name="StepsColumn" Header="动作" Binding="{Binding Config.ScriptSteps.Count}" Width="70"/>
-                <DataGridCheckBoxColumn x:Name="AutoStartColumn" Header="自启" Binding="{Binding Config.AutoStart}" Width="70"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <!-- Main content area -->
+        <Grid Grid.Column="1" Margin="0,8,12,8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                <ui:Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click" />
+                <ui:Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click" />
+                <ui:Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,14,0" Click="Delete_Click" />
+                <ui:Button x:Name="RunActionButton" Content="运行动作" Width="92" Height="28" Margin="0,0,6,0" Click="RunAction_Click" />
+                <ui:Button x:Name="StopButton" Content="停止" Width="76" Height="28" Margin="0,0,6,0" Click="Stop_Click" />
+                <ui:Button x:Name="LogsButton" Content="查看日志" Width="86" Height="28" Margin="0,0,14,0" Click="Logs_Click" />
+                <ui:Button x:Name="SaveTemplateButton" Content="存为模板" Width="116" Height="28" Margin="0,0,6,0" Click="SaveTemplate_Click" />
+            </WrapPanel>
+
+            <DataGrid x:Name="ServicesGrid" Grid.Row="1"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      SelectionChanged="ServicesGrid_SelectionChanged"
+                      HeadersVisibility="Column"
+                      AlternationCount="2"
+                      GridLinesVisibility="Horizontal">
+                <DataGrid.Columns>
+                    <DataGridTextColumn x:Name="StatusColumn" Header="状态" Binding="{Binding StatusText}" Width="100" />
+                    <DataGridTextColumn x:Name="NameColumn" Header="名称" Binding="{Binding Name}" Width="160" />
+                    <DataGridTextColumn x:Name="WorkingDirectoryColumn" Header="工作目录" Binding="{Binding Config.WorkingDirectory}" Width="*" />
+                    <DataGridTextColumn x:Name="StepsColumn" Header="动作" Binding="{Binding Config.ScriptSteps.Count}" Width="70" />
+                    <DataGridCheckBoxColumn x:Name="AutoStartColumn" Header="自启" Binding="{Binding Config.AutoStart}" Width="70" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
     </Grid>
-</Window>
+</ui:FluentWindow>

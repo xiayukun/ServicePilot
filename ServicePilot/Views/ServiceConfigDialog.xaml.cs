@@ -6,7 +6,7 @@ using ServicePilot.Services;
 
 namespace ServicePilot.Views;
 
-public partial class ServiceConfigDialog : Window
+public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
 {
     private readonly ObservableCollection<ScriptStep> _steps = new();
     private readonly IReadOnlyList<ServiceTemplate> _templates;
@@ -156,7 +156,7 @@ public partial class ServiceConfigDialog : Window
         SaveVariablesBox();
         if (_templates.Count == 0)
         {
-            MessageBox.Show(LocalizationService.Current.T("NoTemplatesAvailable"), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("NoTemplatesAvailable"), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -267,19 +267,19 @@ public partial class ServiceConfigDialog : Window
 
         if (string.IsNullOrWhiteSpace(NameBox.Text))
         {
-            MessageBox.Show(LocalizationService.Current.T("EnterServiceName"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("EnterServiceName"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         if (string.IsNullOrWhiteSpace(DirBox.Text))
         {
-            MessageBox.Show(LocalizationService.Current.T("SelectDirectoryPrompt"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("SelectDirectoryPrompt"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
         if (_steps.Count == 0)
         {
-            MessageBox.Show(LocalizationService.Current.T("AddOneStepPrompt"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("AddOneStepPrompt"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
 
@@ -440,7 +440,7 @@ public partial class ServiceConfigDialog : Window
             {
                 if (string.IsNullOrWhiteSpace(step.Content))
                 {
-                    MessageBox.Show(LocalizationService.Current.T("ActionContentRequired"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                    WpfMessageBoxHelper.Show(LocalizationService.Current.T("ActionContentRequired"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
                     return false;
                 }
                 continue;
@@ -452,19 +452,19 @@ public partial class ServiceConfigDialog : Window
                 .ToList();
             if (members.Count == 0)
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeMembersRequired"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeMembersRequired"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             if (members.Any(m => m.Kind != StepKind.Action))
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeCannotNest"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeCannotNest"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
             if (members.Count(m => m.UseVariable) > 1)
             {
-                MessageBox.Show(LocalizationService.Current.T("CompositeOneVariableMember"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                WpfMessageBoxHelper.Show(LocalizationService.Current.T("CompositeOneVariableMember"), LocalizationService.Current.T("Prompt"), MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
         }

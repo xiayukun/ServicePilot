@@ -8,6 +8,13 @@ using ServicePilot.Models;
 using ServicePilot.Services;
 using ServicePilot.ViewModels;
 using ServicePilot.Views;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Hardcodet.Wpf.TaskbarNotification;
+using Wpf.Ui.Appearance;
+using Wpf.Ui.Extensions;
+using WpfMenuItem = Wpf.Ui.Controls.MenuItem;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
 
@@ -26,7 +33,7 @@ public partial class App : Application
     private readonly List<ServiceManagerWindow> _serviceManagerWindows = new();
     private readonly List<TemplateManagerWindow> _templateManagerWindows = new();
 
-    private Forms.NotifyIcon? _trayIcon;
+    private TaskbarIcon? _trayIcon;
     private MainViewModel? _mainViewModel;
     private ProcessManager? _processManager;
     private ConfigService _configService = null!;
@@ -58,6 +65,7 @@ public partial class App : Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        ApplicationThemeManager.Apply(ApplicationTheme.Dark);
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
         if (e.Args.Length > 0)
@@ -74,7 +82,7 @@ public partial class App : Application
         _ownsMutex = ownsMutex;
         if (!ownsMutex)
         {
-            MessageBox.Show(LocalizationService.Current.T("AlreadyRunning"), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("AlreadyRunning"), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
@@ -122,7 +130,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            MessageBox.Show(LocalizationService.Current.F("StartupFailed", ex), LocalizationService.Current.T("StartupErrorTitle"),
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("StartupFailed", ex), LocalizationService.Current.T("StartupErrorTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
         }
@@ -132,7 +140,7 @@ public partial class App : Application
     {
         DispatcherUnhandledException += (_, args) =>
         {
-            MessageBox.Show(LocalizationService.Current.F("UiThreadException", args.Exception), LocalizationService.Current.T("ServicePilotErrorTitle"),
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("UiThreadException", args.Exception), LocalizationService.Current.T("ServicePilotErrorTitle"),
                 MessageBoxButton.OK, MessageBoxImage.Error);
             args.Handled = true;
         };
@@ -141,14 +149,14 @@ public partial class App : Application
         {
             if (args.ExceptionObject is Exception ex)
             {
-                MessageBox.Show(LocalizationService.Current.F("FatalThreadException", ex), LocalizationService.Current.T("ServicePilotErrorTitle"),
+                WpfMessageBoxHelper.Show(LocalizationService.Current.F("FatalThreadException", ex), LocalizationService.Current.T("ServicePilotErrorTitle"),
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         };
 
         TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            MessageBox.Show(LocalizationService.Current.F("AsyncTaskException", args.Exception?.InnerException ?? args.Exception),
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("AsyncTaskException", args.Exception?.InnerException ?? args.Exception),
                 LocalizationService.Current.T("ServicePilotErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
             args.SetObserved();
         };
@@ -176,26 +184,73 @@ public partial class App : Application
     {
         try
         {
-            _trayIcon = new Forms.NotifyIcon
+            _trayIcon = new TaskbarIcon
             {
-                Text = "ServicePilot",
-                Visible = true,
-                Icon = CreateTrayIconWithBadge(0)
+                ToolTipText = "ServicePilot",
+                Visibility = Visibility.Visible,
+                Icon = CreateTrayIconWithBadge(0),
+                MenuActivation = PopupActivationMode.RightClick
             };
 
-            _trayIcon.DoubleClick += (_, _) =>
+            _trayIcon.TrayMouseDoubleClick += (_, _) =>
             {
                 RebuildTrayMenu();
-                _trayIcon.ContextMenuStrip?.Show(Forms.Cursor.Position);
             };
 
             RebuildTrayMenu();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(LocalizationService.Current.F("TrayCreateFailed", ex.Message),
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TrayCreateFailed", ex.Message),
                 LocalizationService.Current.T("ServicePilotErrorTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(1);
+        }
+    }
+
+    private static ImageSource? ConvertDrawingImageToImageSource(Drawing.Image? source)
+    {
+        if (source == null)
+            return null;
+
+        try
+        {
+            using var ms = new MemoryStream();
+            source.Save(ms, Drawing.Imaging.ImageFormat.Png);
+            ms.Seek(0, SeekOrigin.Begin);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.StreamSource = ms;
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static readonly Lazy<ImageSource?> RunningStatusDotWpf = new(() => ConvertDrawingImageToImageSource(RunningStatusDot));
+    private static readonly Lazy<ImageSource?> FailedStatusDotWpf = new(() => ConvertDrawingImageToImageSource(FailedStatusDot));
+    private static readonly Lazy<ImageSource?> WarningStatusDotWpf = new(() => ConvertDrawingImageToImageSource(WarningStatusDot));
+
+    private static void SetMenuItemIcon(MenuItem item, Drawing.Image? dot)
+    {
+        var source = dot == RunningStatusDot ? RunningStatusDotWpf.Value :
+                     dot == FailedStatusDot ? FailedStatusDotWpf.Value :
+                     dot == WarningStatusDot ? WarningStatusDotWpf.Value :
+                     ConvertDrawingImageToImageSource(dot);
+
+        if (source != null)
+        {
+            item.Icon = new System.Windows.Controls.Image
+            {
+                Source = source,
+                Width = 16,
+                Height = 16,
+                Margin = new Thickness(0, 0, 4, 0)
+            };
         }
     }
 
@@ -204,108 +259,112 @@ public partial class App : Application
         if (_isExiting || _trayIcon == null || _mainViewModel == null || _processManager == null)
             return;
 
-        var menu = new Forms.ContextMenuStrip();
+        var menu = new System.Windows.Controls.ContextMenu();
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.VerticalOffset = 4;
+        menu.HorizontalOffset = -8;
 
         foreach (var service in GetSortedServicesForDisplay())
         {
             var state = service.RuntimeState.State;
-            var serviceMenu = new Forms.ToolStripMenuItem(service.Name)
+            var serviceMenu = new WpfMenuItem
             {
-                Image = GetServiceStatusDot(service),
-                ToolTipText = FormatStatusText(state)
+                Header = service.Name,
+                ToolTip = FormatStatusText(state)
             };
+
+            SetMenuItemIcon(serviceMenu, GetServiceStatusDot(service));
 
             AddStepItems(serviceMenu, service);
 
-            serviceMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            serviceMenu.Items.Add(new System.Windows.Controls.Separator());
 
             var hasRunning = service.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
                              service.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running);
-            var stop = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Stop")) { Enabled = hasRunning };
+            var stop = new WpfMenuItem { Header = LocalizationService.Current.T("Stop"), IsEnabled = hasRunning };
             stop.Click += async (_, _) =>
             {
                 RememberServiceUse(service);
                 await StopServiceQuietlyAsync(service.Config.Id);
             };
-            serviceMenu.DropDownItems.Add(stop);
+            serviceMenu.Items.Add(stop);
 
-            var viewLog = new Forms.ToolStripMenuItem(LocalizationService.Current.T("ViewLogs"));
+            var viewLog = new WpfMenuItem { Header = LocalizationService.Current.T("ViewLogs") };
             viewLog.Click += (_, _) => OnViewLogRequested(service);
-            serviceMenu.DropDownItems.Add(viewLog);
+            serviceMenu.Items.Add(viewLog);
 
-            serviceMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
+            serviceMenu.Items.Add(new System.Windows.Controls.Separator());
 
-            var edit = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Edit"));
+            var edit = new WpfMenuItem { Header = LocalizationService.Current.T("Edit") };
             edit.Click += async (_, _) =>
             {
                 RememberServiceUse(service);
                 await OnEditServiceRequested(service);
             };
-            serviceMenu.DropDownItems.Add(edit);
+            serviceMenu.Items.Add(edit);
 
-            var delete = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Delete"));
+            var delete = new WpfMenuItem { Header = LocalizationService.Current.T("Delete") };
             delete.Click += async (_, _) =>
             {
                 RememberServiceUse(service);
                 await OnDeleteServiceRequested(service);
             };
-            serviceMenu.DropDownItems.Add(delete);
+            serviceMenu.Items.Add(delete);
 
-            var saveAsTemplate = new Forms.ToolStripMenuItem(LocalizationService.Current.T("SaveAsTemplate"));
+            var saveAsTemplate = new WpfMenuItem { Header = LocalizationService.Current.T("SaveAsTemplate") };
             saveAsTemplate.Click += async (_, _) =>
             {
                 RememberServiceUse(service);
                 await OnSaveServiceAsTemplateRequested(service);
             };
-            serviceMenu.DropDownItems.Add(saveAsTemplate);
+            serviceMenu.Items.Add(saveAsTemplate);
 
             menu.Items.Add(serviceMenu);
         }
 
         if (_mainViewModel.Services.Count > 0)
-            menu.Items.Add(new Forms.ToolStripSeparator());
+            menu.Items.Add(new System.Windows.Controls.Separator());
 
-        var addService = new Forms.ToolStripMenuItem(LocalizationService.Current.T("AddService"));
+        var addService = new WpfMenuItem { Header = LocalizationService.Current.T("AddService") };
         addService.Click += (_, _) => OnAddServiceRequested();
         menu.Items.Add(addService);
 
-        var manageServices = new Forms.ToolStripMenuItem(LocalizationService.Current.T("ManageServices"));
+        var manageServices = new WpfMenuItem { Header = LocalizationService.Current.T("ManageServices") };
         manageServices.Click += (_, _) => OnManageServicesRequested();
         menu.Items.Add(manageServices);
 
-        var manageTemplates = new Forms.ToolStripMenuItem(LocalizationService.Current.T("ManageTemplates"));
+        var manageTemplates = new WpfMenuItem { Header = LocalizationService.Current.T("ManageTemplates") };
         manageTemplates.Click += (_, _) => OnManageTemplatesRequested();
         menu.Items.Add(manageTemplates);
 
-        var copyHelpForAi = new Forms.ToolStripMenuItem(LocalizationService.Current.T("CopyHelpForAi"));
+        var copyHelpForAi = new WpfMenuItem { Header = LocalizationService.Current.T("CopyHelpForAi") };
         copyHelpForAi.Click += (_, _) => OnCopyHelpForAiRequested();
         menu.Items.Add(copyHelpForAi);
 
-        var stopAll = new Forms.ToolStripMenuItem(LocalizationService.Current.T("StopAllServices"))
+        var stopAll = new WpfMenuItem
         {
-            Enabled = _mainViewModel.Services.Any(s => s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
-                                                       s.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running))
+            Header = LocalizationService.Current.T("StopAllServices"),
+            IsEnabled = _mainViewModel.Services.Any(s => s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
+                                                         s.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running))
         };
         stopAll.Click += async (_, _) => await StopAllQuietlyAsync();
         menu.Items.Add(stopAll);
 
-        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(new System.Windows.Controls.Separator());
 
         AddLanguageMenu(menu);
 
-        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(new System.Windows.Controls.Separator());
 
-        var status = new Forms.ToolStripMenuItem(GetTrayStatusText()) { Enabled = false };
+        var status = new WpfMenuItem { Header = GetTrayStatusText(), IsEnabled = false };
         menu.Items.Add(status);
 
-        var exit = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Exit"));
+        var exit = new WpfMenuItem { Header = LocalizationService.Current.T("Exit") };
         exit.Click += async (_, _) => await ExitAsync();
         menu.Items.Add(exit);
 
-        var oldMenu = _trayIcon.ContextMenuStrip;
-        _trayIcon.ContextMenuStrip = menu;
-        oldMenu?.Dispose();
-        _trayIcon.Text = ShortTrayText(GetTrayStatusText());
+        _trayIcon.ContextMenu = menu;
+        _trayIcon.ToolTipText = ShortTrayText(GetTrayStatusText());
         UpdateTrayIconBadge();
     }
 
@@ -352,7 +411,7 @@ public partial class App : Application
         _variableUsageStore.RememberService(service.Config.Id);
     }
 
-    private void AddStepItems(Forms.ToolStripMenuItem parent, ServiceItemViewModel service)
+    private void AddStepItems(MenuItem parent, ServiceItemViewModel service)
     {
         var steps = service.Config.ScriptSteps.OrderBy(s => s.Order).ToList();
         var serviceBusy = service.RuntimeState.State is ProcessState.Starting or ProcessState.Stopping;
@@ -362,23 +421,23 @@ public partial class App : Application
         {
             if (step.Kind == StepKind.Composite)
             {
-                parent.DropDownItems.Add(CreateCompositeMenuItem(service, step, serviceBusy));
+                parent.Items.Add(CreateCompositeMenuItem(service, step, serviceBusy));
                 any = true;
             }
             else if (!string.IsNullOrWhiteSpace(step.Content))
             {
-                parent.DropDownItems.Add(CreateActionMenuItem(service, step));
+                parent.Items.Add(CreateActionMenuItem(service, step));
                 any = true;
             }
         }
 
         if (!any)
         {
-            parent.DropDownItems.Add(new Forms.ToolStripMenuItem(LocalizationService.Current.T("NoActions")) { Enabled = false });
+            parent.Items.Add(new WpfMenuItem { Header = LocalizationService.Current.T("NoActions"), IsEnabled = false });
         }
     }
 
-    private Forms.ToolStripMenuItem CreateCompositeMenuItem(ServiceItemViewModel service, ScriptStep composite, bool serviceBusy)
+    private MenuItem CreateCompositeMenuItem(ServiceItemViewModel service, ScriptStep composite, bool serviceBusy)
     {
         var running = service.RuntimeState.State is ProcessState.Running or ProcessState.Starting;
         var variableMember = ScriptDefinitionService.FindVariableMember(service.Config, composite);
@@ -386,11 +445,13 @@ public partial class App : Application
 
         if (variableMember == null)
         {
-            var item = new Forms.ToolStripMenuItem(label)
+            var item = new WpfMenuItem
             {
-                Image = running ? RunningStatusDot : null,
-                Enabled = !serviceBusy && !running
+                Header = label,
+                IsEnabled = !serviceBusy && !running
             };
+            if (running)
+                SetMenuItemIcon(item, RunningStatusDot);
             item.Click += (_, _) =>
             {
                 RememberServiceUse(service);
@@ -400,11 +461,13 @@ public partial class App : Application
             return item;
         }
 
-        var menu = new Forms.ToolStripMenuItem(label)
+        var menu = new WpfMenuItem
         {
-            Image = running ? RunningStatusDot : null,
-            Enabled = !serviceBusy && !running
+            Header = label,
+            IsEnabled = !serviceBusy && !running
         };
+        if (running)
+            SetMenuItemIcon(menu, RunningStatusDot);
         AddVariableChoices(menu, service, variableMember, variable =>
         {
             RememberServiceUse(service);
@@ -414,19 +477,20 @@ public partial class App : Application
         return menu;
     }
 
-    private Forms.ToolStripMenuItem CreateActionMenuItem(ServiceItemViewModel service, ScriptStep action)
+    private MenuItem CreateActionMenuItem(ServiceItemViewModel service, ScriptStep action)
     {
         var stepState = GetStepState(service.RuntimeState, action.Id)?.State ?? StepRunState.NotRun;
         var isRunning = stepState == StepRunState.Running;
 
         if (!action.UseVariable)
         {
-            var item = new Forms.ToolStripMenuItem(action.Name)
+            var item = new WpfMenuItem
             {
-                Enabled = !isRunning,
-                Image = GetStepStatusDot(stepState),
-                ToolTipText = FormatStepStateText(stepState)
+                Header = action.Name,
+                IsEnabled = !isRunning,
+                ToolTip = FormatStepStateText(stepState)
             };
+            SetMenuItemIcon(item, GetStepStatusDot(stepState));
             item.Click += (_, _) =>
             {
                 RememberServiceUse(service);
@@ -436,12 +500,13 @@ public partial class App : Application
             return item;
         }
 
-        var menu = new Forms.ToolStripMenuItem(action.Name)
+        var menu = new WpfMenuItem
         {
-            Enabled = !isRunning,
-            Image = GetStepStatusDot(stepState),
-            ToolTipText = FormatStepStateText(stepState)
+            Header = action.Name,
+            IsEnabled = !isRunning,
+            ToolTip = FormatStepStateText(stepState)
         };
+        SetMenuItemIcon(menu, GetStepStatusDot(stepState));
         AddVariableChoices(menu, service, action, variable =>
         {
             RememberServiceUse(service);
@@ -452,49 +517,51 @@ public partial class App : Application
     }
 
     private void AddVariableChoices(
-        Forms.ToolStripMenuItem menu,
+        MenuItem menu,
         ServiceItemViewModel service,
         ScriptStep variableStep,
         Func<string?, Task> runAsync)
     {
         foreach (var variable in GetSortedVariablesForStep(variableStep))
         {
-            var variableItem = new Forms.ToolStripMenuItem(FormatVariableLabel(variable));
+            var variableItem = new WpfMenuItem { Header = FormatVariableLabel(variable) };
             variableItem.Click += async (_, _) =>
             {
                 await RememberVariableForStepAsync(service.Config, variableStep, variable, addIfMissing: false);
                 await runAsync(variable);
                 RebuildTrayMenu();
             };
-            menu.DropDownItems.Add(variableItem);
+            menu.Items.Add(variableItem);
         }
 
         AddNewStepVariableMenuItem(menu, service, variableStep, variable => runAsync(variable));
     }
 
-    private void AddLanguageMenu(Forms.ContextMenuStrip menu)
+    private void AddLanguageMenu(System.Windows.Controls.ContextMenu menu)
     {
-        var languageMenu = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Language"));
+        var languageMenu = new WpfMenuItem { Header = LocalizationService.Current.T("Language") };
         AddLanguageOption(languageMenu, LocalizationService.Auto);
         AddLanguageOption(languageMenu, LocalizationService.Chinese);
         AddLanguageOption(languageMenu, LocalizationService.English);
-        languageMenu.DropDownItems.Add(new Forms.ToolStripSeparator());
-        languageMenu.DropDownItems.Add(new Forms.ToolStripMenuItem(
-            LocalizationService.Current.F("LanguageCurrent", LocalizationService.Current.DisplayLanguageName(LocalizationService.Current.LanguageSetting)))
+        languageMenu.Items.Add(new System.Windows.Controls.Separator());
+        languageMenu.Items.Add(new WpfMenuItem
         {
-            Enabled = false
+            Header = LocalizationService.Current.F("LanguageCurrent", LocalizationService.Current.DisplayLanguageName(LocalizationService.Current.LanguageSetting)),
+            IsEnabled = false
         });
         menu.Items.Add(languageMenu);
     }
 
-    private void AddLanguageOption(Forms.ToolStripMenuItem parent, string languageSetting)
+    private void AddLanguageOption(MenuItem parent, string languageSetting)
     {
-        var item = new Forms.ToolStripMenuItem(LocalizationService.Current.DisplayLanguageName(languageSetting))
+        var item = new WpfMenuItem
         {
-            Checked = string.Equals(LocalizationService.Current.LanguageSetting, languageSetting, StringComparison.OrdinalIgnoreCase)
+            Header = LocalizationService.Current.DisplayLanguageName(languageSetting),
+            IsChecked = string.Equals(LocalizationService.Current.LanguageSetting, languageSetting, StringComparison.OrdinalIgnoreCase),
+            StaysOpenOnClick = true
         };
         item.Click += async (_, _) => await SetLanguageAsync(languageSetting);
-        parent.DropDownItems.Add(item);
+        parent.Items.Add(item);
     }
 
     private async Task SetLanguageAsync(string languageSetting)
@@ -670,14 +737,14 @@ public partial class App : Application
         _variableUsageStore.Sort(step.Id, step.StepVariables);
 
     private void AddNewStepVariableMenuItem(
-        Forms.ToolStripMenuItem parent,
+        MenuItem parent,
         ServiceItemViewModel service,
         ScriptStep step,
         Func<string, Task> runAsync)
     {
-        parent.DropDownItems.Add(new Forms.ToolStripSeparator());
+        parent.Items.Add(new System.Windows.Controls.Separator());
 
-        var add = new Forms.ToolStripMenuItem(LocalizationService.Current.T("Add"));
+        var add = new WpfMenuItem { Header = LocalizationService.Current.T("Add") };
         add.Click += async (_, _) =>
         {
             var variable = await PromptForStepVariableAsync(service, step);
@@ -687,7 +754,7 @@ public partial class App : Application
             await runAsync(variable);
             RebuildTrayMenu();
         };
-        parent.DropDownItems.Add(add);
+        parent.Items.Add(add);
     }
 
     private async Task<string?> PromptForStepVariableAsync(ServiceItemViewModel service, ScriptStep step)
@@ -788,7 +855,7 @@ public partial class App : Application
         {
             if (_mainViewModel.Services.Any(s => string.Equals(s.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
             {
-                MessageBox.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot",
+                WpfMessageBoxHelper.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
@@ -816,7 +883,7 @@ public partial class App : Application
         if (_mainViewModel.Services.Any(s => s.Config.Id != vm.Config.Id &&
                                              string.Equals(s.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -831,7 +898,7 @@ public partial class App : Application
             return;
 
         RememberServiceUse(vm);
-        var confirm = MessageBox.Show(LocalizationService.Current.F("ConfirmDeleteService", vm.Name), "ServicePilot",
+        var confirm = WpfMessageBoxHelper.Show(LocalizationService.Current.F("ConfirmDeleteService", vm.Name), "ServicePilot",
             MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
@@ -848,7 +915,7 @@ public partial class App : Application
 
         if (_appConfig.ServiceTemplates.Any(t => string.Equals(t.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -866,7 +933,7 @@ public partial class App : Application
 
         if (_appConfig.ServiceTemplates.Any(t => string.Equals(t.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot",
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -1023,7 +1090,7 @@ public partial class App : Application
 
         try
         {
-            _trayIcon.ShowBalloonTip(6000, title, ShortBalloonText(message, 220), Forms.ToolTipIcon.Error);
+            _trayIcon.ShowBalloonTip(title, ShortBalloonText(message, 220), BalloonIcon.Error);
         }
         catch
         {
@@ -1232,7 +1299,6 @@ public partial class App : Application
 
         if (_trayIcon != null)
         {
-            _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
         }
@@ -1253,7 +1319,6 @@ public partial class App : Application
 
         if (_trayIcon != null)
         {
-            _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
         }

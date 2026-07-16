@@ -5,7 +5,7 @@ using ServicePilot.Services;
 
 namespace ServicePilot.Views;
 
-public partial class TemplateSelectDialog : Window
+public partial class TemplateSelectDialog : Wpf.Ui.Controls.FluentWindow
 {
     public TemplateSelectDialog(IReadOnlyList<ServiceTemplate> templates)
     {

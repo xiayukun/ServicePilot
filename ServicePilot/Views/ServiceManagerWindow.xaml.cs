@@ -6,7 +6,7 @@ using ServicePilot.ViewModels;
 
 namespace ServicePilot.Views;
 
-public partial class ServiceManagerWindow : Window
+public partial class ServiceManagerWindow : Wpf.Ui.Controls.FluentWindow
 {
     private readonly MainViewModel _mainViewModel;
     private readonly ConfigService _configService;
@@ -15,6 +15,15 @@ public partial class ServiceManagerWindow : Window
     private readonly Action<ServiceItemViewModel> _viewLog;
     private readonly Action _changed;
     private readonly PresetVariableUsageStore _variableUsageStore;
+
+    private enum ServiceFilter
+    {
+        All,
+        Running,
+        Stopped
+    }
+
+    private ServiceFilter _currentFilter = ServiceFilter.All;
 
     public ServiceManagerWindow(
         MainViewModel mainViewModel,
@@ -48,7 +57,19 @@ public partial class ServiceManagerWindow : Window
         };
     }
 
-    private ServiceItemViewModel? SelectedService => ServicesGrid.SelectedItem as ServiceItemViewModel;
+    private ServiceItemViewModel? SelectedService => ServicesGrid?.SelectedItem as ServiceItemViewModel;
+
+    private void FilterList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (FilterAll.IsSelected == true)
+            _currentFilter = ServiceFilter.All;
+        else if (FilterRunning.IsSelected == true)
+            _currentFilter = ServiceFilter.Running;
+        else
+            _currentFilter = ServiceFilter.Stopped;
+
+        RefreshServicesGrid();
+    }
 
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
@@ -98,16 +119,27 @@ public partial class ServiceManagerWindow : Window
 
     private void RefreshServicesGrid(Guid? selectedServiceId = null)
     {
+        if (ServicesGrid == null) return;
         var selectedId = selectedServiceId ?? SelectedService?.Config.Id;
-        var services = _variableUsageStore.SortServices(
+        var allServices = _variableUsageStore.SortServices(
             _mainViewModel.Services,
             service => service.Config.Id,
             service => service.Config.SortOrder,
             service => service.Name);
 
-        ServicesGrid.ItemsSource = services;
+        var filteredServices = _currentFilter switch
+        {
+            ServiceFilter.Running => allServices.Where(s =>
+                s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
+                s.RuntimeState.StepStates.Values.Any(st => st.State == StepRunState.Running)).ToList(),
+            ServiceFilter.Stopped => allServices.Where(s =>
+                s.RuntimeState.State is ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed).ToList(),
+            _ => allServices.ToList()
+        };
+
+        ServicesGrid.ItemsSource = filteredServices;
         if (selectedId.HasValue)
-            ServicesGrid.SelectedItem = services.FirstOrDefault(service => service.Config.Id == selectedId.Value);
+            ServicesGrid.SelectedItem = filteredServices.FirstOrDefault(service => service.Config.Id == selectedId.Value);
     }
 
     public void RefreshAfterConfigChanged(Guid? selectedServiceId = null)
@@ -151,7 +183,7 @@ public partial class ServiceManagerWindow : Window
 
         if (_mainViewModel.Services.Any(s => string.Equals(s.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -175,7 +207,7 @@ public partial class ServiceManagerWindow : Window
         if (_mainViewModel.Services.Any(s => s.Config.Id != vm.Config.Id &&
                                              string.Equals(s.Name, dialog.Result.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("ServiceNameExists", dialog.Result.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -190,7 +222,7 @@ public partial class ServiceManagerWindow : Window
         if (vm == null) return;
 
         RememberServiceUse(vm);
-        var confirm = MessageBox.Show(LocalizationService.Current.F("ConfirmDeleteService", vm.Name), "ServicePilot",
+        var confirm = WpfMessageBoxHelper.Show(LocalizationService.Current.F("ConfirmDeleteService", vm.Name), "ServicePilot",
             MessageBoxButton.YesNo, MessageBoxImage.Warning);
         if (confirm != MessageBoxResult.Yes)
             return;
@@ -408,6 +440,9 @@ public partial class ServiceManagerWindow : Window
         if (sender is FrameworkElement element)
         {
             menu.PlacementTarget = element;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.HorizontalOffset = 0;
+            menu.VerticalOffset = 2;
             element.ContextMenu = menu;
         }
 
@@ -415,7 +450,7 @@ public partial class ServiceManagerWindow : Window
     }
 
     private static StepRuntimeState? GetStepState(ServiceRuntimeState service, Guid stepId) =>
-        service.StepStates.TryGetValue(stepId, out var state) ? state : null;
+            service.StepStates.TryGetValue(stepId, out var state) ? state : null;
 
     private static string FormatStepStateText(StepRunState state) => state switch
     {
@@ -440,7 +475,7 @@ public partial class ServiceManagerWindow : Window
 
         if (_appConfig.ServiceTemplates.Any(t => string.Equals(t.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -457,7 +492,7 @@ public partial class ServiceManagerWindow : Window
 
         if (_appConfig.ServiceTemplates.Any(t => string.Equals(t.Name, template.Name, StringComparison.OrdinalIgnoreCase)))
         {
-            MessageBox.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.F("TemplateNameExists", template.Name), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -470,7 +505,7 @@ public partial class ServiceManagerWindow : Window
     {
         if (service.ScriptSteps.Count == 0)
         {
-            MessageBox.Show(LocalizationService.Current.T("NoTemplateSteps"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Information);
+            WpfMessageBoxHelper.Show(LocalizationService.Current.T("NoTemplateSteps"), "ServicePilot", MessageBoxButton.OK, MessageBoxImage.Information);
             return null;
         }
 
