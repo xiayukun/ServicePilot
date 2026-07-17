@@ -1,4 +1,4 @@
-Chinese release notes: [release-notes-v3.0.0.md](release-notes-v3.0.0.md) | English: this file
+Chinese release notes: [release-notes-v3.0.0.md](https://github.com/xiayukun/ServicePilot/blob/main/docs/release-notes-v3.0.0.md) | English: this file
 
 ServicePilot 3.0.0 brings a **FluentWindow modern UI overhaul**: all management windows migrated to WPF-UI FluentWindow with TitleBar, system accent color selection effects, and unified dark theme.
 
@@ -24,12 +24,3 @@ ServicePilot 3.0.0 brings a **FluentWindow modern UI overhaul**: all management 
 
 - ServicePilot executes user-configured local scripts. AI help content includes the local exe path and should only be sent to trusted personal AI assistants, not posted publicly.
 - For automated testing, set `SERVICEPILOT_CONFIG_DIR` to avoid modifying the real `%APPDATA%\ServicePilot` configuration.
-
-## Pre-release Checklist
-
-- [ ] `dotnet build ServicePilot.sln`
-- [ ] `ServicePilot.exe ai-help` and `ServicePilot.exe doctor --json` pass
-- [ ] All windows display FluentWindow TitleBar correctly
-- [ ] Tray menu hover shows system accent color highlight
-- [ ] GitHub Release uploads `ServicePilot.exe`
-- [ ] Screenshots updated (main image, service editor, log window)

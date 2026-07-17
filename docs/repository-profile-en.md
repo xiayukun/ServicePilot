@@ -10,16 +10,16 @@ ServicePilot
 
 ## GitHub Description
 
-Recommended:
+Recommended (v3.0.0 update - highlight FluentWindow modern UI):
 
 ```text
-ServicePilot | AI-friendly Windows tray service manager / 本地开发服务启动器 with FluentWindow UI: manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
+ServicePilot | AI-friendly Windows tray service manager with FluentWindow modern UI / 本地开发服务启动器：manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
 ```
 
 Shorter:
 
 ```text
-AI-friendly Windows tray service manager / 本地开发服务启动器 for npm, Vite, dotnet, Python, PowerShell.
+AI-friendly tray service manager with FluentWindow modern UI for npm, Vite, dotnet, Python, PowerShell.
 ```
 
 ## Homepage
@@ -84,8 +84,9 @@ process tree cleanup
 Job Object
 ```
 
-## README Above-The-Fold Points
+## README Above-The-Fold Points (v3.0.0 update)
 
+- v3.0.0 brings a FluentWindow UI overhaul: all management windows modernized with TitleBar, system accent color effects, and unified dark theme.
 - After download and launch, users can copy `Copy help for AI` from the tray context menu so agents get the current absolute `ServicePilot.exe` path and first inspection commands.
 - AI agents can start with `ServicePilot.exe ai-help`, `ServicePilot.exe doctor --json`, and JSON status, then safely create personalized services, templates, actions, and variables.
 - The tray number shows active service count and stays visible in the notification area.

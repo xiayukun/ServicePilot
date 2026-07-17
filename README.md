@@ -5,8 +5,9 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。
+ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。v3.0.0 带来所有管理窗口全面升级为 WPF-UI FluentWindow 现代界面，支持 TitleBar 标题栏、系统主题色选中效果和统一深色主题。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。
 
 **交给 AI 的推荐方式：** 下载并启动 ServicePilot 后，在托盘数字图标上右键选择 `复制给 AI 的帮助`。AI 就能先用 `ai-help`、`doctor --json`、`list --json`、`status all --json` 读取真实状态，再帮你新增个性化服务、模板、动作和变量。只要命令行能做，就可以包装成 ServicePilot 动作：切换 API 地址、拉取分支、安装依赖、打开 IDE。ServicePilot 内置了“默认开发动作模板”，也推荐让 AI 直接生成适合当前项目的服务和模板。
 
@@ -34,6 +35,7 @@ ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的
 ## 核心能力
 
 - **托盘优先**：无额外桌面面板，任务栏通知区域数字就是主入口。
+- **FluentWindow 现代界面**：v3.0.0 全面升级，所有管理窗口使用 WPF-UI FluentWindow，带 TitleBar 标题栏、系统主题色选中效果和统一深色主题。
 - **多动作服务**：一个服务可包含 Batch、PowerShell、Python、Node.js 动作。
 - **动作与组合动作**：可以单独运行脚本动作，也可以把多个动作编排成组合动作。
 - **变量切换**：启动、重启、执行动作时可选择不同预设变量。

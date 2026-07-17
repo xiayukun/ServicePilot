@@ -5,8 +5,9 @@
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. It starts, monitors, and stops local dev services from the Windows tray and CLI, bringing frontend apps, backend services, script actions, environment switching, and logs into one tray menu so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
+ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. v3.0.0 brings a complete FluentWindow UI overhaul: all management windows migrated to WPF-UI FluentWindow with TitleBar, system accent color selection effects, and unified dark theme.
 
 **Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. Your AI can then inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables. Anything the command line can do can become a ServicePilot action: switch API URLs, pull a branch, install dependencies, or open an IDE. ServicePilot includes a built-in "Default developer actions" template, and AI agents can generate project-specific services and templates directly.
 
@@ -34,6 +35,7 @@ ServicePilot is a **tray-first, AI-friendly Windows launcher for local developme
 ## Core Features
 
 - **Tray-first UI**: no extra desktop panel; the notification-area number is the main entry point.
+- **FluentWindow modern UI**: v3.0.0 introduces FluentWindow across all management windows — TitleBar, system accent color selection effects, and unified dark theme.
 - **Multi-action services**: Batch, PowerShell, Python, and Node.js actions in one service.
 - **Actions and composites**: run single script actions or ordered composite actions.
 - **Variable switching**: choose action variables when starting, restarting, or running an action.

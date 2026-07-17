@@ -10,16 +10,16 @@ ServicePilot
 
 ## GitHub Description
 
-推荐 GitHub About 描述：
+推荐 GitHub About 描述（v3.0.0 更新 - 突出 FluentWindow 现代界面）：
 
 ```text
-ServicePilot | AI-friendly Windows tray service manager / 本地开发服务启动器 with FluentWindow UI: manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
+ServicePilot | AI-friendly Windows tray service manager with FluentWindow modern UI / 本地开发服务启动器：manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
 ```
 
 如果 GitHub description 需要更短：
 
 ```text
-AI-friendly Windows tray service manager / 本地开发服务启动器 for npm, Vite, dotnet, Python, PowerShell.
+AI-friendly tray service manager with FluentWindow modern UI for npm, Vite, dotnet, Python, PowerShell.
 ```
 
 ## Homepage
@@ -84,8 +84,9 @@ process tree cleanup
 Job Object
 ```
 
-## README 首屏卖点
+## README 首屏卖点 (v3.0.0 更新)
 
+- v3.0.0 全面升级为 WPF-UI FluentWindow 现代界面：所有管理窗口带 TitleBar 标题栏、系统主题色选中效果和统一深色主题。
 - 下载并启动后，用户可以从托盘右键菜单复制 `复制给 AI 的帮助`，让 AI 直接拿到当前 `ServicePilot.exe` 绝对路径和首批检查命令。
 - AI 可以先读 `ServicePilot.exe ai-help`、`ServicePilot.exe doctor --json` 和 JSON 状态，再安全创建个性化服务、模板、动作和变量。
 - 托盘数字就是当前活跃服务数，适合长期挂在任务栏。
