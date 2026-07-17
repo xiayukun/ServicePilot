@@ -47,7 +47,6 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
             Title = LocalizationService.Current.T("EditServiceTitle");
             NameBox.Text = config.Name;
             DirBox.Text = config.WorkingDirectory;
-            AutoStartCheck.IsChecked = config.AutoStart;
             foreach (var step in config.ScriptSteps.OrderBy(s => s.Order))
                 _steps.Add(CloneStepPreserveId(step));
         }
@@ -89,7 +88,6 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         UseVariableCheck.Content = LocalizationService.Current.T("UseVariable");
         OpenLogOnRunCheck.Content = LocalizationService.Current.T("OpenLogOnRun");
         ScriptContentLabel.Text = LocalizationService.Current.T("ScriptContent");
-        AutoStartCheck.Content = LocalizationService.Current.T("AutoStartService");
         SaveTemplateButton.Content = LocalizationService.Current.T("SaveAsTemplate");
         CancelButton.Content = LocalizationService.Current.T("Cancel");
         SaveButton.Content = LocalizationService.Current.T("Save");
@@ -291,7 +289,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
             Id = _editingConfig?.Id ?? Guid.NewGuid(),
             Name = NameBox.Text.Trim(),
             WorkingDirectory = DirBox.Text.Trim(),
-            AutoStart = AutoStartCheck.IsChecked ?? false,
+            AutoStart = _editingConfig?.AutoStart ?? false,
             SortOrder = _editingConfig?.SortOrder ?? 0,
             CreatedAt = _editingConfig?.CreatedAt ?? DateTime.Now,
             PresetVariables = [],

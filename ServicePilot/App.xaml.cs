@@ -235,6 +235,25 @@ public partial class App : Application
     private static readonly Lazy<ImageSource?> FailedStatusDotWpf = new(() => ConvertDrawingImageToImageSource(FailedStatusDot));
     private static readonly Lazy<ImageSource?> WarningStatusDotWpf = new(() => ConvertDrawingImageToImageSource(WarningStatusDot));
 
+    private static System.Windows.Controls.Primitives.Popup? FindPopupChild(DependencyObject parent)
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is System.Windows.Controls.Primitives.Popup popup)
+                return popup;
+            var result = FindPopupChild(child);
+            if (result != null)
+                return result;
+        }
+        return null;
+    }
+
+    private static void ApplySubmenuOffset(MenuItem item)
+    {
+        // 不干预子菜单位置，完全由 WPF 默认行为控制
+    }
+
     private static void SetMenuItemIcon(MenuItem item, Drawing.Image? dot)
     {
         var source = dot == RunningStatusDot ? RunningStatusDotWpf.Value :
@@ -272,6 +291,7 @@ public partial class App : Application
                 Header = service.Name,
                 ToolTip = FormatStatusText(state)
             };
+            ApplySubmenuOffset(serviceMenu);
 
             SetMenuItemIcon(serviceMenu, GetServiceStatusDot(service));
 
@@ -474,6 +494,7 @@ public partial class App : Application
             _processManager?.RunComposite(service.Config.Id, composite.Id, variable);
             return Task.CompletedTask;
         });
+        ApplySubmenuOffset(menu);
         return menu;
     }
 
@@ -513,6 +534,7 @@ public partial class App : Application
             _processManager?.RunStep(service.Config.Id, action.Id, variable);
             return Task.CompletedTask;
         });
+        ApplySubmenuOffset(menu);
         return menu;
     }
 
@@ -549,6 +571,7 @@ public partial class App : Application
             Header = LocalizationService.Current.F("LanguageCurrent", LocalizationService.Current.DisplayLanguageName(LocalizationService.Current.LanguageSetting)),
             IsEnabled = false
         });
+        ApplySubmenuOffset(languageMenu);
         menu.Items.Add(languageMenu);
     }
 

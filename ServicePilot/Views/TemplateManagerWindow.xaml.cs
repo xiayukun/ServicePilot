@@ -23,6 +23,7 @@ public partial class TemplateManagerWindow : Wpf.Ui.Controls.FluentWindow
         LocalizationService.Current.LanguageChanged += OnLanguageChanged;
         Closed += (_, _) => LocalizationService.Current.LanguageChanged -= OnLanguageChanged;
         Refresh();
+        UpdateButtonStates();
     }
 
     private ServiceTemplate? SelectedTemplate => TemplatesGrid.SelectedItem as ServiceTemplate;
@@ -199,6 +200,7 @@ public partial class TemplateManagerWindow : Wpf.Ui.Controls.FluentWindow
     private void TemplatesGrid_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
         RefreshPreview();
+        UpdateButtonStates();
     }
 
     private void RefreshPreview()
@@ -248,5 +250,13 @@ public partial class TemplateManagerWindow : Wpf.Ui.Controls.FluentWindow
         var invalid = Path.GetInvalidFileNameChars().ToHashSet();
         var name = new string(value.Select(ch => invalid.Contains(ch) ? '_' : ch).ToArray()).Trim();
         return string.IsNullOrWhiteSpace(name) ? "template" : name;
+    }
+
+    private void UpdateButtonStates()
+    {
+        var hasSelection = SelectedTemplate != null;
+        EditButton.IsEnabled = hasSelection;
+        DeleteButton.IsEnabled = hasSelection;
+        ExportButton.IsEnabled = hasSelection;
     }
 }

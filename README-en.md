@@ -6,15 +6,9 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-Thanks to the linux.do community for the strong support.
+ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. It starts, monitors, and stops local dev services from the Windows tray and CLI, bringing frontend apps, backend services, script actions, environment switching, and logs into one tray menu so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
 
-ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services**. It brings frontend apps, backend services, script actions, environment switching, and logs from multiple folders into one tray menu, with a CLI that AI agents and scripts can call safely.
-
-ServicePilot starts, monitors, and stops local development services from the Windows tray and CLI, so humans and AI agents can reliably control npm, dotnet, Python, and custom scripts.
-
-**Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. The window includes the current absolute `ServicePilot.exe` path, recommended first commands, and safety guidance; paste that content into your AI assistant so it can inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables.
-
-Anything the command line can do can usually become a ServicePilot action: switch API URLs, pull a branch, install dependencies, open an IDE, or start a dev server. ServicePilot includes a general built-in template, "Default developer actions", with Git branch/tag actions, npm install/build actions, and common tool openers. A practical workflow is to let an AI agent read `ai-help`, `doctor --json`, and `status --json`, then generate project-specific services and templates for you.
+**Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. Your AI can then inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables. Anything the command line can do can become a ServicePilot action: switch API URLs, pull a branch, install dependencies, or open an IDE. ServicePilot includes a built-in "Default developer actions" template, and AI agents can generate project-specific services and templates directly.
 
 **Download:** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [Latest release](https://github.com/xiayukun/ServicePilot/releases/latest) | [Full user guide](docs/user-guide-en.md)
 

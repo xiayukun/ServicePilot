@@ -4,6 +4,15 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 3.0.0 - 2026-07-17
+
+- **FluentWindow UI overhaul**: All management windows (AI Help, Log, Service Manager, Template Manager, Service Editor, Template Editor, Template Select, Variable Input) migrated to WPF-UI `FluentWindow` with `ExtendsContentIntoTitleBar` for modern title bars with min/max/close.
+- **Unified dark theme**: `MenuItem` system-accent-color hover highlight + 3px left selection bar; `ListBoxItem` selection shows accent left border; all `TextBlock`/`Label` now use consistent dark foreground color.
+- **Log window toolbar refactor**: Button styles upgraded with `Appearance="Primary"` / `Appearance="Danger"`, WPF-UI consistent spacing and rounded corners.
+- **AI Help window migration**: Added `TitleBar`, dark background adaptation, removed legacy title bar.
+- **ServiceCommandProcessor enhancement**: New CLI template operations and expanded capabilities (+141 lines).
+- **ServiceManager UI alignment**: List item selection styles and button layouts aligned with FluentWindow design system.
+
 ## 2.4.2 - 2026-07-15
 
 - **P0 fix**: Persist in-memory config to disk before `config reload` to prevent CLI modifications from being overwritten by stale disk config.

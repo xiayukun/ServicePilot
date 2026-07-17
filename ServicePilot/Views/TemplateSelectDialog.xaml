@@ -3,29 +3,41 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="应用模板" Height="360" Width="540"
-        WindowStartupLocation="CenterOwner">
-    <Grid Margin="14">
+        WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
+        ExtendsContentIntoTitleBar="True">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <ListBox x:Name="TemplatesList" Grid.Row="0"
-                 MouseDoubleClick="TemplatesList_MouseDoubleClick">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Margin="4">
-                        <TextBlock Text="{Binding Template.Name}" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding Template.Description}" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding Summary}"/>
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
-        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <ui:Button x:Name="CancelButton" Content="取消" Width="76" Height="30" Margin="0,0,8,0"
-                    Click="Cancel_Click"/>
-            <ui:Button x:Name="ApplyButton" Content="应用" Width="76" Height="30"
-                    Click="Apply_Click"/>
-        </StackPanel>
+
+        <ui:TitleBar Title="应用模板"
+                     ShowMaximize="False"
+                     ShowMinimize="False" />
+
+        <Grid Grid.Row="1" Margin="14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ListBox x:Name="TemplatesList" Grid.Row="0"
+                     MouseDoubleClick="TemplatesList_MouseDoubleClick">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="4">
+                            <TextBlock Text="{Binding Template.Name}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Template.Description}" TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding Summary}"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <ui:Button x:Name="CancelButton" Content="取消" Width="76" Height="30" Margin="0,0,8,0"
+                        Click="Cancel_Click"/>
+                <ui:Button x:Name="ApplyButton" Content="应用" Width="76" Height="30"
+                        Click="Apply_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

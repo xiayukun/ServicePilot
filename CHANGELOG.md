@@ -4,6 +4,15 @@
 
 本文只记录公开发布版本的用户可见变化。
 
+## 3.0.0 - 2026-07-17
+
+- **FluentWindow 界面升级**: 所有管理窗口（AI 帮助、日志、服务管理、模板管理、服务编辑、模板编辑、模板选择、变量输入）全面迁移为 WPF-UI `FluentWindow`，启用 `ExtendsContentIntoTitleBar` 现代标题栏，支持最小化/最大化/关闭按钮。
+- **深色主题统一**: 新增 `MenuItem` 系统主题色 hover 高亮 + 左侧 3px 选中条；`ListBoxItem` 选中时显示系统主题色左侧边框条；所有 `TextBlock` / `Label` 统一深色前景色。
+- **日志窗口工具栏重构**: 按钮样式升级为 `Appearance="Primary"` / `Appearance="Danger"`，布局使用 WPF-UI 一致的间距和圆角。
+- **AI 帮助窗口迁移**: 加入 `TitleBar`、深色背景适配，移除旧版标题栏。
+- **ServiceCommandProcessor 增强**: 新增 CLI 模板操作和扩展能力（141 行增量）。
+- **ServiceManager UI 对齐**: 列表项选中样式、按钮布局全面对齐 FluentWindow 设计系统。
+
 ## 2.4.2 - 2026-07-15
 
 - **P0 修复**: `config reload` 前先落盘内存配置，修复 CLI 修改在 reload 时被磁盘旧配置覆盖的问题。

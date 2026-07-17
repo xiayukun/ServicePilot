@@ -6,15 +6,9 @@
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-感谢 linux.do 佬友们大力支持。
+ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。
 
-ServicePilot 是一个 **托盘优先、AI 友好、面向本地开发项目的 Windows 服务启动器**。它把多个项目里的前端、后端、脚本动作、环境变量切换和日志查看收进一个托盘菜单，同时提供可被 AI/脚本稳定调用的 CLI。
-
-ServicePilot 从 Windows 托盘和 CLI 启动、监控、停止本地开发服务，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。
-
-**交给 AI 的推荐方式：** 下载并启动 ServicePilot 后，在托盘数字图标上右键选择 `复制给 AI 的帮助`。弹窗会包含当前 `ServicePilot.exe` 绝对路径、建议先运行的命令和安全提示；把复制内容发给 AI 后，它就能先用 `ai-help`、`doctor --json`、`list --json`、`status all --json` 读取真实状态，再帮你新增个性化服务、模板、动作和变量。
-
-只要命令行能做到的事，通常都可以包装成 ServicePilot 动作：切换 API 地址、拉取分支、安装依赖、打开 IDE、启动调试服务。ServicePilot 内置了一个通用模板“默认开发动作模板”，包含 Git 分支/Tag 操作、npm 依赖/构建和常用工具打开入口；也推荐让 AI 先读取 `ai-help`、`doctor --json`、`status --json` 后，直接生成适合当前项目的服务和模板。
+**交给 AI 的推荐方式：** 下载并启动 ServicePilot 后，在托盘数字图标上右键选择 `复制给 AI 的帮助`。AI 就能先用 `ai-help`、`doctor --json`、`list --json`、`status all --json` 读取真实状态，再帮你新增个性化服务、模板、动作和变量。只要命令行能做，就可以包装成 ServicePilot 动作：切换 API 地址、拉取分支、安装依赖、打开 IDE。ServicePilot 内置了“默认开发动作模板”，也推荐让 AI 直接生成适合当前项目的服务和模板。
 
 **下载：** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [最新发布](https://github.com/xiayukun/ServicePilot/releases/latest) | [完整用户指南](docs/user-guide.md)
 

@@ -13,7 +13,7 @@ ServicePilot
 Recommended:
 
 ```text
-ServicePilot | AI-friendly Windows tray service manager / 本地开发服务启动器：manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
+ServicePilot | AI-friendly Windows tray service manager / 本地开发服务启动器 with FluentWindow UI: manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
 ```
 
 Shorter:
@@ -45,6 +45,9 @@ ai-tools
 automation
 dotnet
 wpf
+wpf-ui
+fluentwindow
+modern-ui
 vite
 npm
 powershell

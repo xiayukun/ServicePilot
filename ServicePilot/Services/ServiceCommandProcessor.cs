@@ -219,6 +219,7 @@ public class ServiceCommandProcessor
           ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe step remove SERVICE STEP
           ServicePilot.exe step move SERVICE STEP --position 0|first|end|N|after:STEP|before:STEP
+          ServicePilot.exe step add-composite SERVICE --name NAME [--member STEP ...] [--position 0|first|end|N|after:STEP|before:STEP]
           ServicePilot.exe step set-members SERVICE COMPOSITE --member STEP [--member STEP ...]
           ServicePilot.exe step add-member SERVICE COMPOSITE --member STEP
           ServicePilot.exe step remove-member SERVICE COMPOSITE --member STEP
@@ -235,6 +236,7 @@ public class ServiceCommandProcessor
           ServicePilot.exe template step edit TEMPLATE STEP [--name NAME] [--type ...] [--script \"...\"] [--use-variable true|false] [--open-log-on-run true|false]
           ServicePilot.exe template step remove TEMPLATE STEP
           ServicePilot.exe template step move TEMPLATE STEP --position 0|first|end|N|after:STEP|before:STEP
+          ServicePilot.exe template step add-composite TEMPLATE --name NAME [--member STEP ...] [--position 0|first|end|N|after:STEP|before:STEP]
           ServicePilot.exe template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]
           ServicePilot.exe template step add-member TEMPLATE COMPOSITE --member STEP
           ServicePilot.exe template step remove-member TEMPLATE COMPOSITE --member STEP
@@ -778,6 +780,7 @@ public class ServiceCommandProcessor
             "set-members" => await StepSetMembersAsync(args.Skip(1).ToArray()),
             "add-member" => await StepAddMemberAsync(args.Skip(1).ToArray()),
             "remove-member" => await StepRemoveMemberAsync(args.Skip(1).ToArray()),
+            "add-composite" => await StepAddCompositeAsync(args.Skip(1).ToArray()),
             _ => CommandResponse.Error($"未知 step 命令: {args[0]}", 2)
         };
     }
@@ -1002,6 +1005,75 @@ public class ServiceCommandProcessor
                 IntoComposite = !string.IsNullOrWhiteSpace(intoComposite) ? intoComposite : null
             });
         return CommandResponse.Ok($"已新增动作: {newStep.Name} ({newStep.Id})");
+    }
+
+    private async Task<CommandResponse> StepAddCompositeAsync(string[] args)
+    {
+        if (args.Length == 0)
+            return CommandResponse.Error("用法: step add-composite SERVICE --name NAME [--member STEP ...] [--position 0|first|end|N|after:STEP|before:STEP]", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var name = ReadOption(args, "--name");
+        if (string.IsNullOrWhiteSpace(name))
+            return CommandResponse.Error("缺少 --name。", 2);
+
+        if (service.ScriptSteps.Any(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return CommandResponse.Error($"服务 \"{service.Name}\" 已存在同名动作: {name.Trim()}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+
+        var newStep = new ScriptStep
+        {
+            Name = name.Trim(),
+            Kind = StepKind.Composite,
+            ScriptType = ScriptType.Batch,
+            UseVariable = false,
+            Content = "",
+            MemberStepIds = new List<Guid>()
+        };
+
+        var memberNames = ReadOptions(args, "--member");
+        var resolvedNames = new List<string>();
+        foreach (var memberName in memberNames)
+        {
+            var member = FindStep(updated.ScriptSteps, memberName);
+            if (member == null)
+                return HasAmbiguousNameMatch(updated.ScriptSteps, memberName)
+                    ? CommandResponse.Error($"成员动作名称 \"{memberName}\" 匹配到多个，请使用 GUID 定位", 2)
+                    : CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+            if (member.Kind != StepKind.Action)
+                return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作（类型为 {member.Kind}），组合动作只能包含可执行动作。", 2);
+            if (member.Id == newStep.Id)
+                return CommandResponse.Error("组合动作不能包含自身。", 2);
+            newStep.MemberStepIds.Add(member.Id);
+            resolvedNames.Add(member.Name);
+        }
+
+        var position = ReadOption(args, "--position") ?? "end";
+        InsertStepAtPosition(updated.ScriptSteps, newStep, position);
+        ReorderSteps(updated.ScriptSteps);
+
+        await UpdateConfigAsync(updated);
+
+        var memberSummary = resolvedNames.Count > 0 ? $" 成员=[{string.Join(", ", resolvedNames)}]" : "";
+
+        if (HasFlag(args, "--json"))
+            return Json(new
+            {
+                ServiceId = service.Id,
+                ServiceName = service.Name,
+                StepId = newStep.Id,
+                StepName = newStep.Name,
+                newStep.Kind,
+                newStep.Order,
+                newStep.MemberStepIds,
+                ResolvedMembers = resolvedNames
+            });
+
+        return CommandResponse.Ok($"已新增组合动作: {newStep.Name} ({newStep.Id}){memberSummary} 位置={position}");
     }
 
     private async Task<CommandResponse> StepEditAsync(string[] args)
@@ -1429,6 +1501,7 @@ public class ServiceCommandProcessor
             "set-members" => await TemplateStepSetMembersAsync(rest),
             "add-member" => await TemplateStepAddMemberAsync(rest),
             "remove-member" => await TemplateStepRemoveMemberAsync(rest),
+            "add-composite" => await TemplateStepAddCompositeAsync(rest),
             _ => CommandResponse.Error($"未知 template step 命令: {args[0]}", 2)
         };
     }
@@ -1522,6 +1595,74 @@ public class ServiceCommandProcessor
                 IntoComposite = !string.IsNullOrWhiteSpace(intoComposite) ? intoComposite : null
             });
         return CommandResponse.Ok($"已新增模板动作: {newStep.Name} ({newStep.Id})");
+    }
+
+    private async Task<CommandResponse> TemplateStepAddCompositeAsync(string[] args)
+    {
+        if (args.Length == 0)
+            return CommandResponse.Error("用法: template step add-composite TEMPLATE --name NAME [--member STEP ...] [--position 0|first|end|N|after:STEP|before:STEP]", 2);
+
+        var template = FindTemplate(args[0]);
+        if (template == null)
+            return CommandResponse.Error($"找不到模板: {args[0]}", 2);
+
+        var name = ReadOption(args, "--name");
+        if (string.IsNullOrWhiteSpace(name))
+            return CommandResponse.Error("缺少 --name。", 2);
+
+        if (template.ScriptSteps.Any(s => string.Equals(s.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return CommandResponse.Error($"模板 \"{template.Name}\" 已存在同名动作: {name.Trim()}", 2);
+
+        var newStep = new ScriptStep
+        {
+            Name = name.Trim(),
+            Kind = StepKind.Composite,
+            ScriptType = ScriptType.Batch,
+            UseVariable = false,
+            Content = "",
+            MemberStepIds = new List<Guid>()
+        };
+
+        var memberNames = ReadOptions(args, "--member");
+        var resolvedNames = new List<string>();
+        foreach (var memberName in memberNames)
+        {
+            var member = FindStep(template.ScriptSteps, memberName);
+            if (member == null)
+                return HasAmbiguousNameMatch(template.ScriptSteps, memberName)
+                    ? CommandResponse.Error($"成员动作名称 \"{memberName}\" 匹配到多个，请使用 GUID 定位", 2)
+                    : CommandResponse.Error($"找不到成员动作: {memberName}", 2);
+            if (member.Kind != StepKind.Action)
+                return CommandResponse.Error($"成员动作 \"{member.Name}\" 不是可执行动作（类型为 {member.Kind}），组合动作只能包含可执行动作。", 2);
+            if (member.Id == newStep.Id)
+                return CommandResponse.Error("组合动作不能包含自身。", 2);
+            newStep.MemberStepIds.Add(member.Id);
+            resolvedNames.Add(member.Name);
+        }
+
+        var position = ReadOption(args, "--position") ?? "end";
+        InsertStepAtPosition(template.ScriptSteps, newStep, position);
+        ReorderSteps(template.ScriptSteps);
+
+        template.UpdatedAt = DateTime.Now;
+        await _configService.SaveAsync(_appConfig);
+
+        var memberSummary = resolvedNames.Count > 0 ? $" 成员=[{string.Join(", ", resolvedNames)}]" : "";
+
+        if (HasFlag(args, "--json"))
+            return Json(new
+            {
+                TemplateId = template.Id,
+                TemplateName = template.Name,
+                StepId = newStep.Id,
+                StepName = newStep.Name,
+                newStep.Kind,
+                newStep.Order,
+                newStep.MemberStepIds,
+                ResolvedMembers = resolvedNames
+            });
+
+        return CommandResponse.Ok($"已新增模板组合动作: {newStep.Name} ({newStep.Id}){memberSummary} 位置={position}");
     }
 
     private async Task<CommandResponse> TemplateStepEditAsync(string[] args)

@@ -96,7 +96,6 @@ public partial class ServiceManagerWindow : Wpf.Ui.Controls.FluentWindow
         NameColumn.Header = LocalizationService.Current.T("Name");
         WorkingDirectoryColumn.Header = LocalizationService.Current.T("WorkingDirectory");
         StepsColumn.Header = LocalizationService.Current.T("Actions");
-        AutoStartColumn.Header = LocalizationService.Current.T("AutoStart");
     }
 
     private void OnServiceStateChanged(Guid serviceId, ProcessState state)
@@ -165,6 +164,10 @@ public partial class ServiceManagerWindow : Wpf.Ui.Controls.FluentWindow
         {
             StopButton.IsEnabled = false;
             RunActionButton.IsEnabled = false;
+            EditButton.IsEnabled = false;
+            DeleteButton.IsEnabled = false;
+            LogsButton.IsEnabled = false;
+            SaveTemplateButton.IsEnabled = false;
             return;
         }
 
@@ -173,6 +176,10 @@ public partial class ServiceManagerWindow : Wpf.Ui.Controls.FluentWindow
         StopButton.IsEnabled = state is ProcessState.Running or ProcessState.Starting or ProcessState.Stopping || hasRunningStep;
         RunActionButton.IsEnabled = vm.Config.ScriptSteps.Any(step =>
             step.Kind == StepKind.Composite || !string.IsNullOrWhiteSpace(step.Content));
+        EditButton.IsEnabled = true;
+        DeleteButton.IsEnabled = true;
+        LogsButton.IsEnabled = true;
+        SaveTemplateButton.IsEnabled = true;
     }
 
     private async void Add_Click(object sender, RoutedEventArgs e)

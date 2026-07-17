@@ -4,168 +4,178 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:converters="clr-namespace:ServicePilot.Converters"
-        Title="Service configuration" Height="700" Width="1080"
-        WindowStartupLocation="CenterScreen">
+        Title="Service configuration" Height="700" Width="1160"
+        WindowStartupLocation="CenterScreen" Background="#FF1E1E2E"
+        ExtendsContentIntoTitleBar="True">
     <Window.Resources>
         <converters:StepKindDisplayConverter x:Key="StepKindDisplay"/>
     </Window.Resources>
-    <Grid Margin="18">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                <TextBlock x:Name="ServiceNameLabel" Text="Service name" FontSize="12" Margin="0,0,0,4"/>
-                <ui:TextBox x:Name="NameBox" Height="30"/>
-            </StackPanel>
-            <StackPanel Grid.Column="1">
-                <TextBlock x:Name="WorkingDirectoryLabel" Text="Working directory" FontSize="12" Margin="0,0,0,4"/>
-                <DockPanel>
-                    <ui:Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Browse" Width="72" Height="30"
-                            Margin="6,0,0,0" Click="Browse_Click"/>
-                    <ui:TextBox x:Name="DirBox" Height="30"/>
-                </DockPanel>
-            </StackPanel>
-        </Grid>
+        <ui:TitleBar Title="Service configuration"
+                     ShowMaximize="True"
+                     ShowMinimize="True" />
 
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
+        <Grid Grid.Row="1" Margin="18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-            <Grid Grid.Column="0" Margin="0,0,12,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="220"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                    <TextBlock x:Name="ScriptStepsLabel" Text="Actions" FontSize="12" VerticalAlignment="Center"/>
-                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                        <ui:Button x:Name="ApplyTemplateButton" Content="Apply template" Width="98" Height="30" Margin="2,0" Click="ApplyTemplate_Click"/>
-                        <ui:Button Content="+" Width="32" Height="30" Margin="2,0" Click="AddStep_Click"/>
-                        <ui:Button Content="Up" Width="46" Height="30" Margin="2,0" Click="MoveUp_Click"/>
-                        <ui:Button Content="Dn" Width="46" Height="30" Margin="2,0" Click="MoveDown_Click"/>
-                        <ui:Button x:Name="DeleteStepButton" Content="Del" Width="46" Height="30" Margin="2,0" Click="DeleteStep_Click"/>
-                    </StackPanel>
-                </DockPanel>
-
-                <ListBox x:Name="StepsList" Grid.Row="1"
-                         SelectionChanged="StepsList_SelectionChanged">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding DisplayLabel}"/>
-                                <TextBlock>
-                                    <TextBlock.Text>
-                                        <MultiBinding StringFormat=" ({0})">
-                                            <Binding Path="Kind" Converter="{StaticResource StepKindDisplay}"/>
-                                        </MultiBinding>
-                                    </TextBlock.Text>
-                                </TextBlock>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-
-                <StackPanel Grid.Row="2" Margin="0,12,0,6">
-                    <TextBlock x:Name="VariablesTitleText" Text="Action variables" FontSize="12"/>
-                    <TextBlock x:Name="VariablesHelpText" Text="One variable per line" FontSize="11" Margin="0,2,0,0"/>
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                    <TextBlock x:Name="ServiceNameLabel" Text="Service name" FontSize="12" Margin="0,0,0,4"/>
+                    <ui:TextBox x:Name="NameBox" Height="34" VerticalContentAlignment="Center"/>
                 </StackPanel>
-
-                <ui:TextBox x:Name="VariablesBox" Grid.Row="3"
-                         AcceptsReturn="True" TextWrapping="NoWrap"/>
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="WorkingDirectoryLabel" Text="Working directory" FontSize="12" Margin="0,0,0,4"/>
+                    <DockPanel>
+                        <ui:Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="Browse" Width="72" Height="30"
+                                Margin="6,0,0,0" Click="Browse_Click"/>
+                        <ui:TextBox x:Name="DirBox" Height="34" VerticalContentAlignment="Center"/>
+                    </DockPanel>
+                </StackPanel>
             </Grid>
 
-            <Border Grid.Column="1" CornerRadius="6" Padding="12">
-                <Grid x:Name="StepEditor" Visibility="Collapsed">
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="320"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0" Margin="0,0,12,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="220"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <WrapPanel Grid.Row="0" Margin="0,0,0,8">
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock x:Name="StepNameLabel" Text="Name" FontSize="11"/>
-                            <ui:TextBox x:Name="StepNameBox" Width="180" Height="28" Margin="0,2,0,0"/>
-                        </StackPanel>
-                        <StackPanel Margin="0,0,10,0">
-                            <TextBlock x:Name="StepKindLabel" Text="Kind" FontSize="11"/>
-                            <ComboBox x:Name="StepKindCombo" Width="110" Height="28" Margin="0,2,0,0"
-                                      SelectionChanged="StepKindCombo_SelectionChanged">
-                                <ComboBoxItem Content="Action"/>
-                                <ComboBoxItem Content="Composite"/>
-                            </ComboBox>
-                        </StackPanel>
-                        <StackPanel x:Name="ScriptTypePanel" Margin="0,0,10,0">
-                            <TextBlock x:Name="ScriptTypeLabel" Text="Script type" FontSize="11"/>
-                            <ComboBox x:Name="ScriptTypeCombo" Width="110" Height="28" Margin="0,2,0,0">
-                                <ComboBoxItem Content="Batch"/>
-                                <ComboBoxItem Content="PowerShell"/>
-                                <ComboBoxItem Content="Python"/>
-                                <ComboBoxItem Content="Node.js"/>
-                            </ComboBox>
-                        </StackPanel>
-                        <CheckBox x:Name="UseVariableCheck"
-                                  Content="Use variable"
-                                  IsChecked="True"
-                                  VerticalAlignment="Bottom"
-                                  Margin="12,0,0,5"/>
-                        <CheckBox x:Name="OpenLogOnRunCheck"
-                                  Content="Open log"
-                                  VerticalAlignment="Bottom"
-                                  Margin="12,0,0,5"/>
-                    </WrapPanel>
 
-                    <Grid x:Name="CompositeMembersPanel" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,8">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                        <TextBlock x:Name="ScriptStepsLabel" Text="Actions" FontSize="12" VerticalAlignment="Center"/>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <ui:Button x:Name="ApplyTemplateButton" Content="Apply template" Width="98" Height="30" Margin="2,0" Click="ApplyTemplate_Click"/>
+                            <ui:Button Content="+" Width="32" Height="30" Margin="2,0" Click="AddStep_Click"/>
+                            <ui:Button Content="Up" Width="46" Height="30" Margin="2,0" Click="MoveUp_Click"/>
+                            <ui:Button Content="Dn" Width="46" Height="30" Margin="2,0" Click="MoveDown_Click"/>
+                            <ui:Button x:Name="DeleteStepButton" Content="Del" Width="46" Height="30" Margin="2,0" Click="DeleteStep_Click"/>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <ListBox x:Name="StepsList" Grid.Row="1"
+                             SelectionChanged="StepsList_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DisplayLabel}"/>
+                                    <TextBlock>
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat=" ({0})">
+                                                <Binding Path="Kind" Converter="{StaticResource StepKindDisplay}"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <StackPanel Grid.Row="2" Margin="0,12,0,6">
+                        <TextBlock x:Name="VariablesTitleText" Text="Action variables" FontSize="12"/>
+                        <TextBlock x:Name="VariablesHelpText" Text="One variable per line" FontSize="11" Margin="0,2,0,0"/>
+                    </StackPanel>
+
+                    <ui:TextBox x:Name="VariablesBox" Grid.Row="3" VerticalContentAlignment="Top"
+                             AcceptsReturn="True" TextWrapping="NoWrap"/>
+                </Grid>
+
+                <Border Grid.Column="1" CornerRadius="6" Padding="12">
+                    <Grid x:Name="StepEditor" Visibility="Collapsed">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="120"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                            <TextBlock x:Name="MembersLabel" Text="Members" FontSize="11" VerticalAlignment="Center"/>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <ComboBox x:Name="MemberCandidateCombo" Width="240" Height="26" DisplayMemberPath="Name" Margin="0,0,4,0"/>
-                                <ui:Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
-                                <ui:Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
-                                <ui:Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
-                                <ui:Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
+                        <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock x:Name="StepNameLabel" Text="Name" FontSize="11"/>
+                                <ui:TextBox x:Name="StepNameBox" Width="180" Height="34" VerticalContentAlignment="Center" Margin="0,2,0,0"/>
                             </StackPanel>
-                        </DockPanel>
-                        <ListBox x:Name="MembersList" Grid.Row="1"
-                                 DisplayMemberPath="Name"/>
+                            <StackPanel Margin="0,0,10,0">
+                                <TextBlock x:Name="StepKindLabel" Text="Kind" FontSize="11"/>
+                                <ComboBox x:Name="StepKindCombo" Width="110" Height="34" Margin="0,2,0,0"
+                                          SelectionChanged="StepKindCombo_SelectionChanged">
+                                    <ComboBoxItem Content="Action"/>
+                                    <ComboBoxItem Content="Composite"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel x:Name="ScriptTypePanel" Margin="0,0,10,0">
+                                <TextBlock x:Name="ScriptTypeLabel" Text="Script type" FontSize="11"/>
+                                <ComboBox x:Name="ScriptTypeCombo" Width="110" Height="34" Margin="0,2,0,0">
+                                    <ComboBoxItem Content="Batch"/>
+                                    <ComboBoxItem Content="PowerShell"/>
+                                    <ComboBoxItem Content="Python"/>
+                                    <ComboBoxItem Content="Node.js"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <CheckBox x:Name="UseVariableCheck"
+                                      Content="Use variable"
+                                      IsChecked="True"
+                                      VerticalAlignment="Bottom"
+                                      Margin="12,0,0,5"/>
+                            <CheckBox x:Name="OpenLogOnRunCheck"
+                                      Content="Open log"
+                                      VerticalAlignment="Bottom"
+                                      Margin="12,0,0,5"/>
+                        </WrapPanel>
+
+                        <Grid x:Name="CompositeMembersPanel" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,8">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="120"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                                <TextBlock x:Name="MembersLabel" Text="Members" FontSize="11" VerticalAlignment="Center"/>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <ComboBox x:Name="MemberCandidateCombo" Width="240" Height="34" DisplayMemberPath="Name" Margin="0,0,4,0"/>
+                                    <ui:Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
+                                    <ui:Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
+                                    <ui:Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
+                                    <ui:Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <ListBox x:Name="MembersList" Grid.Row="1"
+                                     DisplayMemberPath="Name"/>
+                        </Grid>
+
+                        <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
+                        <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
+                                               FontFamily="Consolas" FontSize="13"
+                                               ShowLineNumbers="True"
+                                               Background="#FF1E1E2E"
+                                               Foreground="#FFD4D4D4"/>
                     </Grid>
+                </Border>
+            </Grid>
 
-                    <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
-                    <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
-                                           FontFamily="Consolas" FontSize="13"
-                                           ShowLineNumbers="True"/>
-                </Grid>
-            </Border>
+            <DockPanel Grid.Row="2" Margin="0,12,0,0">
+                    <ui:Button x:Name="SaveTemplateButton" Content="Save as template" Width="108" Height="34" Margin="0,0,8,0"
+                            Click="SaveTemplate_Click"/>
+                    <ui:Button x:Name="CancelButton" Content="Cancel" Width="80" Height="34" Margin="0,0,8,0"
+                            Click="Cancel_Click"/>
+                    <ui:Button x:Name="SaveButton" Content="Save" Width="80" Height="34"
+                            Click="Save_Click"/>
+            </DockPanel>
         </Grid>
-
-        <DockPanel Grid.Row="2" Margin="0,12,0,0">
-            <CheckBox x:Name="AutoStartCheck" Content="Autostart this service when ServicePilot starts"
-                      VerticalAlignment="Center"/>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <ui:Button x:Name="SaveTemplateButton" Content="Save as template" Width="108" Height="34" Margin="0,0,8,0"
-                        Click="SaveTemplate_Click"/>
-                <ui:Button x:Name="CancelButton" Content="Cancel" Width="80" Height="34" Margin="0,0,8,0"
-                        Click="Cancel_Click"/>
-                <ui:Button x:Name="SaveButton" Content="Save" Width="80" Height="34"
-                        Click="Save_Click"/>
-            </StackPanel>
-        </DockPanel>
     </Grid>
 </ui:FluentWindow>

@@ -4,30 +4,43 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Copy ServicePilot help for AI" Height="620" Width="860"
         MinHeight="520" MinWidth="720"
-        WindowStartupLocation="CenterScreen">
-    <Grid Margin="14">
+        Background="{ui:ThemeResource ApplicationBackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock x:Name="IntroText" Grid.Row="0"
-                   TextWrapping="Wrap"
-                   FontSize="14"
-                   Margin="0,0,0,10"/>
+        <ui:TitleBar Title="Copy ServicePilot help for AI"
+                     ShowMaximize="True"
+                     ShowMinimize="True" />
 
-        <ui:TextBox x:Name="PromptBox" Grid.Row="1"
-                         IsReadOnly="True" AcceptsReturn="True" AcceptsTab="True"
-                         TextWrapping="Wrap"
-                         FontFamily="Consolas" FontSize="13"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Auto"/>
+        <Grid Grid.Row="1" Margin="14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-            <ui:Button x:Name="CopyAllButton" Width="96" Height="30" Margin="0,0,8,0" Click="CopyAll_Click"/>
-            <ui:Button x:Name="CopyCommandsButton" Width="104" Height="30" Margin="0,0,8,0" Click="CopyCommands_Click"/>
-            <ui:Button x:Name="CloseButton" Width="82" Height="30" Click="Close_Click"/>
-        </StackPanel>
+            <TextBlock x:Name="IntroText" Grid.Row="0"
+                       TextWrapping="Wrap"
+                       FontSize="14"
+                       Margin="0,0,0,10"/>
+
+            <ui:TextBox x:Name="PromptBox" Grid.Row="1"
+                             IsReadOnly="True" AcceptsReturn="True" AcceptsTab="True"
+                             TextWrapping="Wrap"
+                             FontFamily="Consolas" FontSize="13"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                <ui:Button x:Name="CopyAllButton" Width="96" Height="30" Margin="0,0,8,0" Click="CopyAll_Click"/>
+                <ui:Button x:Name="CopyCommandsButton" Width="104" Height="30" Margin="0,0,8,0" Click="CopyCommands_Click"/>
+                <ui:Button x:Name="CloseButton" Width="82" Height="30" Click="Close_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

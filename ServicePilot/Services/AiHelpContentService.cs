@@ -76,7 +76,7 @@ public static class AiHelpContentService
         return """
                ServicePilot AI 操作指南
 
-               ServicePilot 2.4.0 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
+               ServicePilot 3.0.0 是一个 Windows 托盘优先的本地服务和动作运行器。用户也可以在托盘右键菜单选择"复制给 AI 的帮助"，复制带有当前 ServicePilot.exe 绝对路径的提示词。
                2.x 模型:
                  - Action: 一个可执行脚本命令。
                  - Composite: 按顺序编排多个 Action；Composite 不能嵌套 Composite。
@@ -131,6 +131,8 @@ public static class AiHelpContentService
                     ServicePilot.exe step edit "SERVICE" "STEP" --name "New Name" --script "npm run dev"
                     ServicePilot.exe step remove "SERVICE" "STEP"
                     ServicePilot.exe step move "SERVICE" "STEP" --position end
+                 - 维护 Composite（增、添成员、改成员、删成员）:
+                    ServicePilot.exe step add-composite "SERVICE" --name "启动" --member "Action1" --member "Action2" --position first
                  - 维护 Composite 成员（增、改、删）:
                     ServicePilot.exe step set-members "SERVICE" "COMPOSITE" --member "STEP1" --member "STEP2"
                     ServicePilot.exe step add-member "SERVICE" "COMPOSITE" --member "STEP"
@@ -171,6 +173,7 @@ public static class AiHelpContentService
                  ServicePilot.exe step edit "MyService" "HealthCheck" --use-variable false --open-log-on-run true
                  ServicePilot.exe step remove "MyService" "HealthCheck"
                  ServicePilot.exe step move "MyService" "HealthCheck" --position 1
+                 ServicePilot.exe step add-composite "MyService" --name "启动" --member "Set API" --member "Start Server" --position first
                  ServicePilot.exe step set-members "MyService" "Start" --member "Set API" --member "Start Server"
                  ServicePilot.exe step add-member "MyService" "Start" --member "HealthCheck"
                  ServicePilot.exe step remove-member "MyService" "Start" --member "HealthCheck"
@@ -178,6 +181,7 @@ public static class AiHelpContentService
                  ServicePilot.exe template step edit "MyTemplate" "LogStart" --name "Init"
                  ServicePilot.exe template step remove "MyTemplate" "Init"
                  ServicePilot.exe template step move "MyTemplate" "Init" --position after:Start
+                 ServicePilot.exe template step add-composite "MyTemplate" --name "启动" --member "Init" --member "Build" --position first
                  ServicePilot.exe template step set-members "MyTemplate" "Start" --member "Init" --member "Build"
                  ServicePilot.exe template step add-member "MyTemplate" "Start" --member "LogStart"
                  ServicePilot.exe template step remove-member "MyTemplate" "Start" --member "LogStart"

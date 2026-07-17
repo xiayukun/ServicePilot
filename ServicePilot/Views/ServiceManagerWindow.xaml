@@ -3,82 +3,96 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="管理服务" Height="560" Width="960"
-        WindowStartupLocation="CenterScreen">
+        Background="{ui:ThemeResource ApplicationBackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True">
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="180" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <!-- Left navigation sidebar -->
-        <Grid Grid.Column="0" Margin="0,8,0,8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <TextBlock Text="服务管理" FontSize="14" FontWeight="SemiBold"
-                       Margin="14,12,14,8" Foreground="{ui:ThemeResource TextFillColorPrimaryBrush}" />
-            <ListBox x:Name="FilterList" Grid.Row="1"
-                     Margin="8,0,8,0"
-                     Background="Transparent"
-                     BorderThickness="0"
-                     SelectionChanged="FilterList_SelectionChanged">
-                <ListBoxItem x:Name="FilterAll" IsSelected="True">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Margin="0,0,10,0" />
-                        <TextBlock Text="全部服务" />
-                    </StackPanel>
-                </ListBoxItem>
-                <ListBoxItem x:Name="FilterRunning">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Margin="0,0,10,0" />
-                        <TextBlock Text="运行中" />
-                    </StackPanel>
-                </ListBoxItem>
-                <ListBoxItem x:Name="FilterStopped">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                   Margin="0,0,10,0" />
-                        <TextBlock Text="已停止" />
-                    </StackPanel>
-                </ListBoxItem>
-            </ListBox>
-        </Grid>
+        <!-- WPF-UI TitleBar: provides min/max/close + drag -->
+        <ui:TitleBar Title="管理服务"
+                     ShowMaximize="False"
+                     ShowMinimize="True" />
 
-        <!-- Main content area -->
-        <Grid Grid.Column="1" Margin="0,8,12,8">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-            <WrapPanel Grid.Row="0" Margin="0,0,0,8">
-                <ui:Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click" />
-                <ui:Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click" />
-                <ui:Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,14,0" Click="Delete_Click" />
-                <ui:Button x:Name="RunActionButton" Content="运行动作" Width="92" Height="28" Margin="0,0,6,0" Click="RunAction_Click" />
-                <ui:Button x:Name="StopButton" Content="停止" Width="76" Height="28" Margin="0,0,6,0" Click="Stop_Click" />
-                <ui:Button x:Name="LogsButton" Content="查看日志" Width="86" Height="28" Margin="0,0,14,0" Click="Logs_Click" />
-                <ui:Button x:Name="SaveTemplateButton" Content="存为模板" Width="116" Height="28" Margin="0,0,6,0" Click="SaveTemplate_Click" />
-            </WrapPanel>
+        <!-- Original content area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="180" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-            <DataGrid x:Name="ServicesGrid" Grid.Row="1"
-                      AutoGenerateColumns="False"
-                      IsReadOnly="True"
-                      SelectionMode="Single"
-                      SelectionChanged="ServicesGrid_SelectionChanged"
-                      HeadersVisibility="Column"
-                      AlternationCount="2"
-                      GridLinesVisibility="Horizontal">
-                <DataGrid.Columns>
-                    <DataGridTextColumn x:Name="StatusColumn" Header="状态" Binding="{Binding StatusText}" Width="100" />
-                    <DataGridTextColumn x:Name="NameColumn" Header="名称" Binding="{Binding Name}" Width="160" />
-                    <DataGridTextColumn x:Name="WorkingDirectoryColumn" Header="工作目录" Binding="{Binding Config.WorkingDirectory}" Width="*" />
-                    <DataGridTextColumn x:Name="StepsColumn" Header="动作" Binding="{Binding Config.ScriptSteps.Count}" Width="70" />
-                    <DataGridCheckBoxColumn x:Name="AutoStartColumn" Header="自启" Binding="{Binding Config.AutoStart}" Width="70" />
-                </DataGrid.Columns>
-            </DataGrid>
+            <!-- Left navigation sidebar -->
+            <Grid Grid.Column="0" Margin="0,8,0,8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <TextBlock Text="服务管理" FontSize="14" FontWeight="SemiBold"
+                           Margin="14,12,14,8" Foreground="{ui:ThemeResource TextFillColorPrimaryBrush}" />
+                <ListBox x:Name="FilterList" Grid.Row="1"
+                         Margin="8,0,8,0"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         SelectionChanged="FilterList_SelectionChanged">
+                    <ListBoxItem x:Name="FilterAll" IsSelected="True">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE81E;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Margin="0,0,10,0" />
+                            <TextBlock Text="全部服务" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="FilterRunning">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE768;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Margin="0,0,10,0" />
+                            <TextBlock Text="运行中" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem x:Name="FilterStopped">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                       Margin="0,0,10,0" />
+                            <TextBlock Text="已停止" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </Grid>
+
+            <!-- Main content area -->
+            <Grid Grid.Column="1" Margin="0,8,12,8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                    <ui:Button x:Name="AddButton" Content="新增" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click" />
+                    <ui:Button x:Name="EditButton" Content="编辑" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click" />
+                    <ui:Button x:Name="DeleteButton" Content="删除" Width="76" Height="28" Margin="0,0,14,0" Click="Delete_Click" />
+                    <ui:Button x:Name="RunActionButton" Content="运行动作" Width="92" Height="28" Margin="0,0,6,0" Click="RunAction_Click" />
+                    <ui:Button x:Name="StopButton" Content="停止" Width="76" Height="28" Margin="0,0,6,0" Click="Stop_Click" />
+                    <ui:Button x:Name="LogsButton" Content="查看日志" Width="86" Height="28" Margin="0,0,14,0" Click="Logs_Click" />
+                    <ui:Button x:Name="SaveTemplateButton" Content="存为模板" Width="116" Height="28" Margin="0,0,6,0" Click="SaveTemplate_Click" />
+                </WrapPanel>
+
+                <DataGrid x:Name="ServicesGrid" Grid.Row="1"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          SelectionMode="Single"
+                          SelectionChanged="ServicesGrid_SelectionChanged"
+                          HeadersVisibility="Column"
+                          AlternationCount="2"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn x:Name="StatusColumn" Header="状态" Binding="{Binding StatusText}" Width="100" />
+                        <DataGridTextColumn x:Name="NameColumn" Header="名称" Binding="{Binding Name}" Width="160" />
+                        <DataGridTextColumn x:Name="WorkingDirectoryColumn" Header="工作目录" Binding="{Binding Config.WorkingDirectory}" Width="*" />
+                        <DataGridTextColumn x:Name="StepsColumn" Header="动作" Binding="{Binding Config.ScriptSteps.Count}" Width="70" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
         </Grid>
     </Grid>
 </ui:FluentWindow>

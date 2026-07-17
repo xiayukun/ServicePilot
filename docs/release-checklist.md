@@ -35,10 +35,10 @@ dist\ServicePilot.exe
 
 ## GitHub 发布
 
-- 标签：`v2.1.0`
-- 标题：`ServicePilot 2.1.0`
+- 标签：`v3.0.0`
+- 标题：`ServicePilot 3.0.0`
 - 制品：`ServicePilot.exe`
-- 使用 `docs/release-notes-v2.1.0.md` 的发布说明。
+- 使用 `docs/release-notes-v3.0.0.md` 的发布说明。
 - 发布前更新 `CHANGELOG.md` 和 `CHANGELOG-en.md`。
 - 确认 `.github/workflows/build.yml` 在标签或手动触发时通过，并上传 `ServicePilot.exe`。
 - 按 `docs/screenshot-guide.md` 更新中文和英文截图。

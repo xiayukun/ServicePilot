@@ -5,75 +5,92 @@
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:converters="clr-namespace:ServicePilot.Converters"
         Title="日志" Height="560" Width="1040"
-        WindowStartupLocation="CenterScreen">
+        Background="{ui:ThemeResource ApplicationBackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True">
 
     <Window.Resources>
         <converters:LogLevelColorConverter x:Key="LogLevelColor"/>
     </Window.Resources>
 
-    <Grid Margin="12">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 工具栏 -->
-        <DockPanel Grid.Row="0" Margin="0,0,0,8">
-            <TextBlock x:Name="TitleText" Text="日志"
-                       FontSize="14" FontWeight="SemiBold"
-                       VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis"
-                       TextWrapping="NoWrap"
-                       MaxWidth="260"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                        DockPanel.Dock="Right">
-                <ui:Button x:Name="RunActionButton" Content="运行动作" Width="82" Height="26"
-                        Margin="0,0,6,0" Appearance="Primary" Click="RunAction_Click"/>
-                <ui:Button x:Name="StopButton" Content="停止" Width="48" Height="26"
-                        Margin="0,0,10,0" Appearance="Danger" Click="Stop_Click"/>
-                <ui:TextBox x:Name="SearchBox" Width="150" Height="26"
-                         PlaceholderText="搜索日志"
-                         TextChanged="SearchBox_TextChanged"
-                         KeyDown="SearchBox_KeyDown"
-                         Margin="0,0,4,0"/>
-                <ui:Button x:Name="FindPreviousButton" Content="上" Width="44" Height="26"
-                        Margin="0,0,4,0" Click="FindPrevious_Click"/>
-                <ui:Button x:Name="FindNextButton" Content="下" Width="44" Height="26"
-                        Margin="0,0,4,0" Click="FindNext_Click"/>
-                <TextBlock x:Name="SearchStatusText" Width="42"
-                           FontSize="11"
+        <!-- WPF-UI TitleBar: provides min/max/close + drag -->
+        <ui:TitleBar Title="日志"
+                     ShowMaximize="True"
+                     ShowMinimize="True" />
+
+        <Grid Grid.Row="1" Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- 工具栏 -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock x:Name="TitleText" Text="日志"
+                           FontSize="14" FontWeight="SemiBold"
                            VerticalAlignment="Center"
-                           Margin="0,0,8,0"/>
-                <CheckBox x:Name="AutoScrollCheck" Content="自动滚动" IsChecked="True"
-                          VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <ui:Button x:Name="EditButton" Content="编辑" Width="58" Height="26"
-                        Margin="0,0,6,0" Click="Edit_Click"/>
-                <ui:Button x:Name="ClearButton" Content="清空" Width="58" Height="26" Click="Clear_Click"/>
-            </StackPanel>
-        </DockPanel>
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="NoWrap"
+                           MaxWidth="260"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                            DockPanel.Dock="Right">
+                    <Button x:Name="RunActionButton" Content="运行动作" Width="82" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,6,0" Click="RunAction_Click"/>
+                    <ui:Button x:Name="StopButton" Content="停止" Width="56" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,10,0" Appearance="Danger" Click="Stop_Click"/>
+                    <ui:TextBox x:Name="SearchBox" Width="150" Height="34" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                             PlaceholderText="搜索日志"
+                             TextChanged="SearchBox_TextChanged"
+                             KeyDown="SearchBox_KeyDown"
+                             Margin="0,0,4,0"/>
+                    <ui:Button x:Name="FindPreviousButton" Content="上一个" Width="72" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,4,0" Click="FindPrevious_Click"/>
+                    <ui:Button x:Name="FindNextButton" Content="下一个" Width="72" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,4,0" Click="FindNext_Click"/>
+                    <TextBlock x:Name="SearchStatusText" Width="42"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <CheckBox x:Name="AutoScrollCheck" Content="自动滚动" IsChecked="True"
+                              VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ui:Button x:Name="EditButton" Content="编辑" Width="58" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,6,0" Click="Edit_Click"/>
+                    <ui:Button x:Name="ClearButton" Content="清空" Width="58" Height="32" VerticalAlignment="Center" Click="Clear_Click"/>
+                </StackPanel>
+            </DockPanel>
 
-        <TabControl x:Name="LogTabs" Grid.Row="1"
-                    Height="30"
-                    Background="Transparent"
-                    SelectionChanged="LogTabs_SelectionChanged"
-                    Margin="0,0,0,6"/>
+            <TabControl x:Name="LogTabs" Grid.Row="1"
+                                Height="30"
+                                DisplayMemberPath="Header"
+                                Background="Transparent"
+                        SelectionChanged="LogTabs_SelectionChanged"
+                        Margin="0,0,0,6"/>
 
-        <!-- 日志查看器 -->
-        <avalonedit:TextEditor x:Name="LogEditor" Grid.Row="2"
-                               FontFamily="Consolas" FontSize="12"
-                               ShowLineNumbers="False"
-                               IsReadOnly="True"
-                               WordWrap="False"
-                               HorizontalScrollBarVisibility="Auto"
-                               VerticalScrollBarVisibility="Auto"
-                               PreviewKeyDown="LogEditor_PreviewKeyDown">
-            <avalonedit:TextEditor.ContextMenu>
-                <ContextMenu>
-                    <MenuItem x:Name="CopySelectedMenuItem" Header="复制选中" Click="CopySelected_Click"/>
-                    <MenuItem x:Name="CopyAllMenuItem" Header="复制全部" Click="CopyAll_Click"/>
-                </ContextMenu>
-            </avalonedit:TextEditor.ContextMenu>
-        </avalonedit:TextEditor>
+            <!-- 日志查看器 -->
+            <avalonedit:TextEditor x:Name="LogEditor" Grid.Row="2"
+                                   FontFamily="Consolas" FontSize="12"
+                                   ShowLineNumbers="False"
+                                   IsReadOnly="True"
+                                   Background="#FF1E1E2E"
+                                   Foreground="#FFD4D4D4"
+                                   WordWrap="False"
+                                   HorizontalScrollBarVisibility="Auto"
+                                   VerticalScrollBarVisibility="Auto"
+                                   PreviewKeyDown="LogEditor_PreviewKeyDown">
+                <avalonedit:TextEditor.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem x:Name="CopySelectedMenuItem" Header="复制选中" Click="CopySelected_Click"/>
+                        <MenuItem x:Name="CopyAllMenuItem" Header="复制全部" Click="CopyAll_Click"/>
+                    </ContextMenu>
+                </avalonedit:TextEditor.ContextMenu>
+            </avalonedit:TextEditor>
+        </Grid>
     </Grid>
 </ui:FluentWindow>

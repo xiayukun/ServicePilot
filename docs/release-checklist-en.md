@@ -35,10 +35,10 @@ dist\ServicePilot.exe
 
 ## GitHub Release
 
-- Tag: `v2.1.0`
-- Title: `ServicePilot 2.1.0`
+- Tag: `v3.0.0`
+- Title: `ServicePilot 3.0.0`
 - Artifact: `ServicePilot.exe`
-- Use release notes from `docs/release-notes-v2.1.0-en.md`.
+- Use release notes from `docs/release-notes-v3.0.0-en.md`.
 - Update `CHANGELOG.md` and `CHANGELOG-en.md` before publishing.
 - Confirm `.github/workflows/build.yml` passes for the tag or manual run and uploads `ServicePilot.exe`.
 - Update Chinese and English screenshots using `docs/screenshot-guide.md`.

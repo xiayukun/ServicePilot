@@ -3,41 +3,53 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Manage templates" Height="540" Width="860"
-        WindowStartupLocation="CenterScreen">
-
-    <Grid Margin="14">
+        Background="{ui:ThemeResource ApplicationBackgroundBrush}"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True">
+    <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="150"/>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <WrapPanel Grid.Row="0" Margin="0,0,0,8">
-            <ui:Button x:Name="AddButton" Content="Add" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click"/>
-            <ui:Button x:Name="EditButton" Content="Edit" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click"/>
-            <ui:Button x:Name="DeleteButton" Content="Delete" Width="76" Height="28" Margin="0,0,6,0" Click="Delete_Click"/>
-            <ui:Button x:Name="ExportButton" Content="Export" Width="76" Height="28" Margin="0,0,6,0" Click="Export_Click"/>
-            <ui:Button x:Name="ImportButton" Content="Import" Width="76" Height="28" Margin="0,0,6,0" Click="Import_Click"/>
-        </WrapPanel>
 
-        <DataGrid x:Name="TemplatesGrid" Grid.Row="1"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  SelectionMode="Single"
-                  HeadersVisibility="Column"
-                  AlternationCount="2"
-                  GridLinesVisibility="Horizontal"
-                  SelectionChanged="TemplatesGrid_SelectionChanged">
-            <DataGrid.Columns>
-                <DataGridTextColumn x:Name="NameColumn" Header="Name" Binding="{Binding Name}" Width="160"/>
-                <DataGridTextColumn x:Name="DescriptionColumn" Header="Description" Binding="{Binding Description}" Width="*"/>
-                <DataGridTextColumn x:Name="StepsColumn" Header="Actions" Binding="{Binding ScriptSteps.Count}" Width="80"/>
-                <DataGridTextColumn x:Name="UpdatedAtColumn" Header="Updated" Binding="{Binding UpdatedAt}" Width="150"/>
-            </DataGrid.Columns>
-        </DataGrid>
+        <ui:TitleBar Title="Manage templates"
+                     ShowMaximize="True"
+                     ShowMinimize="True" />
 
-        <ui:TextBox x:Name="PreviewBox" Grid.Row="2" Margin="0,8,0,0"
-                         IsReadOnly="True" AcceptsReturn="True"
-                         FontFamily="Consolas" FontSize="12"
-                         VerticalScrollBarVisibility="Auto"/>
+        <Grid Grid.Row="1" Margin="14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="150"/>
+            </Grid.RowDefinitions>
+            <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                <ui:Button x:Name="AddButton" Content="Add" Width="76" Height="28" Margin="0,0,6,0" Click="Add_Click"/>
+                <ui:Button x:Name="EditButton" Content="Edit" Width="76" Height="28" Margin="0,0,6,0" Click="Edit_Click"/>
+                <ui:Button x:Name="DeleteButton" Content="Delete" Width="76" Height="28" Margin="0,0,6,0" Click="Delete_Click"/>
+                <ui:Button x:Name="ExportButton" Content="Export" Width="76" Height="28" Margin="0,0,6,0" Click="Export_Click"/>
+                <ui:Button x:Name="ImportButton" Content="Import" Width="76" Height="28" Margin="0,0,6,0" Click="Import_Click"/>
+            </WrapPanel>
+
+            <DataGrid x:Name="TemplatesGrid" Grid.Row="1"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      SelectionMode="Single"
+                      HeadersVisibility="Column"
+                      AlternationCount="2"
+                      GridLinesVisibility="Horizontal"
+                      SelectionChanged="TemplatesGrid_SelectionChanged">
+                <DataGrid.Columns>
+                    <DataGridTextColumn x:Name="NameColumn" Header="Name" Binding="{Binding Name}" Width="160"/>
+                    <DataGridTextColumn x:Name="DescriptionColumn" Header="Description" Binding="{Binding Description}" Width="*"/>
+                    <DataGridTextColumn x:Name="StepsColumn" Header="Actions" Binding="{Binding ScriptSteps.Count}" Width="80"/>
+                    <DataGridTextColumn x:Name="UpdatedAtColumn" Header="Updated" Binding="{Binding UpdatedAt}" Width="150"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <ui:TextBox x:Name="PreviewBox" Grid.Row="2" Margin="0,8,0,0"
+                             IsReadOnly="True" AcceptsReturn="True"
+                             FontFamily="Consolas" FontSize="12"
+                             VerticalScrollBarVisibility="Auto"/>
+        </Grid>
     </Grid>
 </ui:FluentWindow>
