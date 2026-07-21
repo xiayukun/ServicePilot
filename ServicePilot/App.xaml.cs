@@ -66,6 +66,9 @@ public partial class App : Application
     {
         base.OnStartup(e);
         ApplicationThemeManager.Apply(ApplicationTheme.Dark);
+        // Use the real Windows system accent color instead of WPF-UI's default fixed blue, so accented
+        // UI (e.g. the service manager's selected filter bar) matches the user's OS accent.
+        ApplyWindowsSystemAccent();
         System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
         if (e.Args.Length > 0)
@@ -118,10 +121,13 @@ public partial class App : Application
                 _mainViewModel,
                 GetBufferedLogs,
                 RequestExitFromCommandAsync,
-                _variableUsageStore,
-                ReloadConfigAsync);
+                _variableUsageStore);
             _commandPipeServer = new CommandPipeServer(HandlePipeCommandAsync);
             _commandPipeServer.Start();
+
+            // Hot-reload when the config file is edited externally (or by a non-tray CLI process).
+            _configService.ExternalConfigChanged += OnExternalConfigChanged;
+            _configService.StartWatching();
 
             CreateTrayIcon();
 
@@ -251,7 +257,157 @@ public partial class App : Application
 
     private static void ApplySubmenuOffset(MenuItem item)
     {
-        // 不干预子菜单位置，完全由 WPF 默认行为控制
+        // 不干预子菜单位置，完全由 WPF 默认行为控制。
+        // 但为菜单项过多的子菜单启用滚动，避免超出屏幕高度后被裁剪且无法访问。
+        item.SubmenuOpened -= OnSubmenuOpenedEnableScroll;
+        item.SubmenuOpened += OnSubmenuOpenedEnableScroll;
+    }
+
+    private static void OnSubmenuOpenedEnableScroll(object sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem item)
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                new Action(() => LimitSubmenuScrollHeight(item)),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// Applies a MaxHeight to the ScrollViewer inside a MenuItem's submenu popup so that submenus
+    /// with many entries become scrollable instead of overflowing (and getting clipped by) the screen.
+    /// The submenu content lives inside a Popup (a separate visual tree), so we locate the popup from
+    /// the MenuItem template and search its Child. Works without replacing the WPF-UI MenuItem template.
+    /// </summary>
+    private static void LimitSubmenuScrollHeight(MenuItem item)
+    {
+        var maxHeight = Math.Max(240, SystemParameters.WorkArea.Height - 80);
+
+        // The submenu ScrollViewer is inside the popup that hosts the child items.
+        var popup = FindPopupChild(item);
+        var searchRoot = popup?.Child as DependencyObject ?? item;
+        var scrollViewer = FindDescendant<System.Windows.Controls.ScrollViewer>(searchRoot);
+        if (scrollViewer != null)
+        {
+            scrollViewer.MaxHeight = maxHeight;
+            scrollViewer.VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto;
+        }
+    }
+
+    /// <summary>
+    /// Configures a ContextMenu so its own item list scrolls when it grows past the work area height.
+    /// WPF-UI's default ContextMenu template lacks a ScrollViewer, so we swap in a scrollable template
+    /// (ScrollableContextMenuStyle in App.xaml) and cap MaxHeight to the screen work area.
+    /// </summary>
+    /// <summary>
+    /// Applies the Windows system accent color to WPF-UI so accented resources
+    /// (SystemAccentColorPrimaryBrush etc.) match the user's OS accent instead of the library default.
+    /// </summary>
+    private static void ApplyWindowsSystemAccent()
+    {
+        try
+        {
+            // Prefer the real DWM accent from the registry. WPF-UI's ApplySystemAccent() relies on UWP
+            // UISettings, which in an unpackaged app can silently fall back to the library's default blue.
+            if (TryGetDwmAccentColor(out var accent))
+                Wpf.Ui.Appearance.ApplicationAccentColorManager.Apply(accent, ApplicationTheme.Dark);
+            else
+                Wpf.Ui.Appearance.ApplicationAccentColorManager.ApplySystemAccent();
+
+            // Guarantee the accent brushes exist in the application resource dictionary under the keys our
+            // DynamicResource references use. ApplicationAccentColorManager updates its own dictionaries,
+            // but we push explicit overrides so {DynamicResource SystemAccentColorPrimaryBrush} always
+            // resolves to the accent we just computed (this is what fixes the "always blue" selection bar).
+            OverrideAccentResources();
+        }
+        catch
+        {
+            // If the OS accent can't be read, keep the theme's default accent.
+        }
+    }
+
+    private static void OverrideAccentResources()
+    {
+        if (Current == null)
+            return;
+
+        var mgr = typeof(Wpf.Ui.Appearance.ApplicationAccentColorManager);
+        SetBrushResource("SystemAccentColorPrimaryBrush", mgr, "PrimaryAccentBrush");
+        SetBrushResource("SystemAccentColorSecondaryBrush", mgr, "SecondaryAccentBrush");
+        SetBrushResource("SystemAccentColorTertiaryBrush", mgr, "TertiaryAccentBrush");
+        SetBrushResource("AccentTextFillColorPrimaryBrush", mgr, "PrimaryAccentBrush");
+    }
+
+    private static void SetBrushResource(string resourceKey, Type managerType, string propertyName)
+    {
+        try
+        {
+            var prop = managerType.GetProperty(propertyName,
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (prop?.GetValue(null) is System.Windows.Media.Brush brush)
+                Current!.Resources[resourceKey] = brush;
+        }
+        catch
+        {
+            // Best effort; keep existing resource if the property is unavailable.
+        }
+    }
+
+    /// <summary>
+    /// Reads the Windows DWM accent color from the registry. The value is stored as a 32-bit ABGR
+    /// integer under HKCU\Software\Microsoft\Windows\DWM\AccentColor.
+    /// </summary>
+    private static bool TryGetDwmAccentColor(out System.Windows.Media.Color color)
+    {
+        color = default;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
+            if (key?.GetValue("AccentColor") is int abgr)
+            {
+                var bytes = BitConverter.GetBytes(abgr); // little-endian: [R, G, B, A]
+                color = System.Windows.Media.Color.FromRgb(bytes[0], bytes[1], bytes[2]);
+                return true;
+            }
+        }
+        catch
+        {
+            // Fall through to default accent.
+        }
+        return false;
+    }
+
+    private static void ApplyScrollableMenu(System.Windows.Controls.ContextMenu menu)
+    {
+        if (Current?.TryFindResource("ScrollableContextMenuStyle") is Style style)
+            menu.Style = style;
+        menu.MaxHeight = Math.Max(240, SystemParameters.WorkArea.Height - 40);
+
+        // Always reveal the top of the service list when the menu opens: the top items are the most
+        // recently used, and a scrolled-down menu would otherwise reopen at its previous scroll offset.
+        menu.Opened += (_, _) =>
+        {
+            menu.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var scroll = FindDescendant<System.Windows.Controls.ScrollViewer>(menu);
+                scroll?.ScrollToTop();
+            }), System.Windows.Threading.DispatcherPriority.Loaded);
+        };
+    }
+
+    private static T? FindDescendant<T>(DependencyObject? root) where T : DependencyObject
+    {
+        if (root == null)
+            return null;
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T typed)
+                return typed;
+            var result = FindDescendant<T>(child);
+            if (result != null)
+                return result;
+        }
+        return null;
     }
 
     private static void SetMenuItemIcon(MenuItem item, Drawing.Image? dot)
@@ -282,6 +438,7 @@ public partial class App : Application
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         menu.VerticalOffset = 4;
         menu.HorizontalOffset = -8;
+        ApplyScrollableMenu(menu);
 
         foreach (var service in GetSortedServicesForDisplay())
         {
@@ -342,46 +499,10 @@ public partial class App : Application
             menu.Items.Add(serviceMenu);
         }
 
-        if (_mainViewModel.Services.Count > 0)
-            menu.Items.Add(new System.Windows.Controls.Separator());
-
-        var addService = new WpfMenuItem { Header = LocalizationService.Current.T("AddService") };
-        addService.Click += (_, _) => OnAddServiceRequested();
-        menu.Items.Add(addService);
-
-        var manageServices = new WpfMenuItem { Header = LocalizationService.Current.T("ManageServices") };
-        manageServices.Click += (_, _) => OnManageServicesRequested();
-        menu.Items.Add(manageServices);
-
-        var manageTemplates = new WpfMenuItem { Header = LocalizationService.Current.T("ManageTemplates") };
-        manageTemplates.Click += (_, _) => OnManageTemplatesRequested();
-        menu.Items.Add(manageTemplates);
-
-        var copyHelpForAi = new WpfMenuItem { Header = LocalizationService.Current.T("CopyHelpForAi") };
-        copyHelpForAi.Click += (_, _) => OnCopyHelpForAiRequested();
-        menu.Items.Add(copyHelpForAi);
-
-        var stopAll = new WpfMenuItem
-        {
-            Header = LocalizationService.Current.T("StopAllServices"),
-            IsEnabled = _mainViewModel.Services.Any(s => s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
-                                                         s.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running))
-        };
-        stopAll.Click += async (_, _) => await StopAllQuietlyAsync();
-        menu.Items.Add(stopAll);
-
-        menu.Items.Add(new System.Windows.Controls.Separator());
-
-        AddLanguageMenu(menu);
-
-        menu.Items.Add(new System.Windows.Controls.Separator());
-
-        var status = new WpfMenuItem { Header = GetTrayStatusText(), IsEnabled = false };
-        menu.Items.Add(status);
-
-        var exit = new WpfMenuItem { Header = LocalizationService.Current.T("Exit") };
-        exit.Click += async (_, _) => await ExitAsync();
-        menu.Items.Add(exit);
+        // Fixed action items live in a PINNED footer (see ScrollableContextMenuStyle). Only the service
+        // list above scrolls; add/manage/status/exit stay visible no matter how many services exist.
+        var footer = BuildTrayFooterMenu();
+        TrayContextMenu.SetFooter(menu, footer);
 
         _trayIcon.ContextMenu = menu;
         _trayIcon.ToolTipText = ShortTrayText(GetTrayStatusText());
@@ -559,32 +680,113 @@ public partial class App : Application
         AddNewStepVariableMenuItem(menu, service, variableStep, variable => runAsync(variable));
     }
 
-    private void AddLanguageMenu(System.Windows.Controls.ContextMenu menu)
+    /// <summary>
+    /// Builds the pinned footer (fixed actions) for the tray menu. The footer is a plain vertical
+    /// StackPanel hosting the SAME ui:MenuItem type used for the scrolling service list, so it inherits
+    /// the identical WPF-UI item chrome/spacing (no more "sparse" mismatched look). A standalone
+    /// ui:MenuItem in a StackPanel cannot reliably open a submenu popup, so Language is a leaf item that
+    /// opens a small selection popup window instead of a nested submenu.
+    /// </summary>
+    private System.Windows.FrameworkElement BuildTrayFooterMenu()
     {
-        var languageMenu = new WpfMenuItem { Header = LocalizationService.Current.T("Language") };
-        AddLanguageOption(languageMenu, LocalizationService.Auto);
-        AddLanguageOption(languageMenu, LocalizationService.Chinese);
-        AddLanguageOption(languageMenu, LocalizationService.English);
-        languageMenu.Items.Add(new System.Windows.Controls.Separator());
-        languageMenu.Items.Add(new WpfMenuItem
+        var footer = new StackPanel { Orientation = System.Windows.Controls.Orientation.Vertical };
+
+        if (_mainViewModel!.Services.Count > 0)
+            footer.Children.Add(new System.Windows.Controls.Separator());
+
+        var addService = new WpfMenuItem { Header = LocalizationService.Current.T("AddService") };
+        addService.Click += (_, _) => { CloseTrayMenu(); OnAddServiceRequested(); };
+        footer.Children.Add(addService);
+
+        var manageServices = new WpfMenuItem { Header = LocalizationService.Current.T("ManageServices") };
+        manageServices.Click += (_, _) => { CloseTrayMenu(); OnManageServicesRequested(); };
+        footer.Children.Add(manageServices);
+
+        var manageTemplates = new WpfMenuItem { Header = LocalizationService.Current.T("ManageTemplates") };
+        manageTemplates.Click += (_, _) => { CloseTrayMenu(); OnManageTemplatesRequested(); };
+        footer.Children.Add(manageTemplates);
+
+        var copyHelpForAi = new WpfMenuItem { Header = LocalizationService.Current.T("CopyHelpForAi") };
+        copyHelpForAi.Click += (_, _) => { CloseTrayMenu(); OnCopyHelpForAiRequested(); };
+        footer.Children.Add(copyHelpForAi);
+
+        var stopAll = new WpfMenuItem
         {
-            Header = LocalizationService.Current.F("LanguageCurrent", LocalizationService.Current.DisplayLanguageName(LocalizationService.Current.LanguageSetting)),
-            IsEnabled = false
-        });
-        ApplySubmenuOffset(languageMenu);
-        menu.Items.Add(languageMenu);
+            Header = LocalizationService.Current.T("StopAllServices"),
+            IsEnabled = _mainViewModel.Services.Any(s => s.RuntimeState.State is ProcessState.Running or ProcessState.Starting ||
+                                                         s.RuntimeState.StepStates.Values.Any(step => step.State == StepRunState.Running))
+        };
+        stopAll.Click += async (_, _) => { CloseTrayMenu(); await StopAllQuietlyAsync(); };
+        footer.Children.Add(stopAll);
+
+        footer.Children.Add(new System.Windows.Controls.Separator());
+
+        // Language: leaf item + popup selection (no nested submenu), so it matches the flat footer style.
+        var currentLangName = LocalizationService.Current.DisplayLanguageName(LocalizationService.Current.LanguageSetting);
+        var languageItem = new WpfMenuItem
+        {
+            Header = LocalizationService.Current.F("LanguageCurrent", currentLangName)
+        };
+        languageItem.Click += (_, _) => { CloseTrayMenu(); ShowLanguagePopup(); };
+        footer.Children.Add(languageItem);
+
+        footer.Children.Add(new System.Windows.Controls.Separator());
+
+        var status = new WpfMenuItem { Header = GetTrayStatusText(), IsEnabled = false };
+        footer.Children.Add(status);
+
+        var exit = new WpfMenuItem { Header = LocalizationService.Current.T("Exit") };
+        exit.Click += async (_, _) => { CloseTrayMenu(); await ExitAsync(); };
+        footer.Children.Add(exit);
+
+        return footer;
     }
 
-    private void AddLanguageOption(MenuItem parent, string languageSetting)
+    /// <summary>
+    /// Small modal popup to pick the UI language (auto / zh-CN / en-US). Used instead of a nested tray
+    /// submenu because a standalone footer MenuItem cannot host a reliable side-opening submenu popup.
+    /// </summary>
+    private void ShowLanguagePopup()
     {
-        var item = new WpfMenuItem
+        var window = new Window
         {
-            Header = LocalizationService.Current.DisplayLanguageName(languageSetting),
-            IsChecked = string.Equals(LocalizationService.Current.LanguageSetting, languageSetting, StringComparison.OrdinalIgnoreCase),
-            StaysOpenOnClick = true
+            Title = LocalizationService.Current.T("Language"),
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterScreen,
+            ShowInTaskbar = false,
+            Topmost = true
         };
-        item.Click += async (_, _) => await SetLanguageAsync(languageSetting);
-        parent.Items.Add(item);
+
+        var panel = new StackPanel { Margin = new Thickness(16), MinWidth = 220 };
+        foreach (var setting in new[] { LocalizationService.Auto, LocalizationService.Chinese, LocalizationService.English })
+        {
+            var captured = setting;
+            var isCurrent = string.Equals(LocalizationService.Current.LanguageSetting, setting, StringComparison.OrdinalIgnoreCase);
+            var button = new Wpf.Ui.Controls.Button
+            {
+                Content = LocalizationService.Current.DisplayLanguageName(setting) + (isCurrent ? "  \u2713" : string.Empty),
+                Margin = new Thickness(0, 0, 0, 8),
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
+                Appearance = isCurrent ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary
+            };
+            button.Click += async (_, _) =>
+            {
+                window.Close();
+                await SetLanguageAsync(captured);
+            };
+            panel.Children.Add(button);
+        }
+
+        window.Content = panel;
+        window.ShowDialog();
+    }
+
+    private void CloseTrayMenu()
+    {
+        if (_trayIcon?.ContextMenu is System.Windows.Controls.ContextMenu cm)
+            cm.IsOpen = false;
     }
 
     private async Task SetLanguageAsync(string languageSetting)
@@ -1250,52 +1452,47 @@ public partial class App : Application
         };
     }
 
-    private async Task<CommandResponse> ReloadConfigAsync()
+    /// <summary>
+    /// Reloads config from disk after an external edit. Marshaled onto the UI thread by the caller.
+    /// IMPORTANT: this must NOT save the in-memory config first — doing so would overwrite the
+    /// external file edit with a stale in-memory snapshot (silent data loss).
+    /// </summary>
+    private void OnExternalConfigChanged()
     {
-        if (_processManager == null || _mainViewModel == null)
-            return CommandResponse.Error("托盘实例尚未初始化。", 2);
-
-        try
+        Dispatcher.BeginInvoke(async () =>
         {
-            // P0: Ensure any pending CLI modifications are persisted to disk before reloading.
-            await _configService.SaveAsync(_appConfig);
+            if (_isExiting || _processManager == null || _mainViewModel == null || _configService == null)
+                return;
 
-            var reloadedConfig = await _configService.LoadAsync();
-
-            // Update the in-memory AppConfig
-            _appConfig.Services.Clear();
-            _appConfig.Services.AddRange(reloadedConfig.Services);
-            _appConfig.ServiceTemplates.Clear();
-            _appConfig.ServiceTemplates.AddRange(reloadedConfig.ServiceTemplates);
-            _appConfig.Settings = reloadedConfig.Settings ?? new AppSettings();
-
-            // Refresh ProcessManager: reload service configs
-            _processManager.LoadConfigs(_appConfig.Services);
-
-            // Refresh MainViewModel: rebuild the Services collection
-            _mainViewModel.Services.Clear();
-            foreach (var state in _processManager.Services)
+            try
             {
-                var vm = new ServiceItemViewModel(state, _processManager);
-                vm.LogRequested += OnViewLogRequested;
-                _mainViewModel.Services.Add(vm);
+                var reloadedConfig = await _configService.LoadAsync();
+
+                _appConfig.Services.Clear();
+                _appConfig.Services.AddRange(reloadedConfig.Services);
+                _appConfig.ServiceTemplates.Clear();
+                _appConfig.ServiceTemplates.AddRange(reloadedConfig.ServiceTemplates);
+                _appConfig.Settings = reloadedConfig.Settings ?? new AppSettings();
+
+                LocalizationService.Current.Configure(_appConfig.Settings.Language);
+
+                // Merge into the runtime without tearing down running services.
+                _processManager.SyncConfigs(_appConfig.Services);
+                _mainViewModel.SyncFromRuntime(vm => vm.LogRequested += OnViewLogRequested);
+
+                RebuildTrayMenu();
+                foreach (var window in _serviceManagerWindows.ToList())
+                    window.RefreshAfterConfigChanged();
+                foreach (var window in _templateManagerWindows.ToList())
+                    window.RefreshAfterConfigChanged();
+                foreach (var window in _logWindows.Values.ToList())
+                    window.RefreshAfterConfigChanged();
             }
-
-            // Refresh UI
-            RebuildTrayMenu();
-            foreach (var window in _serviceManagerWindows.ToList())
-                window.RefreshAfterConfigChanged();
-            foreach (var window in _templateManagerWindows.ToList())
-                window.RefreshAfterConfigChanged();
-            foreach (var window in _logWindows.Values.ToList())
-                window.RefreshAfterConfigChanged();
-
-            return CommandResponse.Ok("已重新加载配置");
-        }
-        catch (Exception ex)
-        {
-            return CommandResponse.Error($"重新加载配置失败: {ex.Message}", 2);
-        }
+            catch
+            {
+                // A malformed external edit must not crash the tray; keep the last good in-memory state.
+            }
+        });
     }
 
     private async Task RequestExitFromCommandAsync()
@@ -1311,6 +1508,12 @@ public partial class App : Application
             return;
 
         _isExiting = true;
+
+        if (_configService != null)
+        {
+            _configService.ExternalConfigChanged -= OnExternalConfigChanged;
+            _configService.Dispose();
+        }
 
         if (_processManager != null)
         {
@@ -1338,6 +1541,12 @@ public partial class App : Application
             _processManager.Dispose();
         }
 
+        if (_configService != null)
+        {
+            _configService.ExternalConfigChanged -= OnExternalConfigChanged;
+            _configService.Dispose();
+        }
+
         _commandPipeServer?.Dispose();
 
         if (_trayIcon != null)
@@ -1359,4 +1568,25 @@ public partial class App : Application
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(IntPtr hIcon);
+}
+
+/// <summary>
+/// Attached property carrying a pinned footer element for the tray ContextMenu template.
+/// The scrollable ContextMenu template scrolls only its items host (the service list) and keeps
+/// this footer (add/manage/status/exit) fixed at the bottom, always visible regardless of scroll.
+/// </summary>
+public static class TrayContextMenu
+{
+    public static readonly DependencyProperty FooterProperty =
+        DependencyProperty.RegisterAttached(
+            "Footer",
+            typeof(object),
+            typeof(TrayContextMenu),
+            new PropertyMetadata(null));
+
+    public static void SetFooter(DependencyObject element, object? value) =>
+        element.SetValue(FooterProperty, value);
+
+    public static object? GetFooter(DependencyObject element) =>
+        element.GetValue(FooterProperty);
 }

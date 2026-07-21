@@ -24,7 +24,6 @@ public class ServiceCommandProcessor
     private readonly Func<Guid, IReadOnlyList<LogEntry>>? _logProvider;
     private readonly Func<Task>? _shutdownRequested;
     private readonly PresetVariableUsageStore? _variableUsageStore;
-    private readonly Func<Task<CommandResponse>>? _reloadRequested;
 
     private sealed record DiagnosticIssue(string Severity, string Code, string Target, string Message);
 
@@ -35,8 +34,7 @@ public class ServiceCommandProcessor
         MainViewModel? mainViewModel = null,
         Func<Guid, IReadOnlyList<LogEntry>>? logProvider = null,
         Func<Task>? shutdownRequested = null,
-        PresetVariableUsageStore? variableUsageStore = null,
-        Func<Task<CommandResponse>>? reloadRequested = null)
+        PresetVariableUsageStore? variableUsageStore = null)
     {
         _configService = configService;
         _appConfig = appConfig;
@@ -45,7 +43,6 @@ public class ServiceCommandProcessor
         _logProvider = logProvider;
         _shutdownRequested = shutdownRequested;
         _variableUsageStore = variableUsageStore;
-        _reloadRequested = reloadRequested;
     }
 
     public async Task<CommandResponse> ExecuteAsync(string[] args)
@@ -77,6 +74,7 @@ public class ServiceCommandProcessor
             "templates" => Templates(rest),
             "template" => await TemplateAsync(rest),
             "subservice" => CommandResponse.Error("子服务功能已移除。请使用预设变量和 step run。", 2),
+            "merge-script" or "mergescript" => await MergeScriptAsync(rest),
             "shutdown" or "exit" or "quit" => Shutdown(),
             _ => CommandResponse.Error($"未知命令: {args[0]}\n\n{HelpText()}", 2)
         };
@@ -87,23 +85,14 @@ public class ServiceCommandProcessor
     private async Task<CommandResponse> ConfigAsync(string[] args)
     {
         if (args.Length == 0)
-            return CommandResponse.Error("用法: config reload | config apply --file PATH", 2);
+            return CommandResponse.Error("用法: config apply --file PATH", 2);
 
         var subCommand = args[0].ToLowerInvariant();
         return subCommand switch
         {
-            "reload" => await ConfigReloadAsync(),
             "apply" => await ConfigApplyAsync(args.Skip(1).ToArray()),
-            _ => CommandResponse.Error($"未知 config 命令: {args[0]}\n用法: config reload | config apply --file PATH", 2)
+            _ => CommandResponse.Error($"未知 config 命令: {args[0]}\n用法: config apply --file PATH", 2)
         };
-    }
-
-    private async Task<CommandResponse> ConfigReloadAsync()
-    {
-        if (_reloadRequested == null)
-            return TrayRequired();
-
-        return await _reloadRequested();
     }
 
     private async Task<CommandResponse> ConfigApplyAsync(string[] args)
@@ -162,30 +151,7 @@ public class ServiceCommandProcessor
             return CommandResponse.Error($"写入配置失败: {ex.Message}", 2);
         }
 
-        // Trigger tray reload
-        if (_reloadRequested != null)
-        {
-            var reloadResult = await _reloadRequested();
-            if (reloadResult.ExitCode != 0)
-            {
-                // Reload failed — roll back
-                var failedTimestamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
-                var failedPath = Path.Combine(cacheDir, $"config.v2.{failedTimestamp}.failed.json");
-                try
-                {
-                    if (File.Exists(_configService.PathToConfig))
-                        File.Move(_configService.PathToConfig, failedPath);
-                    if (File.Exists(cachePath))
-                        File.Copy(cachePath, _configService.PathToConfig, overwrite: true);
-                }
-                catch
-                {
-                    // Best-effort rollback
-                }
-                return CommandResponse.Error($"校验不通过，已回滚到缓存配置，失败文件保存为 {failedPath}");
-            }
-        }
-
+        // The running tray instance watches config.v2.json and hot-reloads automatically after this write.
         return CommandResponse.Ok("已应用配置");
     }
 
@@ -198,7 +164,6 @@ public class ServiceCommandProcessor
           ServicePilot.exe version
           ServicePilot.exe ai-help
           ServicePilot.exe config-path
-          ServicePilot.exe config reload
           ServicePilot.exe config apply --file PATH
           ServicePilot.exe doctor [--json]
           ServicePilot.exe list [--json]
@@ -240,6 +205,14 @@ public class ServiceCommandProcessor
           ServicePilot.exe template step set-members TEMPLATE COMPOSITE --member STEP [--member STEP ...]
           ServicePilot.exe template step add-member TEMPLATE COMPOSITE --member STEP
           ServicePilot.exe template step remove-member TEMPLATE COMPOSITE --member STEP
+          ServicePilot.exe merge-script list [--json]
+          ServicePilot.exe merge-script list SERVICE [--json]
+          ServicePilot.exe merge-script get SERVICE STEP [--json]
+          ServicePilot.exe merge-script set SERVICE STEP --inline "code" [--skip-validate]
+          ServicePilot.exe merge-script set SERVICE STEP --file PATH [--skip-validate]
+          ServicePilot.exe merge-script test SERVICE STEP --file lines.txt [--json]
+          ServicePilot.exe merge-script remove SERVICE STEP
+
           Legacy: add, remove, templates, template create
           ServicePilot.exe shutdown
 
@@ -2428,6 +2401,355 @@ public class ServiceCommandProcessor
         _processManager?.AddService(config);
         if (config.AutoStart)
             _processManager?.StartService(config.Id);
+    }
+
+    // ── merge-script ─────────────────────────────────────────────────────────
+
+    private async Task<CommandResponse> MergeScriptAsync(string[] args)
+    {
+        if (args.Length == 0)
+            return CommandResponse.Error("用法: merge-script list|get|set|test|remove ...", 2);
+
+        var subCommand = args[0].ToLowerInvariant();
+        var rest = args.Skip(1).ToArray();
+        return subCommand switch
+        {
+            "list" or "ls" => MergeScriptList(rest),
+            "get" => MergeScriptGet(rest),
+            "set" => await MergeScriptSetAsync(rest),
+            "test" or "preview" => await MergeScriptTestAsync(rest),
+            "remove" or "delete" or "clear" => await MergeScriptRemoveAsync(rest),
+            _ => CommandResponse.Error($"未知 merge-script 命令: {args[0]}\n用法: merge-script list|get|set|test|remove ...", 2)
+        };
+    }
+
+    private CommandResponse MergeScriptList(string[] args)
+    {
+        var json = HasFlag(args, "--json");
+        var selector = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+
+        IReadOnlyList<ServiceConfig> services;
+        if (!string.IsNullOrWhiteSpace(selector))
+        {
+            var single = FindConfig(selector);
+            if (single == null)
+                return CommandResponse.Error($"找不到服务: {selector}", 2);
+            services = new[] { single };
+        }
+        else
+        {
+            services = ConfigServices();
+        }
+
+        if (json)
+        {
+            return Json(services.Select(svc => new
+            {
+                svc.Id,
+                svc.Name,
+                Steps = svc.ScriptSteps
+                    .Where(step => step.Kind == StepKind.Action)
+                    .OrderBy(step => step.Order)
+                    .Select(step => new
+                    {
+                        step.Id,
+                        step.Name,
+                        step.Order,
+                        HasMergeScript = !string.IsNullOrWhiteSpace(step.LogMergeScript)
+                    })
+            }));
+        }
+
+        if (services.Count == 0)
+            return CommandResponse.Ok("没有配置服务。");
+
+        var lines = new List<string>();
+        foreach (var svc in services)
+        {
+            lines.Add($"[{svc.Name}]");
+            var actionSteps = svc.ScriptSteps
+                .Where(s => s.Kind == StepKind.Action)
+                .OrderBy(s => s.Order)
+                .ToList();
+            if (actionSteps.Count == 0)
+            {
+                lines.Add("  (没有 Action 动作)");
+                continue;
+            }
+            foreach (var step in actionSteps)
+            {
+                var hasScript = !string.IsNullOrWhiteSpace(step.LogMergeScript);
+                lines.Add($"  {step.Order}. {step.Name} ({step.Id}) merge-script={(hasScript ? "yes" : "no")}");
+            }
+        }
+
+        return CommandResponse.Ok(string.Join(Environment.NewLine, lines));
+    }
+
+    private CommandResponse MergeScriptGet(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: merge-script get SERVICE STEP [--json]", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var step = FindStep(service, args[1]);
+        if (step == null)
+            return HasAmbiguousNameMatch(service.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
+
+        var script = step.LogMergeScript;
+        if (HasFlag(args, "--json"))
+        {
+            return Json(new
+            {
+                ServiceId = service.Id,
+                ServiceName = service.Name,
+                StepId = step.Id,
+                StepName = step.Name,
+                HasMergeScript = !string.IsNullOrWhiteSpace(script),
+                MergeScript = script
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(script))
+            return CommandResponse.Ok($"{service.Name} / {step.Name} 没有配置合并函数。");
+
+        return CommandResponse.Ok(script);
+    }
+
+    private async Task<CommandResponse> MergeScriptSetAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: merge-script set SERVICE STEP --inline \"code\" | --file PATH", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+        var step = FindStep(updated, args[1]);
+        if (step == null)
+            return HasAmbiguousNameMatch(updated.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
+
+        var inline = ReadOption(args, "--inline");
+        var filePath = ReadFileOption(args);
+
+        string scriptCode;
+        if (!string.IsNullOrWhiteSpace(inline))
+        {
+            scriptCode = inline;
+        }
+        else if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            if (!File.Exists(filePath))
+                return CommandResponse.Error($"文件不存在: {filePath}", 2);
+
+            try
+            {
+                scriptCode = await File.ReadAllTextAsync(filePath);
+            }
+            catch (Exception ex)
+            {
+                return CommandResponse.Error($"读取文件失败: {ex.Message}", 2);
+            }
+        }
+        else
+        {
+            return CommandResponse.Error("缺少 --inline 或 --file 参数。用法: merge-script set SERVICE STEP --inline \"code\" | --file PATH", 2);
+        }
+
+        // Compile-check before saving so broken scripts are rejected instead of silently failing at runtime.
+        if (!HasFlag(args, "--skip-validate"))
+        {
+            using var validator = new LogMergeService();
+            var ok = await validator.CompileAsync(scriptCode);
+            if (!ok)
+            {
+                var error = validator.GetCompileError(scriptCode) ?? "未知编译错误。";
+                return CommandResponse.Error($"合并函数编译失败，未保存：{Environment.NewLine}{error}{Environment.NewLine}（如需强制保存请加 --skip-validate）", 2);
+            }
+        }
+
+        step.LogMergeScript = scriptCode;
+
+        await UpdateConfigAsync(updated);
+
+        if (HasFlag(args, "--json"))
+            return Json(new { ServiceId = service.Id, ServiceName = service.Name, StepId = step.Id, StepName = step.Name, Updated = true });
+
+        return CommandResponse.Ok($"已设置 {service.Name} / {step.Name} 的合并函数。");
+    }
+
+    private async Task<CommandResponse> MergeScriptTestAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: merge-script test SERVICE STEP --file lines.txt [--json]", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var step = FindStep(service, args[1]);
+        if (step == null)
+            return HasAmbiguousNameMatch(service.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
+
+        if (string.IsNullOrWhiteSpace(step.LogMergeScript))
+            return CommandResponse.Error($"{service.Name} / {step.Name} 没有配置合并函数。先用 merge-script set 设置。", 2);
+
+        // Input lines are treated verbatim as the CurrentLine values, mirroring what the log window
+        // feeds the script ("HH:mm:ss [Level] message"). Paste real log lines including the prefix.
+        var filePath = ReadFileOption(args);
+        if (string.IsNullOrWhiteSpace(filePath))
+            return CommandResponse.Error("缺少 --file 参数。用法: merge-script test SERVICE STEP --file lines.txt [--json]", 2);
+        if (!File.Exists(filePath))
+            return CommandResponse.Error($"文件不存在: {filePath}", 2);
+
+        string[] lines;
+        try
+        {
+            lines = await File.ReadAllLinesAsync(filePath);
+        }
+        catch (Exception ex)
+        {
+            return CommandResponse.Error($"读取文件失败: {ex.Message}", 2);
+        }
+
+        using var engine = new LogMergeService();
+        var compiled = await engine.CompileAsync(step.LogMergeScript);
+        if (!compiled)
+        {
+            var error = engine.GetCompileError(step.LogMergeScript) ?? "未知编译错误。";
+            return CommandResponse.Error($"合并函数编译失败：{Environment.NewLine}{error}", 2);
+        }
+
+        var json = HasFlag(args, "--json");
+        var rows = new List<object>();
+        var rendered = new List<string>();
+        var textLines = new List<string>();
+
+        string? previousLine = null;
+        MergeResult? previousResult = null;
+        var groupOpen = false;
+
+        foreach (var raw in lines)
+        {
+            var globals = new MergeScriptGlobals
+            {
+                PreviousLine = previousLine,
+                CurrentLine = raw,
+                PreviousResult = previousResult,
+                PreviousWasCollapsed = previousResult?.Collapse == true && groupOpen,
+                InCollapseGroup = groupOpen
+            };
+            var result = await engine.EvaluateAsync(step.LogMergeScript, globals);
+
+            var hit = result != null;
+            var mergedMessage = result?.MergedMessage;
+            var collapseFlag = result?.Collapse ?? false;
+            var color = result?.Color;
+            var displayText = string.IsNullOrWhiteSpace(mergedMessage) ? raw : mergedMessage!;
+
+            // Simulate the window's collapse rule: collapse only if the script asks AND a group is open
+            // (a previous line returned Collapse=false and became the header).
+            var collapsedIntoPrevious = hit && collapseFlag && groupOpen && rendered.Count > 0;
+            if (collapsedIntoPrevious)
+                rendered[^1] = displayText;
+            else
+                rendered.Add(displayText);
+
+            rows.Add(new
+            {
+                Index = rows.Count,
+                Raw = raw,
+                Hit = hit,
+                MergedMessage = mergedMessage,
+                Color = color,
+                Collapse = collapseFlag,
+                CollapsedIntoPrevious = collapsedIntoPrevious,
+                Children = result?.Children
+            });
+
+            if (!json)
+            {
+                var status = !hit ? "MISS" : collapsedIntoPrevious ? "COLLAPSE→上一条" : "KEEP";
+                textLines.Add($"[{rows.Count - 1}] {status}");
+                textLines.Add($"    原文 : {raw}");
+                if (hit)
+                    textLines.Add($"    渲染 : {displayText}  (Color={color ?? "-"}, Collapse={collapseFlag})");
+            }
+
+            // Mirror the window: a hit with Collapse=false opens/refreshes the group header; a null result
+            // closes the group; a collapsed line keeps the current group open.
+            if (!hit)
+                groupOpen = false;
+            else if (!collapseFlag)
+                groupOpen = true;
+
+            previousResult = result;
+            previousLine = raw;
+        }
+
+        if (json)
+        {
+            return Json(new
+            {
+                ServiceName = service.Name,
+                StepName = step.Name,
+                InputLines = lines.Length,
+                RenderedLines = rendered.Count,
+                Rows = rows,
+                FinalRender = rendered
+            });
+        }
+
+        var sb = new List<string>
+        {
+            $"服务: {service.Name} / 动作: {step.Name}",
+            $"输入 {lines.Length} 行 → 渲染后 {rendered.Count} 行（折叠 {lines.Length - rendered.Count} 行）",
+            new string('-', 40)
+        };
+        sb.AddRange(textLines);
+        sb.Add(new string('-', 40));
+        sb.Add("最终渲染结果：");
+        sb.AddRange(rendered.Select(r => "  " + r));
+
+        return CommandResponse.Ok(string.Join(Environment.NewLine, sb));
+    }
+
+    private async Task<CommandResponse> MergeScriptRemoveAsync(string[] args)
+    {
+        if (args.Length < 2)
+            return CommandResponse.Error("用法: merge-script remove SERVICE STEP", 2);
+
+        var service = FindConfig(args[0]);
+        if (service == null)
+            return CommandResponse.Error($"找不到服务: {args[0]}", 2);
+
+        var updated = ScriptDefinitionService.CloneService(service);
+        var step = FindStep(updated, args[1]);
+        if (step == null)
+            return HasAmbiguousNameMatch(updated.ScriptSteps, args[1])
+                ? CommandResponse.Error($"动作名称 \"{args[1]}\" 匹配到多个，请使用 GUID 定位", 2)
+                : CommandResponse.Error($"找不到动作: {args[1]}", 2);
+
+        if (string.IsNullOrWhiteSpace(step.LogMergeScript))
+            return CommandResponse.Ok($"{service.Name} / {step.Name} 没有合并函数，无需清除。");
+
+        step.LogMergeScript = null;
+        await UpdateConfigAsync(updated);
+
+        if (HasFlag(args, "--json"))
+            return Json(new { ServiceId = service.Id, ServiceName = service.Name, StepId = step.Id, StepName = step.Name, Removed = true });
+
+        return CommandResponse.Ok($"已清除 {service.Name} / {step.Name} 的合并函数。");
     }
 
     private async Task UpdateConfigAsync(ServiceConfig config)

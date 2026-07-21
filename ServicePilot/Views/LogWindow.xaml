@@ -7,6 +7,7 @@
         Title="日志" Height="560" Width="1040"
         Background="{ui:ThemeResource ApplicationBackgroundBrush}"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
 
     <Window.Resources>
@@ -19,10 +20,15 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- WPF-UI TitleBar: provides min/max/close + drag -->
-        <ui:TitleBar Title="日志"
+        <!-- WPF-UI TitleBar: provides min/max/close + drag. Title binds to the window Title so the header
+             shows the full "日志 - <服务名>" text (no separate toolbar title needed). -->
+        <ui:TitleBar Title="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"
                      ShowMaximize="True"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="12">
             <Grid.RowDefinitions>
@@ -31,16 +37,9 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- 工具栏 -->
-            <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                <TextBlock x:Name="TitleText" Text="日志"
-                           FontSize="14" FontWeight="SemiBold"
-                           VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis"
-                           TextWrapping="NoWrap"
-                           MaxWidth="260"/>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                            DockPanel.Dock="Right">
+            <!-- 工具栏：标题已移到头部标题栏，这里只放操作按钮，整体靠右。 -->
+            <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="True">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button x:Name="RunActionButton" Content="运行动作" Width="82" Height="32" VerticalAlignment="Center"
                             Margin="0,0,6,0" Click="RunAction_Click"/>
                     <ui:Button x:Name="StopButton" Content="停止" Width="56" Height="32" VerticalAlignment="Center"
@@ -60,6 +59,9 @@
                                Margin="0,0,8,0"/>
                     <CheckBox x:Name="AutoScrollCheck" Content="自动滚动" IsChecked="True"
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ui:Button x:Name="SummaryButton" Content="摘要" Width="58" Height="32" VerticalAlignment="Center"
+                            Margin="0,0,6,0" Click="Summary_Click"
+                            ToolTip="折叠全部合并组，只看摘要一行；再次点击展开全部"/>
                     <ui:Button x:Name="EditButton" Content="编辑" Width="58" Height="32" VerticalAlignment="Center"
                             Margin="0,0,6,0" Click="Edit_Click"/>
                     <ui:Button x:Name="ClearButton" Content="清空" Width="58" Height="32" VerticalAlignment="Center" Click="Clear_Click"/>
@@ -73,24 +75,32 @@
                         SelectionChanged="LogTabs_SelectionChanged"
                         Margin="0,0,0,6"/>
 
-            <!-- 日志查看器 -->
-            <avalonedit:TextEditor x:Name="LogEditor" Grid.Row="2"
-                                   FontFamily="Consolas" FontSize="12"
-                                   ShowLineNumbers="False"
-                                   IsReadOnly="True"
-                                   Background="#FF1E1E2E"
-                                   Foreground="#FFD4D4D4"
-                                   WordWrap="False"
-                                   HorizontalScrollBarVisibility="Auto"
-                                   VerticalScrollBarVisibility="Auto"
-                                   PreviewKeyDown="LogEditor_PreviewKeyDown">
-                <avalonedit:TextEditor.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem x:Name="CopySelectedMenuItem" Header="复制选中" Click="CopySelected_Click"/>
-                        <MenuItem x:Name="CopyAllMenuItem" Header="复制全部" Click="CopyAll_Click"/>
-                    </ContextMenu>
-                </avalonedit:TextEditor.ContextMenu>
-            </avalonedit:TextEditor>
+            <!-- 日志查看器 + 右侧概览 minimap -->
+            <Grid Grid.Row="2" Background="#FF1E1E2E">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <avalonedit:TextEditor x:Name="LogEditor" Grid.Column="0"
+                                       FontFamily="Consolas" FontSize="12"
+                                       ShowLineNumbers="False"
+                                       IsReadOnly="True"
+                                       Background="#FF1E1E2E"
+                                       Foreground="#FFD4D4D4"
+                                       WordWrap="False"
+                                       Padding="0,0,0,14"
+                                       HorizontalScrollBarVisibility="Auto"
+                                       VerticalScrollBarVisibility="Auto"
+                                       PreviewKeyDown="LogEditor_PreviewKeyDown">
+                    <avalonedit:TextEditor.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem x:Name="CopySelectedMenuItem" Header="复制选中" Click="CopySelected_Click"/>
+                            <MenuItem x:Name="CopyAllMenuItem" Header="复制全部" Click="CopyAll_Click"/>
+                        </ContextMenu>
+                    </avalonedit:TextEditor.ContextMenu>
+                </avalonedit:TextEditor>
+                <Border x:Name="OverviewHost" Grid.Column="1" Width="12"/>
+            </Grid>
         </Grid>
     </Grid>
 </ui:FluentWindow>

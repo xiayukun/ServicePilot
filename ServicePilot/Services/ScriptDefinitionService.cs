@@ -18,6 +18,7 @@ public static class ScriptDefinitionService
             OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
+            LogMergeScript = source.LogMergeScript,
             MemberStepIds = source.MemberStepIds.ToList(),
             Order = source.Order
         };

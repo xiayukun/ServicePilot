@@ -25,6 +25,69 @@ public class ProcessManager : IDisposable
             AddService(config);
     }
 
+    /// <summary>
+    /// Merges the given configs into the current runtime without tearing down running services.
+    /// Existing services are updated in place (preserving live process/step state), new services are
+    /// added, and services no longer present on disk are removed only when they are not running.
+    /// Returns the set of running service ids that could not be removed so the caller can inform the user.
+    /// </summary>
+    public IReadOnlyList<Guid> SyncConfigs(List<ServiceConfig> configs)
+    {
+        var incoming = configs.OrderBy(c => c.SortOrder).ToList();
+        var incomingIds = new HashSet<Guid>(incoming.Select(c => c.Id));
+        var skippedRunning = new List<Guid>();
+
+        Guid[] existingIds;
+        lock (_gate)
+        {
+            existingIds = _runtimeStates.Keys.ToArray();
+        }
+
+        // Remove services deleted on disk — but never kill a running one.
+        foreach (var id in existingIds)
+        {
+            if (incomingIds.Contains(id))
+                continue;
+
+            bool isBusy;
+            ServiceRuntimeState? state;
+            lock (_gate)
+            {
+                _runtimeStates.TryGetValue(id, out state);
+            }
+            isBusy = state != null && IsServiceBusy(state);
+
+            if (isBusy)
+            {
+                skippedRunning.Add(id);
+                continue;
+            }
+
+            lock (_gate)
+            {
+                if (_runtimeStates.TryGetValue(id, out var removing))
+                {
+                    _runtimeStates.Remove(id);
+                    RunOnUiThread(() => Services.Remove(removing));
+                }
+            }
+        }
+
+        // Add new / update existing.
+        foreach (var config in incoming)
+        {
+            var updated = UpdateService(config);
+            if (!updated)
+                AddService(config);
+        }
+
+        return skippedRunning;
+    }
+
+    private static bool IsServiceBusy(ServiceRuntimeState state) =>
+        state.State is ProcessState.Running or ProcessState.Starting or ProcessState.Stopping ||
+        state.StepStates.Values.Any(step => step.State == StepRunState.Running);
+
     public bool AddService(ServiceConfig config)
     {
         lock (_gate)

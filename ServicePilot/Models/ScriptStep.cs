@@ -30,6 +30,12 @@ public class ScriptStep
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
+    /// Optional C# merge script evaluated by <c>LogMergeService</c> to transform log output at runtime.
+    /// When set, the script receives <see cref="MergeScriptGlobals"/> and returns a <see cref="MergeResult"/>.
+    /// </summary>
+    public string? LogMergeScript { get; set; }
+
+    /// <summary>
     /// For <see cref="StepKind.Composite"/> steps: ordered ids of the member actions to run in sequence.
     /// </summary>
     public List<Guid> MemberStepIds { get; set; } = new();

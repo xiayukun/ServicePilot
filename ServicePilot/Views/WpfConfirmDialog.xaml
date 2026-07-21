@@ -5,6 +5,7 @@
         Title="ServicePilot" Height="200" Width="420"
         WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
         ResizeMode="NoResize"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
     <Grid>
         <Grid.RowDefinitions>
@@ -14,7 +15,11 @@
 
         <ui:TitleBar Title="ServicePilot"
                      ShowMaximize="False"
-                     ShowMinimize="False" />
+                     ShowMinimize="False">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="20">
             <Grid.RowDefinitions>

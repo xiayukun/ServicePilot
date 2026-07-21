@@ -5,7 +5,7 @@ using ServicePilot.Models;
 
 namespace ServicePilot.Services;
 
-public class ConfigService
+public class ConfigService : IDisposable
 {
     private static readonly string ConfigDir =
         Environment.GetEnvironmentVariable("SERVICEPILOT_CONFIG_DIR")
@@ -19,6 +19,17 @@ public class ConfigService
     public string PathToConfig => ConfigPath;
     public string LegacyV1Config => LegacyV1ConfigPath;
     public string LegacyLocalConfigPath => Path.Combine(AppContext.BaseDirectory, "config.json");
+
+    // ── External change detection ──────────────────────────────────────────────
+    // Raised (debounced) when config.v2.json changes on disk from an external editor.
+    // Writes performed by this process are suppressed so we never reload our own save.
+    public event Action? ExternalConfigChanged;
+
+    private FileSystemWatcher? _watcher;
+    private System.Threading.Timer? _debounceTimer;
+    private readonly object _watchLock = new();
+    private DateTime _lastSelfWriteUtc = DateTime.MinValue;
+    private bool _disposed;
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -76,7 +87,100 @@ public class ConfigService
         var json = JsonSerializer.Serialize(config, Options);
         var tempPath = ConfigPath + ".tmp";
         await File.WriteAllTextAsync(tempPath, json);
+
+        // Mark this as a self-write so the FileSystemWatcher does not treat it as an external edit.
+        lock (_watchLock)
+            _lastSelfWriteUtc = DateTime.UtcNow;
+
         File.Move(tempPath, ConfigPath, overwrite: true);
+
+        // The move produces a second timestamp; refresh the marker after the write completes.
+        lock (_watchLock)
+            _lastSelfWriteUtc = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Starts watching config.v2.json for external edits. Debounced changes raise
+    /// <see cref="ExternalConfigChanged"/> on a background thread. Writes performed by this
+    /// process (via <see cref="SaveAsync"/>) are ignored.
+    /// </summary>
+    public void StartWatching()
+    {
+        if (_watcher != null)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(ConfigDir);
+            _watcher = new FileSystemWatcher(ConfigDir, "config.v2.json")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
+                EnableRaisingEvents = true
+            };
+            _watcher.Changed += OnConfigFileEvent;
+            _watcher.Created += OnConfigFileEvent;
+            _watcher.Renamed += OnConfigFileEvent;
+        }
+        catch
+        {
+            // If the watcher cannot start (permissions, network path, etc.) we simply
+            // fall back to no auto-reload; the app keeps working.
+            _watcher = null;
+        }
+    }
+
+    private void OnConfigFileEvent(object sender, FileSystemEventArgs e)
+    {
+        // Ignore events triggered by our own SaveAsync within a short window.
+        lock (_watchLock)
+        {
+            if ((DateTime.UtcNow - _lastSelfWriteUtc).TotalMilliseconds < 1500)
+                return;
+        }
+
+        // Debounce: editors may fire multiple events per save.
+        lock (_watchLock)
+        {
+            _debounceTimer ??= new System.Threading.Timer(_ => RaiseExternalChanged());
+            _debounceTimer.Change(400, System.Threading.Timeout.Infinite);
+        }
+    }
+
+    private void RaiseExternalChanged()
+    {
+        // Re-check the self-write guard: a save may have landed during the debounce window.
+        lock (_watchLock)
+        {
+            if ((DateTime.UtcNow - _lastSelfWriteUtc).TotalMilliseconds < 1500)
+                return;
+        }
+
+        try
+        {
+            ExternalConfigChanged?.Invoke();
+        }
+        catch
+        {
+            // Never let a reload handler exception escape the timer thread.
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+
+        if (_watcher != null)
+        {
+            _watcher.Changed -= OnConfigFileEvent;
+            _watcher.Created -= OnConfigFileEvent;
+            _watcher.Renamed -= OnConfigFileEvent;
+            _watcher.Dispose();
+            _watcher = null;
+        }
+        _debounceTimer?.Dispose();
+        _debounceTimer = null;
     }
 
     /// <summary>

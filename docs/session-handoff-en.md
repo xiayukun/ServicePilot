@@ -1,21 +1,65 @@
 # Session Handoff
 
-Last updated: 2026-07-14
+Last updated: 2026-07-21
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## Release: ServicePilot 4.0.0 (2026-07-21)
+
+- Bumped from 3.x to `4.0.0` (`csproj` + `AGENTS.md`) as a major release consolidating this session's new features.
+- The icon white-halo root cause was the **opaque white background baked into source PNG V1**; `scripts\make_icon.py` now detects the teal squircle bounds + applies a rounded-rect mask, exporting a transparent `app.ico` (exe/taskbar) and `app.png` (title-bar `ui:ImageIcon`, avoids multi-frame ico downscale halos). A full `obj/bin` clean rebuild ensures the new icon is embedded in the exe.
+- README/README-en gained a top hero image `Assets/servicepilot-hero.png` (AI-generated, teal brand), and the 4.0 folding/overview log screenshot `Assets/screenshots/log-window-zh.png` was promoted to the top.
+- CHANGELOG/CHANGELOG-en consolidated the former 3.1.0 entry into the `4.0.0` release entry.
+- Committed, pushed, and created the GitHub Release via `gh` (tag `v4.0.0`, uploading `ServicePilot.exe`).
+- The local deploy target is the Chinese folder "同步软件" (shown as garbled `ͬ������` in some shells; it is the same directory with 30+ apps); byte-exact matching is used to avoid creating duplicate dirs or accidental deletion.
+
+## Earlier change: new app icon + version 3.1.0 (2026-07-21)
+
+- Adopted a new teal squircle icon (source PNG V1). `scripts\make_icon.py` (Pillow) trims transparent padding, re-pads centered, and exports a multi-resolution `ServicePilot\Resources\Icons\app.ico` (16/24/32/48/64/128/256).
+- `app.ico` is the single icon source: the csproj `<ApplicationIcon>` (exe icon), every `ui:FluentWindow` `Icon` (taskbar), and every `ui:TitleBar.Icon` (visible left-side title-bar icon, `ui:ImageIcon` 18×18). All 9 window XAMLs updated.
+- The tray badge icon is still generated dynamically by `App.CreateTrayIconWithBadge` (running count) and intentionally does NOT use `app.ico`.
+- Version bumped to `3.1.0` (`csproj` + `AGENTS.md`); `CHANGELOG`/`CHANGELOG-en`/`README`/`README-en` gained a 3.1.0 entry covering this session's user-visible work (merge scripts / folding / overview / hot-reload / scrollable menus / system accent / icon & title bar).
+- Built with 0 warnings/0 errors, then published over the local private target.
+
+## Earlier change: fold visualization + tray menu (2026-07-21)
+
+On top of the log merge/collapse batch, the collapse feature now has real fold visualization plus related UI polish.
+
+Fold visualization (`LogWindow.xaml.cs` / new `Views/FoldColorMarkerRenderer.cs`):
+- Folding is now a REAL AvalonEdit fold (`FoldingManager.Install` wired into TextView line generation, which actually hides folded lines), with a left-side `>`/`+` expand toggle. Raw lines are always kept; expanding reveals every child line. The fold starts at the header line offset so the collapsed view shows only the summary Title.
+- Folded content is searchable: `FindLogMatch` auto-expands any fold containing a hit; the `Summary` button toggles fold-all / expand-all.
+- The collapsed placeholder TEXT is fixed white (`FoldingElementGenerator.TextBrush`, a global static set once).
+- Multi-color folds: AvalonEdit's fold box is one global color and cannot be colored per section (`FoldingElementGenerator` is `sealed`). Instead `FoldColorMarkerRenderer` (an `IBackgroundRenderer` overlay) paints a ~100px content-color block between the `+` marker and the summary text, using the fold's FIRST child color; the Title is padded with leading spaces (`GetFoldTitlePrefix`) so text sits to the right of the block and never overlaps. This is the only supported way to show multiple differently-colored folds at once.
+- Right-side overview `Views/OverviewMargin.cs`: a color overview map next to the native scrollbar, one pixel row per highest-priority color (Error > Warning > custom > System > normal), folding-aware, click-to-scroll, no draggable thumb (which caused per-scroll repaint lag); `InvalidateVisualCache` has a signature guard so pure scrolling does not rebuild.
+
+Tray menu:
+- Briefly tried "keep the menu open after clicking a run/stop item" (`StaysOpenOnClick`); it felt wrong, so it was fully reverted — clicking closes the menu as before (run items call `RebuildTrayMenu()`).
+
+Merge script upgraded to a stateful streaming function (2026-07-21):
+- New inputs (`MergeScriptGlobals`): `PreviousResult` (the full `MergeResult` returned for the previous line), `PreviousWasCollapsed`, `InCollapseGroup`.
+- New output (`MergeResult`): `State` (`Dictionary<string, object?>`), handed to the next line as `PreviousResult.State` — enables counters / de-dup / conditional folding.
+- Constraints: runtime only, never persisted, NOT restored on tab rebuild; store simple values only (string/int/double/bool, since scripts run in a collectible ALC); per tab (`LogTabState.LastResult`).
+- Touchpoints: `MergeScriptGlobals.cs`, `MergeResult.cs`, `LogMergeService.BuildSource` (new injected locals, `UserBodyStartLine` 16→19), `LogWindow.ApplyMerge`, `ServiceCommandProcessor.MergeScriptTestAsync` (CLI test carries state too); editor prefill comments, AI help (zh/en), and AGENTS are all synced.
+
+## Earlier change: log merge collapse fix (2026-07-20)
+
+Fixed "LogMergeScript is set but progress lines never fold in the log window." Two real root causes:
+
+1. `LogWindow` never consumed `MergeResult.Collapse` — it only replaced text and color, so folding was never rendered. (This batch further evolved it into a real AvalonEdit fold, see above.)
+2. `LogMergeService.BuildReferences` was missing `System.Text.RegularExpressions` (and a few others), so any script using `Regex` failed to compile at runtime and was silently swallowed (the user's script used `Regex`). References are now complete, and `BuildSource` pre-adds `using System.Text.RegularExpressions;` / `using System.Globalization;` (with `UserBodyStartLine` updated to match).
+
+Supporting changes:
+- `merge-script set` now compile-checks and refuses to save on error (`--skip-validate` to force); a runtime compile failure surfaces once per step in the service log via `MergeScriptCompileError` instead of being silent.
+- New `merge-script test SERVICE STEP --file lines.txt [--json]`: feeds each line as CurrentLine and prints hit / MergedMessage / Color / Collapse plus the final rendered view — verify without running a service. Verified offline (8 lines → 3) and in the single-file publish build.
+- Contract documented in AGENTS.md / AI help: `PreviousLine`/`CurrentLine` are the FULL formatted line `"HH:mm:ss [Level] message"`; the script is read live from the current config on every line (`UpdateService` updates `RuntimeState.Config`), so edits take effect on the next line without restart; `Color` accepts any WPF color; `Children` is reserved/not rendered.
 
 ## Current State
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current mainline is ServicePilot 2.3.0:
+The current released version is ServicePilot 3.0.0:
 
-- v2.3.0 adds: step set-members/add-member/remove-member (service and template sides), template import --on-conflict, --json UTF-8 encoding with errors on stdout, service/step edit no-change detection, service get/status DefaultStartStep annotation, smaller tray icon numbers.
-- `dotnet build` has 2 errors in TemplateManagerWindow.xaml.cs (ImportAsync return type change not yet adapted in GUI). CLI-only functionality compiles and works.
-
-The last fully released version is ServicePilot 2.2.0 (tag `v2.2.0`, commit `aa6bdf6`).
-
-- Project version properties are currently `2.3.0` (ServicePilot/ServicePilot.csproj).
+- Project version properties are currently `3.0.0` (ServicePilot/ServicePilot.csproj). The log merge/collapse batches above are not yet version-bumped or committed; pick a new version and sync the CHANGELOG when committing.
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.
@@ -61,14 +105,13 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 
 ## Packaging And Release
 
-- Normal build check: `rtk dotnet build ServicePilot.sln`.
-- Single-file publish command: `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`.
+- Normal build check: `dotnet build ServicePilot.sln`.
+- Single-file publish command: `dotnet publish ./ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist`.
 - `Release` publish defaults should produce a single `ServicePilot.exe`.
 - If the running exe locks `dist`, publish to `dist-staged` first.
 - After successfully producing an exe, follow the local private copy target in `LOCAL_NOTES.private.md` when that file exists. Do not copy that target path into committed docs.
+- Before overwriting the local install target, detect whether the target exe is locked by a running process yourself (e.g. `Get-Process ServicePilot`) and only ask the user to close it when it is actually locked; do not ask by default.
 - Current user instruction: produce local exe builds for testing only. Do not commit, tag, or publish a GitHub Release unless explicitly asked.
-- v2.1.0 is released (tag `v2.1.0`). v2.1.1 is committed and tagged (tag `v2.1.1`, commit `6b49baa`), but not yet pushed to remote or published as a GitHub Release.
-- Release note drafts live in `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`; v2.1.1 optional release notes TBD.
 - GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
 
 ## Documentation Rules
@@ -84,7 +127,7 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 Run at least this after functional changes:
 
 ```text
-rtk dotnet build ServicePilot.sln
+dotnet build ServicePilot.sln
 ```
 
 For config migration or CLI work, verify with an isolated directory:

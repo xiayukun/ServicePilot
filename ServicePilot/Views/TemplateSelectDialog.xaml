@@ -4,6 +4,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="应用模板" Height="360" Width="540"
         WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
     <Grid>
         <Grid.RowDefinitions>
@@ -13,7 +14,11 @@
 
         <ui:TitleBar Title="应用模板"
                      ShowMaximize="False"
-                     ShowMinimize="False" />
+                     ShowMinimize="False">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="14">
             <Grid.RowDefinitions>

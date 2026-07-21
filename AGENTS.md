@@ -1,10 +1,6 @@
-Follow the local RTK command rules configured for this machine.
-
 --- project-doc ---
 
 # ServicePilot Agent Notes
-
-Follow the local RTK command rules configured for this machine.
 
 ## Project State
 
@@ -23,9 +19,10 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `3.0.0`.
+- Public release version: `4.0.0`.
+- App icon: `ServicePilot\Resources\Icons\app.ico` is the single icon source. It backs the exe `<ApplicationIcon>`, every FluentWindow `Icon` (taskbar), and each `ui:TitleBar.Icon` (visible left-side title-bar icon). Regenerate it from the source PNG via `scripts\make_icon.py` (multi-size 16-256 ICO). The dynamic tray badge icon is generated separately in `App.CreateTrayIconWithBadge` and is intentionally NOT `app.ico`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
-- `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`, and `dist` should contain only `ServicePilot.exe`.
+- `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `dotnet publish ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist`, and `dist` should contain only `ServicePilot.exe`.
 - After every successful package/build that produces `ServicePilot.exe`, also follow the local private copy target documented in `LOCAL_NOTES.private.md` when that file exists. Do not copy the target path into committed docs.
 - This directory is currently a Git repository on branch `main`. Still check `git status` before edits because user screenshots/assets may be untracked.
 - Process-runner design references are summarized in `docs/process-runner-research.md` and `docs/process-runner-research-en.md`.
@@ -46,11 +43,11 @@ Before making changes:
 4. Inspect relevant code instead of relying on memory.
 5. Do not revert user changes or generated artifacts unless the user explicitly asks.
 
-When using shell commands, follow `RTK.md`: prefix executable commands with `rtk`. For PowerShell built-ins, use `rtk powershell.exe -NoProfile -Command "..."`.
+Use shell commands directly (e.g. `dotnet`, `git`, `powershell.exe -NoProfile -Command "..."`).
 
 Before finishing a coding turn:
 
-1. Run `rtk dotnet build ServicePilot.sln`.
+1. Run `dotnet build ServicePilot.sln`.
 2. Update this file if architecture, commands, behavior, or maintenance rules changed.
 3. Update `docs/session-handoff.md` and `docs/session-handoff-en.md`.
 4. Keep Chinese and English Markdown documents aligned when user-facing docs change.
@@ -170,7 +167,20 @@ Tray and dialogs:
 - Log window: `Views\LogWindow.xaml(.cs)` receives a `ServiceItemViewModel`, `ProcessManager`, `PresetVariableUsageStore`, action-variable save callback, and service edit callback. It offers variable-aware action/composite execution, stop, edit, bounded in-memory logs, search, copy, and horizontal scrolling for long lines. It intentionally has no separate Start button; the `运行动作` / `Run action` menu is the single execution entrypoint.
 - Log window tabs are created lazily. Do not create default `全部` / `All` or default `服务` / `Service` tabs. When an action enters `Running`, the log window should activate that action's tab even if the tab already exists. Continuous output alone must not steal the user's active tab. System logs without an action name may create the service tab only when such logs actually exist.
 - Log window title text should be clipped with ellipsis and must never push action buttons off-screen. Service names are user data and less important than keeping controls clickable.
-- App log buffers are capped at 20,000 entries, while each visible log-window tab renders at most 5,000 recent entries and batches high-frequency output before refreshing AvalonEdit. Keep future increases bounded and preserve batched rendering so webpack/Vite-style progress logs cannot freeze the UI. In the log window, non-error `[webpack.Progress] NN% ...` lines are coalesced into one visible progress line with a text progress bar; this is display-layer compaction only and must not remove raw logs from CLI/buffer data.
+- App log buffers are capped at 20,000 entries, while each visible log-window tab renders at most 5,000 recent entries and batches high-frequency output before refreshing AvalonEdit. Keep future increases bounded and preserve batched rendering so webpack/Vite-style progress logs cannot freeze the UI.
+- There is no built-in hard-coded webpack/Vite progress coalescing. Progress-line folding is opt-in per Action via `LogMergeScript` (see the Log Merge Script section below). Do not reintroduce a hidden global coalescer.
+
+Log Merge Script (per-Action log folding/merging/coloring):
+
+- `ScriptStep.LogMergeScript` is an optional Roslyn C# script body evaluated by `LogMergeService` against every log line of that Action's tab (including non-visible tabs, so state stays correct on tab switch).
+- Globals contract: `PreviousLine` and `CurrentLine` are the FULL formatted line `"HH:mm:ss [Level] message"` (with timestamp/level prefix). The process-emitted text such as `<s> [webpack.Progress] ...` is part of the message. This is the exact string produced by `LogWindow.FormatLogLine`. Additional globals: `PreviousResult` (`MergeResult?` returned for the previous line — read `PreviousResult.State` to carry state forward), `PreviousWasCollapsed` (`bool`), and `InCollapseGroup` (`bool`, whether a group header exists to fold into). If you add/remove injected globals, update `LogMergeService.BuildSource` locals AND `UserBodyStartLine` together.
+- Return `MergeResult` or `null` (null keeps the original line). `MergedMessage` on a group header (`Collapse=false`) is the summary shown on the collapsed line; `Color` is any WPF-parseable color (named or `#RRGGBB`, invalid ignored); `Collapse=true` marks the line as a folded child of the group started by the previous non-collapsed line. The first line of a group must return `Collapse=false` (anchor); collapse only applies when the previous entry was also produced by the script. `State` (`Dictionary<string, object?>`) is optional cross-line carry state handed to the next line as `PreviousResult.State` — runtime only, never persisted, NOT restored on tab rebuild, and should hold simple values only (string/int/double/bool) because scripts run in a collectible ALC. `Children` is reserved/not yet rendered. Merge state (`LogTabState.LastResult`) is per tab and reset when the script is absent.
+- Folding is a REAL AvalonEdit fold, not a text overwrite. Raw lines are always kept in the buffer/CLI data; `LogWindow.RebuildFoldings` builds `FoldingManager` sections from the collapse groups, folds them by default, and shows one summary line with a left-side `>`/`+` toggle. Expanding reveals every raw child line. Search (`FindLogMatch`) auto-expands any fold that contains a hit, and the summary button toggles fold-all/expand-all.
+- Fold visuals: the collapsed placeholder TEXT is fixed white (`FoldingElementGenerator.TextBrush`, a global static set once). AvalonEdit cannot color individual folds, so per-fold content color is shown by `FoldColorMarkerRenderer` — an `IBackgroundRenderer` overlay that paints a ~100px solid color block between the `+` marker and the summary text, using the fold's FIRST folded child color. The summary Title is padded with leading spaces (`GetFoldTitlePrefix`) so the text starts to the right of the block and never overlaps it. This is the only supported way to show multiple differently-colored folds at once.
+- `Views\OverviewMargin.cs` is the right-side color overview map next to the native scrollbar. It paints one row per pixel taking the highest-priority color (Error > Warning > custom merge color > System > normal), is folding-aware (folded-away children do not consume rows), and click-scrolls to the corresponding line. It intentionally has no draggable viewport thumb (that caused per-scroll repaint lag); `InvalidateVisualCache` has a signature guard so pure scrolling does not rebuild the map.
+- `LogMergeService` compiles scripts with `CSharpCompilation` (emit to memory + collectible `AssemblyLoadContext`) so it works under single-file publish. `BuildReferences` must include every assembly user scripts commonly need — currently corlib, System.Linq, collections, StringBuilder, `System.Text.RegularExpressions`, Uri, Globalization, ServicePilot, System.Runtime, netstandard. `BuildSource` adds `using System.Text.RegularExpressions;` and `using System.Globalization;`; if you add/remove prefix `using` lines, update `UserBodyStartLine` so compile-error line numbers stay correct.
+- The script is read live from the current config on every line, so `merge-script set` / GUI edits / external config edits (via the file watcher, which calls `ProcessManager.UpdateService` → `RuntimeState.Config`) take effect on the next log line without restarting the service.
+- Compile failures are never silently swallowed: `merge-script set` compile-checks and refuses to save on error (`--skip-validate` to force); at runtime a compile failure surfaces once per step in the service log via the `MergeScriptCompileError` localized message.
 - `Views\PresetVariableInputDialog.xaml(.cs)` is the small input dialog used by tray and service manager variable `新增`.
 - Log window action buttons use `LogActionButtonStyle`; disabled button foreground must stay black for readability against WPF's disabled button background.
 - Runtime/system failure logs trigger a throttled tray balloon from `App.OnServiceOutput`. Do not notify on every stderr line; notify on final/system failures so retry noise does not spam the user.
@@ -211,6 +221,11 @@ ServicePilot.exe step add SERVICE --name NAME --type Batch|PowerShell|Python|Nod
 ServicePilot.exe step edit SERVICE STEP [--name NAME] [--type ...] [--script ...] [--use-variable ...] [--open-log-on-run ...] [--json]
 ServicePilot.exe step remove SERVICE STEP [--json]
 ServicePilot.exe step move SERVICE STEP --position N|after:STEP|before:STEP [--json]
+ServicePilot.exe merge-script list [SERVICE] [--json]
+ServicePilot.exe merge-script get SERVICE STEP [--json]
+ServicePilot.exe merge-script set SERVICE STEP --inline "code"|--file PATH [--skip-validate]
+ServicePilot.exe merge-script test SERVICE STEP --file lines.txt [--json]
+ServicePilot.exe merge-script remove SERVICE STEP
 ServicePilot.exe add --name NAME --dir DIR --step "Name|Batch|command" [--preset VALUE]
 ServicePilot.exe remove SERVICE
 ServicePilot.exe template list|get|add|edit|remove|apply|save-from-service ...

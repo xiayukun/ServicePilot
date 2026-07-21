@@ -4,6 +4,20 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.0.0 - 2026-07-21
+
+A major feature release: a programmable log merge script engine with VSCode-style log folding, a right-side color overview for navigation, external config-file hot-reload, and a fully refreshed brand icon.
+
+- **Log Merge Script engine**: Step/template actions support a custom C# merge function that folds multiple log lines into a single colored summary. Script inputs now include `PreviousResult`, `PreviousWasCollapsed`, `InCollapseGroup`, and the result adds a `State` dictionary for carrying cross-line state (runtime only, not persisted). The service/template editor gained a merge-function code box pre-filled with a documented template. A `merge-script test` CLI command is available.
+- **VSCode-style log folding**: Raw lines are kept while expandable fold groups are created; collapsed groups show only the summary. Searching a match inside a fold auto-expands it. A "Fold all / Expand all" summary toggle was added. Fold placeholder text is white, with a ~100px color block (using the first folded line's color) between the plus marker and the text.
+- **Right-side color overview navigation**: A static clickable color overview aggregates per-line colors by priority (Error > Warning > Custom > System > Normal) for quick navigation; it is folding-aware and reflects only visible logs.
+- **External config hot-reload**: Editing `%APPDATA%\ServicePilot\config.v2.json` directly is detected and hot-reloaded by the tray without overwriting external edits, preserving running services' runtime state.
+- **Scrollable menus**: Tray first/second and all nested menus scroll when items overflow, and scroll back to the top on open; styling is consistent across levels.
+- **System accent color**: The service-manager selection bar and similar accents now read the Windows system accent color (DWM AccentColor).
+- **New app icon**: A more refined transparent teal squircle icon, applied to the exe icon, taskbar icon, and the left-side title-bar icon of every FluentWindow (Log, Service Manager, Template Manager, AI Help, Service/Template Editor, Template Select, Variable Input, Confirm dialog), removing the old icon's white halo.
+- **Log window title bar**: The full title (e.g. `Log - <service>`) now lives in the title bar; the toolbar no longer repeats it. Long titles are truncated and no longer overlap the action buttons.
+- **AI help**: The "Copy help for AI" popup and `ai-help` restore full CLI help and document the merge-script contract, folding semantics, and external config hot-reload usage.
+
 ## 3.0.0 - 2026-07-17
 
 - **FluentWindow UI overhaul**: All management windows (AI Help, Log, Service Manager, Template Manager, Service Editor, Template Editor, Template Select, Variable Input) migrated to WPF-UI `FluentWindow` with `ExtendsContentIntoTitleBar` for modern title bars with min/max/close.

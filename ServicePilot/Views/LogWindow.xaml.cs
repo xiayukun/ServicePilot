@@ -1,12 +1,13 @@
 using System.Collections.ObjectModel;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit.Document;
+using ICSharpCode.AvalonEdit.Folding;
 using ICSharpCode.AvalonEdit.Rendering;
 using ServicePilot.Models;
 using ServicePilot.Services;
@@ -18,27 +19,35 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 {
     private const int MaxLogEntries = 5000;
     private const string ServiceLogsKey = "__service__";
-    private static readonly Regex WebpackProgressRegex = new(
-        @"^(?<prefix>.*?\s*)?\[webpack\.Progress\]\s+(?<percent>\d{1,3})%\s+(?<rest>.*)$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private readonly ServiceItemViewModel _service;
     private readonly ProcessManager _processManager;
     private readonly PresetVariableUsageStore _variableUsageStore;
     private readonly Func<ServiceConfig, ScriptStep, string?, bool, Task> _rememberVariableForStepAsync;
     private readonly Func<ServiceItemViewModel, Window?, Task> _editServiceAsync;
+    private readonly LogMergeService _logMergeService;
     private readonly DispatcherTimer _scrollTimer;
     private readonly DispatcherTimer _renderTimer;
     private readonly ObservableCollection<LogTabState> _logTabs = new();
     private readonly Dictionary<string, LogTabState> _logTabsByKey = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _pendingLogLock = new();
     private readonly List<LogEntry> _pendingCrossThreadLogs = new();
+    private readonly List<PendingRenderOp> _pendingInserts = new();
+    private readonly HashSet<Guid> _reportedMergeErrors = new();
+    // (merge colors live on each LogEntry.MergeColor; no separate cache needed)
+    private FoldingManager? _foldingManager;
+    private FoldColorMarkerRenderer? _foldColorMarker;
+    private string? _foldTitlePrefix;
+    private OverviewMargin? _overviewMargin;
     private bool _pendingCrossThreadDispatch;
     private bool _activeTabDirty;
     private bool _searchStatusDirty;
     private bool _pendingAutoScroll;
     private bool _logUiReady;
     private int _lastSearchOffset = -1;
+    private bool _summaryViewActive;
+    // Header entries whose folding has already been given its default (folded) state once.
+    private readonly HashSet<LogEntry> _foldingInitialized = new();
 
     public ObservableCollection<LogEntry> LogEntries { get; } = new();
 
@@ -54,12 +63,35 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         _variableUsageStore = variableUsageStore;
         _rememberVariableForStepAsync = rememberVariableForStepAsync;
         _editServiceAsync = editServiceAsync;
+        _logMergeService = new LogMergeService();
 
         InitializeComponent();
         DataContext = service;
         LogEditor.Document ??= new TextDocument();
         LogTabs.ItemsSource = _logTabs;
+
+        // Folding: use FoldingManager.Install so the manager is actually wired into the TextView's line
+        // generation (that is what hides folded lines). It also installs the left-side fold margin with
+        // the +/- expander toggles. Creating a FoldingManager directly only shows the markers but never
+        // hides folded content.
+        _foldingManager = FoldingManager.Install(LogEditor.TextArea);
+        // Per-fold color chip: AvalonEdit's fold box is a single global color, so this overlay draws a
+        // small content-colored square at each collapsed fold's header line, letting multiple folds show
+        // different colors (blue fold above, red fold below) at the same time.
+        _foldColorMarker = new FoldColorMarkerRenderer(_foldingManager);
+        LogEditor.TextArea.TextView.BackgroundRenderers.Add(_foldColorMarker);
+        // Collapsed fold placeholder text is fixed white (per-fold content color is shown by the color
+        // block drawn to its left). TextBrush is a global static, so setting it once here is enough.
+        FoldingElementGenerator.TextBrush = System.Windows.Media.Brushes.White;
+        // Right-side color-coded overview map (Error/Warning/System/merge colors), click to jump. It is
+        // folding-aware: folded-away lines don't consume rows, so errors below big folds stay visible.
+        _overviewMargin = new OverviewMargin(LogEntries, LogEditor, _foldingManager);
+        OverviewHost.Child = _overviewMargin;
+        // VisualLinesChanged fires when foldings expand/collapse (or content changes), so the overview
+        // rebuilds to reflect which lines are currently visible. This is throttled by AvalonEdit itself.
+        LogEditor.TextArea.TextView.VisualLinesChanged += (_, _) => _overviewMargin?.InvalidateVisualCache();
         LogEditor.TextArea.TextView.LineTransformers.Add(new LogLineColorizer(LogEntries));
+
         ApplyLocalization();
         UpdateTitle();
         UpdateActionButtons();
@@ -89,6 +121,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         {
             _scrollTimer.Stop();
             _renderTimer.Stop();
+            _logMergeService.Dispose();
             _processManager.ServiceStateChanged -= OnServiceStateChanged;
             _processManager.StepStateChanged -= OnStepStateChanged;
             LocalizationService.Current.LanguageChanged -= OnLanguageChanged;
@@ -115,6 +148,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         AutoScrollCheck.Content = LocalizationService.Current.T("AutoScroll");
         EditButton.Content = LocalizationService.Current.T("Edit");
         ClearButton.Content = LocalizationService.Current.T("Clear");
+        UpdateSummaryButton();
         CopySelectedMenuItem.Header = LocalizationService.Current.T("CopySelected");
         CopyAllMenuItem.Header = LocalizationService.Current.T("CopyAll");
         RefreshServiceTabHeader();
@@ -137,8 +171,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             LogEntries.Clear();
             _logTabs.Clear();
             _logTabsByKey.Clear();
+            _pendingInserts.Clear();
             foreach (var entry in snapshot)
-                AddEntryToTab(entry);
+                CommitEntryToTab(entry);
 
             LogTabs.SelectedItem = _logTabs.LastOrDefault();
             RebuildActiveLogText();
@@ -195,19 +230,156 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         }
     }
 
+    /// <summary>
+    /// Resolves the target tab, evaluates the merge script, and commits the entry into the tab's
+    /// entry list (append or in-place collapse). Returns the tab and the merge outcome.
+    /// Used both by live logging and by initial snapshot rebuild so history folds identically.
+    /// </summary>
+    private LogTabState CommitEntryToTab(LogEntry entry)
+    {
+        var targetTab = ResolveTab(entry);
+        ApplyMerge(targetTab, entry);
+
+        // Always append: raw lines are preserved so a collapse group can be expanded later. Folding
+        // (the left-side > toggle) hides the collapsed children by default; nothing is discarded. The
+        // per-entry MergeColor is carried on the entry itself, so it survives document rebuilds.
+        AddEntryToTabEntries(targetTab, entry);
+        return targetTab;
+    }
+
     private void AddLogOnUi(LogEntry entry)
     {
-        var targetTab = AddEntryToTab(entry);
+        // Evaluate the merge script for every tab (not only the visible one) so group state and in-memory
+        // history stay correct regardless of which tab the user is looking at.
+        var targetTab = CommitEntryToTab(entry);
+
         var selectedTab = LogTabs.SelectedItem as LogTabState;
         if (selectedTab == null)
         {
             LogTabs.SelectedItem = targetTab;
-            MarkActiveTabDirty(autoScroll: true);
+            selectedTab = targetTab;
         }
-        else if (ReferenceEquals(selectedTab, targetTab))
+
+        if (!ReferenceEquals(selectedTab, targetTab))
         {
-            MarkActiveTabDirty(autoScroll: true);
+            // Entry went to a non-visible tab — history is already committed; no document work needed.
+            return;
         }
+
+        _pendingInserts.Add(new PendingRenderOp(entry));
+        MarkActiveTabDirty(autoScroll: true);
+    }
+
+    /// <summary>A single queued document mutation: append the entry as a new line.</summary>
+    private readonly record struct PendingRenderOp(LogEntry Entry);
+
+    /// <summary>
+    /// Evaluates the step's LogMergeScript against the entry and updates the tab's collapse-group state.
+    /// Never mutates <paramref name="entry"/>.Message: raw text is kept so groups can be expanded. When
+    /// the script returns Collapse=true the entry becomes a folded child and the group header's
+    /// <see cref="LogEntry.GroupSummary"/> is refreshed with the latest MergedMessage.
+    /// Contract: CurrentLine / PreviousLine are the FULL formatted lines ("HH:mm:ss [Level] message").
+    /// Collapse=true folds the current line into the group started by the previous non-collapsed line;
+    /// the first line of a group must return Collapse=false.
+    /// </summary>
+    private void ApplyMerge(LogTabState tab, LogEntry entry)
+    {
+        var currentLine = FormatLogLine(entry);
+
+        var step = FindStepForTab(tab);
+        if (step == null || string.IsNullOrWhiteSpace(step.LogMergeScript))
+        {
+            tab.GroupHeader = null;
+            tab.LastLine = currentLine;
+            tab.LastResult = null;
+            return;
+        }
+
+        var globals = new MergeScriptGlobals
+        {
+            PreviousLine = tab.LastLine,
+            CurrentLine = currentLine,
+            PreviousResult = tab.LastResult,
+            PreviousWasCollapsed = tab.LastResult?.Collapse == true && tab.GroupHeader != null,
+            InCollapseGroup = tab.GroupHeader != null
+        };
+
+        MergeResult? result = null;
+        try
+        {
+            // Synchronous evaluation on the UI hot path; must not block on an async method that captures
+            // the UI SynchronizationContext (that deadlocks when a burst of lines arrives).
+            result = _logMergeService.Evaluate(step.LogMergeScript, globals);
+        }
+        catch
+        {
+            // Script evaluation must never crash the UI.
+        }
+
+        if (result == null)
+        {
+            ReportMergeCompileErrorOnce(step);
+            tab.GroupHeader = null;
+            tab.LastLine = currentLine;
+            tab.LastResult = null;
+            return;
+        }
+
+        entry.MergeColor = string.IsNullOrWhiteSpace(result.Color) ? null : result.Color;
+
+        // Collapse only when the script asks for it AND there is a group header to fold into.
+        var collapse = result.Collapse && tab.GroupHeader != null;
+        if (collapse)
+        {
+            entry.IsCollapsedChild = true;
+            // Refresh the header's summary with the latest merged message so the folded (one-line) view
+            // shows live progress (e.g. "编译中 67%").
+            if (!string.IsNullOrWhiteSpace(result.MergedMessage))
+                tab.GroupHeader!.GroupSummary = result.MergedMessage;
+        }
+        else
+        {
+            // This line starts a new (potential) group and becomes its header.
+            entry.IsCollapsedChild = false;
+            entry.GroupSummary = string.IsNullOrWhiteSpace(result.MergedMessage) ? null : result.MergedMessage;
+            tab.GroupHeader = entry;
+        }
+
+        tab.LastLine = currentLine;
+        tab.LastResult = result;
+    }
+
+    private void ReportMergeCompileErrorOnce(ScriptStep step)
+    {
+        if (string.IsNullOrWhiteSpace(step.LogMergeScript))
+            return;
+
+        var error = _logMergeService.GetCompileError(step.LogMergeScript);
+        if (string.IsNullOrWhiteSpace(error))
+            return;
+
+        if (!_reportedMergeErrors.Add(step.Id))
+            return;
+
+        var entry = new LogEntry(
+            LogLevel.Error,
+            LocalizationService.Current.F("MergeScriptCompileError", step.Name, error),
+            "system",
+            step.Name);
+        Dispatcher.BeginInvoke(() => AddLog(entry), DispatcherPriority.Background);
+    }
+
+    private ScriptStep? FindStepForTab(LogTabState tab)
+    {
+        if (tab.Key == ServiceLogsKey)
+            return null;
+
+        if (!tab.Key.StartsWith("step:"))
+            return null;
+
+        var stepName = tab.Key["step:".Length..];
+        return _service.Config.ScriptSteps
+            .FirstOrDefault(s => s.Name.Trim() == stepName);
     }
 
     private void RefreshServiceTabHeader()
@@ -217,13 +389,11 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         LogTabs.Items.Refresh();
     }
 
-    private LogTabState AddEntryToTab(LogEntry entry)
+    private LogTabState ResolveTab(LogEntry entry)
     {
-        var targetTab = string.IsNullOrWhiteSpace(entry.StepName)
+        return string.IsNullOrWhiteSpace(entry.StepName)
             ? EnsureLogTab(ServiceLogsKey, LocalizationService.Current.T("ServiceLogs"))
             : EnsureLogTab(StepLogKey(entry.StepName), entry.StepName.Trim());
-        AddEntryToTabEntries(targetTab, entry);
-        return targetTab;
     }
 
     private LogTabState EnsureLogTab(string key, string header)
@@ -239,19 +409,6 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
     private static void AddEntryToTabEntries(LogTabState tab, LogEntry entry)
     {
-        if (TryCreateProgressEntry(entry, out var progressEntry, out var progressKey))
-        {
-            if (tab.Entries.Count > 0 &&
-                TryGetProgressKey(tab.Entries[^1], out var lastProgressKey) &&
-                string.Equals(lastProgressKey, progressKey, StringComparison.Ordinal))
-            {
-                tab.Entries[^1] = progressEntry;
-                return;
-            }
-
-            entry = progressEntry;
-        }
-
         if (tab.Entries.Count >= MaxLogEntries)
             tab.Entries.RemoveAt(0);
         tab.Entries.Add(entry);
@@ -266,11 +423,39 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             _renderTimer.Start();
     }
 
+    /// <summary>
+    /// Incremental flush: inserts only newly added entries into the document.
+    /// Does NOT rebuild the entire document (except on tab switch).
+    /// </summary>
     private void FlushLogRender()
     {
         _renderTimer.Stop();
-        if (_activeTabDirty)
-            RebuildActiveLogText();
+
+        if (_activeTabDirty && LogTabs.SelectedItem is LogTabState tab)
+        {
+            EnsureLogDocument();
+            var doc = LogEditor.Document;
+
+            if (_pendingInserts.Count > 0)
+            {
+                var sb = new StringBuilder();
+                foreach (var op in _pendingInserts)
+                {
+                    LogEntries.Add(op.Entry);
+                    if (doc.TextLength > 0 || sb.Length > 0)
+                        sb.Append(Environment.NewLine);
+                    sb.Append(FormatLogLine(op.Entry));
+                }
+                doc.Insert(doc.TextLength, sb.ToString());
+                _pendingInserts.Clear();
+
+                // Group headers keep their raw first-line text (stable offsets); the live summary is
+                // shown as the fold's collapsed placeholder title, refreshed inside RebuildFoldings.
+                RebuildFoldings();
+                LogEditor.TextArea.TextView.Redraw();
+                _overviewMargin?.InvalidateVisualCache();
+            }
+        }
 
         if (_searchStatusDirty)
             UpdateSearchStatus();
@@ -292,6 +477,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         if (!_logUiReady || LogEditor?.Document == null)
             return;
 
+        _pendingInserts.Clear();
         RebuildActiveLogText();
         UpdateSearchStatus();
         ScheduleAutoScroll();
@@ -538,9 +724,46 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         _logTabs.Clear();
         _logTabsByKey.Clear();
         LogEntries.Clear();
+        _pendingInserts.Clear();
+        _foldingInitialized.Clear();
+        _foldingManager?.Clear();
         LogEditor.Clear();
         LogTabs.SelectedItem = null;
         SearchStatusText.Text = string.Empty;
+        _overviewMargin?.InvalidateVisualCache();
+    }
+
+    /// <summary>
+    /// Summary view toggle: folds all merge groups to a single summary line (summary view), or expands
+    /// them all to show every raw line. Toggles between the two on each click.
+    /// </summary>
+    private void Summary_Click(object sender, RoutedEventArgs e)
+    {
+        if (_foldingManager == null)
+            return;
+
+        var foldings = _foldingManager.AllFoldings.ToList();
+        if (foldings.Count == 0)
+            return;
+
+        // If any group is currently expanded, collapse everything (enter summary view); otherwise expand.
+        var shouldFold = foldings.Any(f => !f.IsFolded);
+        foreach (var folding in foldings)
+            folding.IsFolded = shouldFold;
+
+        _summaryViewActive = shouldFold;
+        UpdateSummaryButton();
+        LogEditor.TextArea.TextView.Redraw();
+    }
+
+    private void UpdateSummaryButton()
+    {
+        SummaryButton.Content = _summaryViewActive
+            ? LocalizationService.Current.T("LogExpandAll")
+            : LocalizationService.Current.T("LogFoldAll");
+        SummaryButton.ToolTip = _summaryViewActive
+            ? LocalizationService.Current.T("LogExpandAllTip")
+            : LocalizationService.Current.T("LogFoldAllTip");
     }
 
     private async void Edit_Click(object sender, RoutedEventArgs e)
@@ -552,7 +775,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
     private void UpdateTitle()
     {
-        TitleText.Text = LocalizationService.Current.F("LogTitle", _service.Name);
+        // Title flows to the header TitleBar via binding; there is no separate toolbar title anymore.
         Title = LocalizationService.Current.F("LogTitle", _service.Name);
     }
 
@@ -663,6 +886,8 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         _lastSearchOffset = index;
+        // If the match lands inside a folded (collapsed) group, expand that group so the user can see it.
+        ExpandFoldingAt(index);
         LogEditor.Select(index, query.Length);
         var line = LogEditor.Document.GetLineByOffset(index).LineNumber;
         LogEditor.ScrollToLine(line);
@@ -699,6 +924,15 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         SearchStatusText.Text = current > 0 ? $"{current}/{count}" : $"0/{count}";
     }
 
+    /// <summary>Expands (unfolds) any collapse group whose folded region contains the given offset.</summary>
+    private void ExpandFoldingAt(int offset)
+    {
+        if (_foldingManager == null)
+            return;
+        foreach (var folding in _foldingManager.GetFoldingsContaining(offset))
+            folding.IsFolded = false;
+    }
+
     private static int CountMatchesBefore(string text, string query, int offset)
     {
         var count = 0;
@@ -711,6 +945,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         return count;
     }
 
+    /// <summary>
+    /// Full document rebuild — called only on tab switch or explicit reload.
+    /// </summary>
     private void RebuildActiveLogText()
     {
         if (!_logUiReady || LogEditor == null)
@@ -718,6 +955,11 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
         EnsureLogDocument();
         LogEntries.Clear();
+        // Full rebuild recreates the document and all folding sections from scratch, so reset the
+        // "already folded once" tracking to re-apply each group's default folded state.
+        _foldingInitialized.Clear();
+        // Colors and group metadata live on each LogEntry, so a rebuild (tab switch) just re-renders the
+        // stored entries and re-derives foldings — no re-running of the merge script is needed.
         if (LogTabs.SelectedItem is LogTabState tab)
         {
             foreach (var entry in tab.Entries)
@@ -733,7 +975,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         LogEditor.Text = builder.ToString();
+        RebuildFoldings();
         LogEditor.TextArea.TextView.Redraw();
+        _overviewMargin?.InvalidateVisualCache();
     }
 
     private void EnsureLogDocument()
@@ -744,55 +988,121 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     private static string FormatLogLine(LogEntry entry) =>
         $"{entry.Timestamp:HH:mm:ss} [{entry.Level}] {entry.Message}";
 
-    private static bool TryCreateProgressEntry(LogEntry entry, out LogEntry progressEntry, out string progressKey)
+    /// <summary>
+    /// Returns a run of spaces wide enough to clear the reserved color-block gap
+    /// (<see cref="FoldColorMarkerRenderer.BlockWidth"/>), so collapsed-fold summary text starts to the
+    /// right of the block instead of under it. Measured once against the editor's (monospace) font.
+    /// </summary>
+    private string GetFoldTitlePrefix()
     {
-        progressEntry = entry;
-        progressKey = string.Empty;
+        if (_foldTitlePrefix != null)
+            return _foldTitlePrefix;
 
-        if (entry.Level == LogLevel.Error)
-            return false;
+        var typeface = new Typeface(LogEditor.FontFamily, LogEditor.FontStyle, LogEditor.FontWeight, LogEditor.FontStretch);
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var space = new FormattedText(" ", System.Globalization.CultureInfo.InvariantCulture,
+            System.Windows.FlowDirection.LeftToRight, typeface, LogEditor.FontSize, System.Windows.Media.Brushes.White, dpi);
+        var spaceWidth = space.WidthIncludingTrailingWhitespace;
+        if (spaceWidth <= 0)
+            spaceWidth = LogEditor.FontSize * 0.55; // Fallback estimate for monospace fonts.
 
-        var match = WebpackProgressRegex.Match(entry.Message);
-        if (!match.Success)
-            return false;
+        // Add a small extra margin (BlockLeft ~4px + one space of breathing room) so text never touches
+        // the block edge.
+        var count = (int)Math.Ceiling((FoldColorMarkerRenderer.BlockWidth + 8) / spaceWidth) + 1;
+        _foldTitlePrefix = new string(' ', Math.Max(1, count));
+        return _foldTitlePrefix;
+    }
 
-        progressKey = "webpack-progress";
-        var percent = Math.Clamp(int.Parse(match.Groups["percent"].Value), 0, 100);
-        var prefix = match.Groups["prefix"].Success ? match.Groups["prefix"].Value.TrimEnd() : string.Empty;
-        var rest = match.Groups["rest"].Value.Trim();
-        var bar = CreateProgressBar(percent);
-        var messagePrefix = string.IsNullOrWhiteSpace(prefix)
-            ? "[webpack.Progress]"
-            : $"{prefix} [webpack.Progress]";
+    /// <summary>
+    /// Builds AvalonEdit foldings from the collapse groups in <see cref="LogEntries"/>. A group is a
+    /// header line (IsCollapsedChild=false with GroupSummary set) followed by one or more collapsed
+    /// child lines. Each group folds from the end of the header line through the last child; folded by
+    /// default so a busy group shows a single summary line with a left-side > toggle to expand it.
+    /// </summary>
+    private void RebuildFoldings()
+    {
+        if (_foldingManager == null)
+            return;
 
-        progressEntry = new LogEntry(entry.Level, $"{messagePrefix} {percent}% {bar} {rest}", entry.Source, entry.StepName)
+        var doc = LogEditor.Document;
+        var foldings = new List<NewFolding>();
+        // Maps a folding's start offset to (header entry, collapsed title, group color). Header line text
+        // is stable (we never rewrite it), so start offsets are stable and UpdateFoldings matches cleanly.
+        var startOffsetToGroup = new Dictionary<int, (LogEntry Header, string Title, string? Color)>();
+
+        var i = 0;
+        while (i < LogEntries.Count)
         {
-            Timestamp = entry.Timestamp
-        };
-        return true;
+            // A header owns the following run of collapsed children.
+            if (i + 1 < LogEntries.Count && LogEntries[i + 1].IsCollapsedChild)
+            {
+                var headerIndex = i;
+                var lastChild = i + 1;
+                while (lastChild + 1 < LogEntries.Count && LogEntries[lastChild + 1].IsCollapsedChild)
+                    lastChild++;
+
+                if (headerIndex + 1 <= doc.LineCount && lastChild + 1 <= doc.LineCount)
+                {
+                    var headerLine = doc.GetLineByNumber(headerIndex + 1);
+                    var lastLine = doc.GetLineByNumber(lastChild + 1);
+                    var header = LogEntries[headerIndex];
+                    // Fold from the START of the header line so the whole raw first line is hidden too;
+                    // when collapsed, ONLY the summary title is shown (no leftover raw first log line).
+                    var summary = string.IsNullOrWhiteSpace(header.GroupSummary) ? null : header.GroupSummary;
+                    // Pad the title with leading spaces so the summary text starts AFTER the reserved
+                    // color-block gap (FoldColorMarkerRenderer.BlockWidth) and never overlaps the block.
+                    var title = GetFoldTitlePrefix() + (summary ?? FormatLogLine(header));
+                    // The color block reflects the FOLDED CONTENT color. Take the FIRST folded child's
+                    // color (headerIndex + 1, the first line hidden inside the fold); fall back to the
+                    // header color. The placeholder TEXT itself is fixed white.
+                    var firstChild = LogEntries[headerIndex + 1];
+                    var groupColor = firstChild.MergeColor ?? header.MergeColor;
+                    foldings.Add(new NewFolding(headerLine.Offset, lastLine.EndOffset)
+                    {
+                        Name = title,
+                        DefaultClosed = true
+                    });
+                    startOffsetToGroup[headerLine.Offset] = (header, title, groupColor);
+                }
+
+                i = lastChild + 1;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        // UpdateFoldings keeps IsFolded for existing sections (preserving the user's manual toggle) and
+        // creates the rest. We then (a) refresh each collapsed title with the live summary, and (b) fold
+        // each group exactly once — the first time its header appears — since DefaultClosed alone is not
+        // reliably applied by UpdateFoldings.
+        _foldingManager.UpdateFoldings(foldings, -1);
+        _foldColorMarker?.Colors.Clear();
+        foreach (var folding in _foldingManager.AllFoldings)
+        {
+            if (!startOffsetToGroup.TryGetValue(folding.StartOffset, out var group))
+                continue;
+            folding.Title = group.Title;
+            if (_foldingInitialized.Add(group.Header))
+                folding.IsFolded = true;
+            // Record this fold's first-line content color so the overlay renderer can paint a full-width
+            // underline strip below its summary line. This is what lets multiple folds show different
+            // colors at the same time (AvalonEdit's own fold placeholder text is one global color).
+            if (_foldColorMarker != null)
+            {
+                var stripBrush = LogLineColorizer.TryParseBrush(group.Color);
+                if (stripBrush != null)
+                    _foldColorMarker.Colors[folding.StartOffset] = stripBrush;
+            }
+        }
+        LogEditor.TextArea.TextView.Redraw();
     }
 
-    private static bool TryGetProgressKey(LogEntry entry, out string progressKey)
-    {
-        progressKey = string.Empty;
-        if (entry.Level == LogLevel.Error)
-            return false;
-
-        var match = WebpackProgressRegex.Match(entry.Message);
-        if (!match.Success)
-            return false;
-
-        progressKey = "webpack-progress";
-        return true;
-    }
-
-    private static string CreateProgressBar(int percent)
-    {
-        const int width = 24;
-        var filled = Math.Clamp((int)Math.Round(percent / 100d * width), 0, width);
-        return "[" + new string('#', filled) + new string('-', width - filled) + "]";
-    }
-
+    /// <summary>
+    /// AvalonEdit LogLineColorizer: supports per-entry MergeResult custom colors, falling back to
+    /// level-based colors.
+    /// </summary>
     private sealed class LogLineColorizer : DocumentColorizingTransformer
     {
         private readonly IReadOnlyList<LogEntry> _entries;
@@ -802,13 +1112,53 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             _entries = entries;
         }
 
+        private static Color? ParseMergeColor(string? colorText)
+            => (TryParseBrush(colorText) as SolidColorBrush)?.Color;
+
+        /// <summary>
+        /// Parses a WPF color name / hex string into a frozen <see cref="SolidColorBrush"/>, or null when
+        /// the text is empty/invalid. Shared by line coloring and the fold-box color.
+        /// </summary>
+        internal static System.Windows.Media.Brush? TryParseBrush(string? colorText)
+        {
+            if (string.IsNullOrWhiteSpace(colorText))
+                return null;
+            try
+            {
+                if (new System.Windows.Media.BrushConverter().ConvertFromString(colorText) is SolidColorBrush scb)
+                {
+                    scb.Freeze();
+                    return scb;
+                }
+            }
+            catch
+            {
+                // Ignore invalid color strings.
+            }
+            return null;
+        }
+
         protected override void ColorizeLine(DocumentLine line)
         {
             var index = line.LineNumber - 1;
             if (index < 0 || index >= _entries.Count)
                 return;
 
-            var brush = _entries[index].Level switch
+            var entry = _entries[index];
+
+            // Merge color takes priority over level-based color
+            var mergeColor = ParseMergeColor(entry.MergeColor);
+            if (mergeColor.HasValue)
+            {
+                var mergeBrush = new SolidColorBrush(mergeColor.Value);
+                ChangeLinePart(line.Offset, line.EndOffset, element =>
+                {
+                    element.TextRunProperties.SetForegroundBrush(mergeBrush);
+                });
+                return;
+            }
+
+            var brush = entry.Level switch
             {
                 LogLevel.Error => System.Windows.Media.Brushes.OrangeRed,
                 LogLevel.Warning => System.Windows.Media.Brushes.Gold,
@@ -834,5 +1184,23 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         public string Key { get; }
         public string Header { get; set; }
         public List<LogEntry> Entries { get; } = new();
+
+        /// <summary>
+        /// The current collapse-group header entry (the most recent non-collapsed line). Subsequent
+        /// entries whose merge script returns Collapse=true are folded under it. Null when no group is open.
+        /// </summary>
+        public LogEntry? GroupHeader { get; set; }
+
+        /// <summary>The previous entry's full formatted line, fed to the merge script as PreviousLine.</summary>
+        public string? LastLine { get; set; }
+
+        /// <summary>
+        /// The merge script's result for the previous line, fed to the next line as PreviousResult so a
+        /// script can carry state forward via MergeResult.State. Runtime only; reset when the merge script
+        /// is absent. Not restored on rebuild.
+        /// </summary>
+        public MergeResult? LastResult { get; set; }
     }
+
+
 }

@@ -4,8 +4,9 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:converters="clr-namespace:ServicePilot.Converters"
-        Title="Service configuration" Height="700" Width="1160"
+        Title="Service configuration" Height="700" Width="1400"
         WindowStartupLocation="CenterScreen" Background="#FF1E1E2E"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
     <Window.Resources>
         <converters:StepKindDisplayConverter x:Key="StepKindDisplay"/>
@@ -18,7 +19,11 @@
 
         <ui:TitleBar Title="Service configuration"
                      ShowMaximize="True"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="18">
             <Grid.RowDefinitions>
@@ -98,74 +103,96 @@
                              AcceptsReturn="True" TextWrapping="NoWrap"/>
                 </Grid>
 
-                <Border Grid.Column="1" CornerRadius="6" Padding="12">
-                    <Grid x:Name="StepEditor" Visibility="Collapsed">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <WrapPanel Grid.Row="0" Margin="0,0,0,8">
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock x:Name="StepNameLabel" Text="Name" FontSize="11"/>
-                                <ui:TextBox x:Name="StepNameBox" Width="180" Height="34" VerticalContentAlignment="Center" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <StackPanel Margin="0,0,10,0">
-                                <TextBlock x:Name="StepKindLabel" Text="Kind" FontSize="11"/>
-                                <ComboBox x:Name="StepKindCombo" Width="110" Height="34" Margin="0,2,0,0"
-                                          SelectionChanged="StepKindCombo_SelectionChanged">
-                                    <ComboBoxItem Content="Action"/>
-                                    <ComboBoxItem Content="Composite"/>
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel x:Name="ScriptTypePanel" Margin="0,0,10,0">
-                                <TextBlock x:Name="ScriptTypeLabel" Text="Script type" FontSize="11"/>
-                                <ComboBox x:Name="ScriptTypeCombo" Width="110" Height="34" Margin="0,2,0,0">
-                                    <ComboBoxItem Content="Batch"/>
-                                    <ComboBoxItem Content="PowerShell"/>
-                                    <ComboBoxItem Content="Python"/>
-                                    <ComboBoxItem Content="Node.js"/>
-                                </ComboBox>
-                            </StackPanel>
-                            <CheckBox x:Name="UseVariableCheck"
-                                      Content="Use variable"
-                                      IsChecked="True"
-                                      VerticalAlignment="Bottom"
-                                      Margin="12,0,0,5"/>
-                            <CheckBox x:Name="OpenLogOnRunCheck"
-                                      Content="Open log"
-                                      VerticalAlignment="Bottom"
-                                      Margin="12,0,0,5"/>
-                        </WrapPanel>
+                <Grid Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*"/>
+                        <ColumnDefinition Width="1*"/>
+                    </Grid.ColumnDefinitions>
 
-                        <Grid x:Name="CompositeMembersPanel" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,8">
+                    <Border Grid.Column="0" CornerRadius="6" Padding="12">
+                        <Grid x:Name="StepEditor" Visibility="Collapsed">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="120"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,4">
-                                <TextBlock x:Name="MembersLabel" Text="Members" FontSize="11" VerticalAlignment="Center"/>
-                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <ComboBox x:Name="MemberCandidateCombo" Width="240" Height="34" DisplayMemberPath="Name" Margin="0,0,4,0"/>
-                                    <ui:Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
-                                    <ui:Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
-                                    <ui:Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
-                                    <ui:Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
+                            <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                                <StackPanel Margin="0,0,10,0">
+                                    <TextBlock x:Name="StepNameLabel" Text="Name" FontSize="11"/>
+                                    <ui:TextBox x:Name="StepNameBox" Width="180" Height="34" VerticalContentAlignment="Center" Margin="0,2,0,0"/>
                                 </StackPanel>
-                            </DockPanel>
-                            <ListBox x:Name="MembersList" Grid.Row="1"
-                                     DisplayMemberPath="Name"/>
-                        </Grid>
+                                <StackPanel Margin="0,0,10,0">
+                                    <TextBlock x:Name="StepKindLabel" Text="Kind" FontSize="11"/>
+                                    <ComboBox x:Name="StepKindCombo" Width="110" Height="34" Margin="0,2,0,0"
+                                              SelectionChanged="StepKindCombo_SelectionChanged">
+                                        <ComboBoxItem Content="Action"/>
+                                        <ComboBoxItem Content="Composite"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <StackPanel x:Name="ScriptTypePanel" Margin="0,0,10,0">
+                                    <TextBlock x:Name="ScriptTypeLabel" Text="Script type" FontSize="11"/>
+                                    <ComboBox x:Name="ScriptTypeCombo" Width="110" Height="34" Margin="0,2,0,0">
+                                        <ComboBoxItem Content="Batch"/>
+                                        <ComboBoxItem Content="PowerShell"/>
+                                        <ComboBoxItem Content="Python"/>
+                                        <ComboBoxItem Content="Node.js"/>
+                                    </ComboBox>
+                                </StackPanel>
+                                <CheckBox x:Name="UseVariableCheck"
+                                          Content="Use variable"
+                                          IsChecked="True"
+                                          VerticalAlignment="Bottom"
+                                          Margin="12,0,0,5"/>
+                                <CheckBox x:Name="OpenLogOnRunCheck"
+                                          Content="Open log"
+                                          VerticalAlignment="Bottom"
+                                          Margin="12,0,0,5"/>
+                            </WrapPanel>
 
-                        <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
-                        <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
-                                               FontFamily="Consolas" FontSize="13"
-                                               ShowLineNumbers="True"
-                                               Background="#FF1E1E2E"
-                                               Foreground="#FFD4D4D4"/>
-                    </Grid>
-                </Border>
+                            <Grid x:Name="CompositeMembersPanel" Grid.Row="1" Visibility="Collapsed" Margin="0,0,0,8">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="120"/>
+                                </Grid.RowDefinitions>
+                                <DockPanel Grid.Row="0" Margin="0,0,0,4">
+                                    <TextBlock x:Name="MembersLabel" Text="Members" FontSize="11" VerticalAlignment="Center"/>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <ComboBox x:Name="MemberCandidateCombo" Width="240" Height="34" DisplayMemberPath="Name" Margin="0,0,4,0"/>
+                                        <ui:Button x:Name="AddMemberButton" Content="Add" Width="52" Height="26" Margin="0,0,4,0" Click="AddMember_Click"/>
+                                        <ui:Button x:Name="RemoveMemberButton" Content="Remove" Width="62" Height="26" Margin="0,0,4,0" Click="RemoveMember_Click"/>
+                                        <ui:Button Content="Up" Width="34" Height="26" Margin="0,0,4,0" Click="MoveMemberUp_Click"/>
+                                        <ui:Button Content="Dn" Width="34" Height="26" Click="MoveMemberDown_Click"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <ListBox x:Name="MembersList" Grid.Row="1"
+                                         DisplayMemberPath="Name"/>
+                            </Grid>
+
+                            <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
+                            <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
+                                                   FontFamily="Consolas" FontSize="13"
+                                                   ShowLineNumbers="True"
+                                                   Background="#FF1E1E2E"
+                                                   Foreground="#FFD4D4D4"/>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Column="1" CornerRadius="6" Padding="12" Margin="12,0,0,0">
+                        <Grid x:Name="MergeScriptPanel" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="MergeFunctionLabel" Grid.Row="0" Text="Merge function" FontSize="11" Margin="0,0,0,4"/>
+                            <avalonedit:TextEditor x:Name="MergeScriptEditor" Grid.Row="1"
+                                                   FontFamily="Consolas" FontSize="13"
+                                                   ShowLineNumbers="True"
+                                                   Background="#FF1E1E2E"
+                                                   Foreground="#FFD4D4D4"/>
+                        </Grid>
+                    </Border>
+                </Grid>
             </Grid>
 
             <DockPanel Grid.Row="2" Margin="0,12,0,0">

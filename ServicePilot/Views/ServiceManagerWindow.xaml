@@ -5,6 +5,7 @@
         Title="管理服务" Height="560" Width="960"
         Background="{ui:ThemeResource ApplicationBackgroundBrush}"
         WindowStartupLocation="CenterScreen"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
     <Grid>
         <Grid.RowDefinitions>
@@ -15,7 +16,11 @@
         <!-- WPF-UI TitleBar: provides min/max/close + drag -->
         <ui:TitleBar Title="管理服务"
                      ShowMaximize="False"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- Original content area -->
         <Grid Grid.Row="1">

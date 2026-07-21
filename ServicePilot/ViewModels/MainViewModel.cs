@@ -57,6 +57,40 @@ public class MainViewModel : ViewModelBase
         await _configService.SaveAsync(_appConfig);
     }
 
+    /// <summary>
+    /// Reconciles the Services view-model collection with the current ProcessManager runtime states
+    /// after an external config reload. Adds view-models for new services, drops ones removed on disk,
+    /// and refreshes bindings for existing ones — without recreating in-place running view-models.
+    /// </summary>
+    public void SyncFromRuntime(Action<ServiceItemViewModel> attachLogHandler)
+    {
+        var runtimeStates = _processManager.Services.ToList();
+        var runtimeIds = new HashSet<Guid>(runtimeStates.Select(s => s.Config.Id));
+
+        // Drop view-models whose service no longer exists.
+        for (var i = Services.Count - 1; i >= 0; i--)
+        {
+            if (!runtimeIds.Contains(Services[i].Config.Id))
+                Services.RemoveAt(i);
+        }
+
+        // Add / refresh.
+        foreach (var state in runtimeStates)
+        {
+            var existing = Services.FirstOrDefault(s => s.Config.Id == state.Config.Id);
+            if (existing == null)
+            {
+                var vm = new ServiceItemViewModel(state, _processManager);
+                attachLogHandler(vm);
+                Services.Add(vm);
+            }
+            else
+            {
+                existing.RefreshConfig();
+            }
+        }
+    }
+
     public ServiceItemViewModel AddService(ServiceConfig config)
     {
         config.SortOrder = Services.Count;

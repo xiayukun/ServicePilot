@@ -74,6 +74,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         RemoveMemberButton.Content = LocalizationService.Current.T("Delete");
         UseVariableCheck.Content = LocalizationService.Current.T("UseVariable");
         OpenLogOnRunCheck.Content = LocalizationService.Current.T("OpenLogOnRun");
+        MergeFunctionLabel.Text = LocalizationService.Current.T("MergeFunction");
         ScriptContentLabel.Text = LocalizationService.Current.T("ScriptContent");
         CancelButton.Content = LocalizationService.Current.T("Cancel");
         SaveButton.Content = LocalizationService.Current.T("Save");
@@ -154,6 +155,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         OpenLogOnRunCheck.IsChecked = _selectedStep.OpenLogOnRun;
         ScriptEditor.Text = _selectedStep.Content;
         SetScriptHighlighting(ScriptEditor, _selectedStep.ScriptType);
+        LoadMergeScript(_selectedStep);
         _loadingStep = false;
         UpdateStepEditorMode();
         ShowVariablesForCurrentStep();
@@ -186,6 +188,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         _selectedStep.UseVariable = _selectedStep.Kind == StepKind.Action && (UseVariableCheck.IsChecked ?? true);
         _selectedStep.OpenLogOnRun = _selectedStep.Kind == StepKind.Action && (OpenLogOnRunCheck.IsChecked ?? false);
         _selectedStep.Content = _selectedStep.Kind == StepKind.Action ? ScriptEditor.Text ?? string.Empty : string.Empty;
+        _selectedStep.LogMergeScript = _selectedStep.Kind == StepKind.Action ? MergeScriptEditor.Text ?? string.Empty : null;
         if (_selectedStep.Kind == StepKind.Action)
             _selectedStep.MemberStepIds.Clear();
         RefreshStepDisplayLabels();
@@ -326,6 +329,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         OpenLogOnRunCheck.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         ScriptContentLabel.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         ScriptEditor.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
+        MergeScriptPanel.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         CompositeMembersPanel.Visibility = isComposite ? Visibility.Visible : Visibility.Collapsed;
         RefreshMembers();
     }
@@ -425,6 +429,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
             OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
+            LogMergeScript = source.LogMergeScript,
             MemberStepIds = source.MemberStepIds.ToList(),
             Order = source.Order,
             RunOnStart = source.RunOnStart
@@ -443,5 +448,51 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         };
         editor.SyntaxHighlighting = ICSharpCode.AvalonEdit.Highlighting.HighlightingManager.Instance
             .GetDefinitionByExtension(ext);
+    }
+
+    private void LoadMergeScript(ScriptStep step)
+    {
+        if (step == null || step.Kind != StepKind.Action)
+        {
+            MergeScriptEditor.Text = string.Empty;
+            return;
+        }
+        var script = step.LogMergeScript;
+        if (string.IsNullOrWhiteSpace(script))
+            script = GetDefaultMergeTemplate();
+        MergeScriptEditor.Text = script;
+        MergeScriptEditor.SyntaxHighlighting = ICSharpCode.AvalonEdit.Highlighting.HighlightingManager.Instance
+            .GetDefinitionByExtension(".cs");
+    }
+
+    private static string GetDefaultMergeTemplate()
+    {
+        return LocalizationService.Current.IsEnglish
+            ? """
+              // Inputs (locals):
+              //   CurrentLine  (string?)  current log line "HH:mm:ss [Level] message"
+              //   PreviousLine (string?)  previous log line (null on first line)
+              //   PreviousResult        (MergeResult?) result returned for the previous line
+              //   PreviousWasCollapsed  (bool) was the previous line folded?
+              //   InCollapseGroup       (bool) is a fold group currently open?
+              // Return a MergeResult, or null to keep the line unchanged.
+              // Fold: first line of a group returns Collapse = false (header/summary);
+              // following lines return Collapse = true. Header MergedMessage = collapsed text.
+              // Carry state via State (runtime only, simple values) -> next line's PreviousResult.State.
+              return null;
+              """
+            : """
+              // 输入（局部变量）：
+              //   CurrentLine  (string?)  当前日志行 "HH:mm:ss [级别] 消息"
+              //   PreviousLine (string?)  上一行日志（首行为 null）
+              //   PreviousResult        (MergeResult?) 上一行返回的结果
+              //   PreviousWasCollapsed  (bool) 上一行是否被折叠
+              //   InCollapseGroup       (bool) 当前是否已有打开的折叠组
+              // 返回 MergeResult，或返回 null 保持原行不变。
+              // 折叠：一组第一行返回 Collapse = false（组头/摘要）；后续行返回 Collapse = true。
+              // 组头的 MergedMessage 就是折叠成一行时显示的文字。
+              // 通过 State 传状态给下一行（仅运行期、只存简单类型）-> 下一行的 PreviousResult.State。
+              return null;
+              """;
     }
 }

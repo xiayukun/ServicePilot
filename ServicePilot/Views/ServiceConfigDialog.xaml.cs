@@ -88,6 +88,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         UseVariableCheck.Content = LocalizationService.Current.T("UseVariable");
         OpenLogOnRunCheck.Content = LocalizationService.Current.T("OpenLogOnRun");
         ScriptContentLabel.Text = LocalizationService.Current.T("ScriptContent");
+        MergeFunctionLabel.Text = LocalizationService.Current.T("MergeFunction");
         SaveTemplateButton.Content = LocalizationService.Current.T("SaveAsTemplate");
         CancelButton.Content = LocalizationService.Current.T("Cancel");
         SaveButton.Content = LocalizationService.Current.T("Save");
@@ -196,6 +197,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         OpenLogOnRunCheck.IsChecked = _selectedStep.OpenLogOnRun;
         ScriptEditor.Text = _selectedStep.Content;
         SetScriptHighlighting(ScriptEditor, _selectedStep.ScriptType);
+        LoadMergeScript(_selectedStep);
         _loadingStep = false;
         UpdateStepEditorMode();
         ShowVariablesForCurrentStep();
@@ -230,6 +232,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         _selectedStep.UseVariable = _selectedStep.Kind == StepKind.Action && (UseVariableCheck.IsChecked ?? true);
         _selectedStep.OpenLogOnRun = _selectedStep.Kind == StepKind.Action && (OpenLogOnRunCheck.IsChecked ?? false);
         _selectedStep.Content = _selectedStep.Kind == StepKind.Action ? ScriptEditor.Text ?? string.Empty : string.Empty;
+        _selectedStep.LogMergeScript = _selectedStep.Kind == StepKind.Action ? MergeScriptEditor.Text ?? string.Empty : null;
         if (_selectedStep.Kind == StepKind.Action)
             _selectedStep.MemberStepIds.Clear();
         RefreshStepDisplayLabels();
@@ -397,6 +400,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         OpenLogOnRunCheck.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         ScriptContentLabel.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         ScriptEditor.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
+        MergeScriptPanel.Visibility = isComposite ? Visibility.Collapsed : Visibility.Visible;
         CompositeMembersPanel.Visibility = isComposite ? Visibility.Visible : Visibility.Collapsed;
         RefreshMembers();
     }
@@ -500,10 +504,84 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
             OpenLogOnRun = source.OpenLogOnRun,
             StepVariables = source.StepVariables.ToList(),
             Content = source.Content,
+            LogMergeScript = source.LogMergeScript,
             MemberStepIds = source.MemberStepIds.ToList(),
             Order = source.Order,
             RunOnStart = source.RunOnStart
         };
+    }
+
+    private void LoadMergeScript(ScriptStep step)
+    {
+        if (step.Kind != StepKind.Action)
+        {
+            MergeScriptEditor.Text = string.Empty;
+            return;
+        }
+
+        var script = step.LogMergeScript;
+        if (string.IsNullOrWhiteSpace(script))
+            script = GetDefaultMergeFunctionTemplate();
+
+        MergeScriptEditor.Text = script;
+        MergeScriptEditor.SyntaxHighlighting = ICSharpCode.AvalonEdit.Highlighting.HighlightingManager.Instance
+            .GetDefinitionByExtension(".cs");
+    }
+
+    private static string GetDefaultMergeFunctionTemplate()
+    {
+        return LocalizationService.Current.IsEnglish
+            ? """
+              // Inputs (available as locals):
+              //   CurrentLine  (string?)  the current log line: "HH:mm:ss [Level] message"
+              //   PreviousLine (string?)  the previous log line (null on the first line)
+              //   PreviousResult        (MergeResult?) the result returned for the previous line
+              //   PreviousWasCollapsed  (bool) was the previous line folded?
+              //   InCollapseGroup       (bool) is a fold group currently open?
+              // Return a MergeResult, or null to keep the line unchanged.
+              // Multi-line logic: use a variable then return it.
+              //   MergeResult? result; if (...) result = ...; return result;
+              //
+              // Fold: the FIRST line of a group returns Collapse = false (it becomes the
+              // header/summary); following lines return Collapse = true to fold under it.
+              // MergedMessage on the header is the text shown on the collapsed one line.
+              //
+              // Carry state to the next line via State (runtime only, simple values only):
+              //   var count = (PreviousResult?.State? ["count"] as int?) ?? 0;
+              //   return new MergeResult { State = new() { ["count"] = count + 1 } };
+              new MergeResult
+              {
+                  MergedMessage = CurrentLine,
+                  // Color = "Gray",     // any WPF color name or #RRGGBB
+                  // Collapse = false,   // true = fold this line into the current group
+                  // State = null        // Dictionary<string, object?> passed to the next line
+              }
+              """
+            : """
+              // 输入（可直接作为局部变量使用）：
+              //   CurrentLine  (string?)  当前日志行："HH:mm:ss [级别] 消息"
+              //   PreviousLine (string?)  上一行日志（首行为 null）
+              //   PreviousResult        (MergeResult?) 上一行返回的结果
+              //   PreviousWasCollapsed  (bool) 上一行是否被折叠
+              //   InCollapseGroup       (bool) 当前是否已有打开的折叠组
+              // 返回 MergeResult，或返回 null 保持原行不变。
+              // 多行逻辑：用变量再返回。
+              //   MergeResult? result; if (...) result = ...; return result;
+              //
+              // 折叠：一组的“第一行”返回 Collapse = false（作为组头/摘要行）；
+              // 后续行返回 Collapse = true 折叠进该组。组头的 MergedMessage 就是折叠成一行时显示的文字。
+              //
+              // 通过 State 把状态传给下一行（仅运行期、只存简单类型）：
+              //   var count = (PreviousResult?.State? ["count"] as int?) ?? 0;
+              //   return new MergeResult { State = new() { ["count"] = count + 1 } };
+              new MergeResult
+              {
+                  MergedMessage = CurrentLine,
+                  // Color = "Gray",     // 任意 WPF 颜色名或 #RRGGBB
+                  // Collapse = false,   // true = 把本行折叠进当前组
+                  // State = null        // Dictionary<string, object?>，传给下一行
+              }
+              """;
     }
 
     private static void SetScriptHighlighting(ICSharpCode.AvalonEdit.TextEditor editor, ScriptType scriptType)

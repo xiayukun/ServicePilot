@@ -2,22 +2,26 @@
 
 [中文说明](README.md)
 
+![ServicePilot](Assets/servicepilot-hero.png)
+
 ![Platform](https://img.shields.io/badge/platform-Windows-blue)
 ![.NET](https://img.shields.io/badge/.NET-8.0-512BD4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. v3.0.0 brings a complete FluentWindow UI overhaul: all management windows migrated to WPF-UI FluentWindow with TitleBar, system accent color selection effects, and unified dark theme.
+ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. v4.0.0 introduces a programmable log merge script engine with VSCode-style log folding, a right-side color overview for navigation, external config-file hot-reload, and a refined new app icon (applied to the exe, taskbar, and every window title bar).
 
 **Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. Your AI can then inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables. Anything the command line can do can become a ServicePilot action: switch API URLs, pull a branch, install dependencies, or open an IDE. ServicePilot includes a built-in "Default developer actions" template, and AI agents can generate project-specific services and templates directly.
 
 **Download:** [ServicePilot.exe](https://github.com/xiayukun/ServicePilot/releases/latest/download/ServicePilot.exe) | [Latest release](https://github.com/xiayukun/ServicePilot/releases/latest) | [Full user guide](docs/user-guide-en.md)
 
-![ServicePilot tray context menu](Assets/screenshots/tray-menu-zh.png)
+Log window (v4.0 adds log merge folding + right-side color overview):
 
-| Service editor and script actions | Live log window |
+![Live log window (merge folding + color overview)](Assets/screenshots/log-window-zh.png)
+
+| Tray context menu | Service editor and script actions |
 | --- | --- |
-| ![Service editor and script actions](Assets/screenshots/service-editor-zh.png) | ![Live log window](Assets/screenshots/log-window-zh.png) |
+| ![ServicePilot tray context menu](Assets/screenshots/tray-menu-zh.png) | ![Service editor and script actions](Assets/screenshots/service-editor-zh.png) |
 
 | CLI / AI status checks | AI command help |
 | --- | --- |
@@ -42,7 +46,9 @@ ServicePilot is a **tray-first, AI-friendly Windows launcher for local developme
 - **Full service templates**: save names, descriptions, actions, composites, and variables while keeping each target working directory.
 - **Template sharing**: export templates as JSON files and import templates shared by others.
 - **Built-in general template**: first launch seeds editable "Default developer actions" with Git, npm, IDE, and terminal actions.
-- **Live logs**: per-action tabs, search, copy, horizontal scrolling, and bounded history.
+- **Live logs**: per-action tabs, search, copy, horizontal scrolling, and bounded history; the full title is shown in the window title bar.
+- **Log merge & folding**: actions can define a custom C# merge script that folds multiple log lines into a single colored summary (VSCode-style expand/collapse), auto-expands on search matches, and a right-side priority-aggregated color overview for quickly locating errors.
+- **External config hot-reload**: editing `%APPDATA%\ServicePilot\config.v2.json` directly is detected and hot-reloaded by the tray without overwriting external edits, preserving running services' state.
 - **AI/script CLI**: JSON output for `list/status/service/step/template/logs`; `--json` errors also go to stdout with forced UTF-8 encoding for clean pipe consumption; the tray can `Copy help for AI`, and CLI configuration changes refresh open manager/log windows.
 - **Step-level incremental editing**: `step add/edit/remove/move` adds, edits, removes, and reorders individual action steps; `step set-members/add-member/remove-member` directly manages composite action members; `template import --on-conflict` controls name-collision strategy; changes propagate to the tray menu and open manager/log windows via the tray pipe.
 - **Reliable stop**: Windows Job Object cleanup reduces Vite/npm child processes that keep ports alive.

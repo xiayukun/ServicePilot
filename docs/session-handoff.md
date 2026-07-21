@@ -1,23 +1,70 @@
 # 会话交接
 
-最后更新：2026-07-14
+最后更新：2026-07-21
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
+
+## 发布：ServicePilot 4.0.0（2026-07-21）
+
+- 版本从 3.x 提升到 `4.0.0`（`csproj` + `AGENTS.md`），作为整合本会话全部新功能的重大版本发布。
+- 图标白边根因是**源图 V1 自带不透明白底**；`scripts\make_icon.py` 已改为检测青色 squircle 边界 + 圆角遮罩抠图，导出透明 `app.ico`（exe/任务栏）与 `app.png`（标题栏 `ui:ImageIcon`，避免多帧 ico 缩放白边）。彻底清 `obj/bin` 重编译确保新图标嵌入 exe。
+- README/README-en 顶部加入 hero 主图 `Assets/servicepilot-hero.png`（AI 生成，青色品牌调），并把展示 4.0 折叠/概览的日志截图 `Assets/screenshots/log-window-zh.png` 提到首屏。
+- CHANGELOG/CHANGELOG-en 将原 3.1.0 条目整合为 `4.0.0` 发布条目。
+- 通过 `gh` 提交、推送并创建 GitHub Release（tag `v4.0.0`，上传 `ServicePilot.exe`）。
+- 本机部署目标是中文目录“同步软件”（在部分 shell 里显示为乱码 `ͬ������`，实为同一目录，30+ 软件）；用字节精确定位避免误建重复目录/误删。
+
+## 更早改动：全新应用图标 + 版本 3.1.0（2026-07-21）
+
+- 采用新的青色圆角图标（源图 V1）。用 `scripts\make_icon.py`（Pillow）裁掉透明留白、居中补边并导出多分辨率 `ServicePilot\Resources\Icons\app.ico`（16/24/32/48/64/128/256）。
+- `app.ico` 作为唯一图标源：`csproj` 的 `<ApplicationIcon>`（exe 图标）、每个 `ui:FluentWindow` 的 `Icon`（任务栏）、每个 `ui:TitleBar.Icon`（标题栏左侧可见图标，`ui:ImageIcon` 18×18）。涉及全部 9 个窗口 XAML。
+- 托盘徽章图标仍由 `App.CreateTrayIconWithBadge` 动态生成（显示运行数），**不**使用 `app.ico`，保持不变。
+- 版本 bump 到 `3.1.0`（`csproj` + `AGENTS.md`），`CHANGELOG`/`CHANGELOG-en`/`README`/`README-en` 已加 3.1.0 条目（含本会话累计的合并脚本/折叠/概览/热加载/菜单滚动/系统主题色/图标标题栏等用户可见能力）。
+- 构建 0 警告 0 错误后发布覆盖到本地私有目标。
+
+## 更早改动：日志折叠可视化 + 托盘菜单（2026-07-21）
+
+在「日志合并/折叠」批次基础上，完成了折叠的真实可视化渲染与相关 UI 细节。
+
+日志折叠可视化（`LogWindow.xaml.cs` / 新增 `Views/FoldColorMarkerRenderer.cs`）：
+- 折叠改为**真正的 AvalonEdit 折叠**（`FoldingManager.Install` 接入 TextView 行生成，真正隐藏折叠行），左侧有 `>`/`+` 展开切换；原始行始终保留，展开可见全部子行。折叠区从 header 行行首开始，折叠态只显示摘要 Title。
+- 折叠内容可搜索：`FindLogMatch` 命中折叠区内的行时自动展开该折叠；`Summary` 按钮一键折叠全部/展开全部。
+- 折叠占位**文字固定白色**（`FoldingElementGenerator.TextBrush` 全局静态，初始化设一次）。
+- **多色折叠**：AvalonEdit 折叠框只能全局单色，无法逐区上色（`FoldingElementGenerator` 为 `sealed`）。改由 `FoldColorMarkerRenderer`（`IBackgroundRenderer` 叠加层）在 `+` 号与摘要文字之间画一个约 100px 的内容色块，颜色取被折叠**第一行**色；摘要 Title 用前缀空格（`GetFoldTitlePrefix`，按等宽字体空格宽度估算）把文字挤到色块右侧，二者不重叠。这是同屏显示多个不同色折叠的唯一支持方式。
+- 右侧概览 `Views/OverviewMargin.cs`：贴近原生滚动条的彩色概览图，逐像素取最高优先级色（Error > Warning > 自定义 > System > 普通），折叠感知（折叠子行不占行），点击跳转；无可拖动缩略块（拖动会导致逐帧重绘卡顿），`InvalidateVisualCache` 有签名守卫避免纯滚动时重建。
+
+托盘菜单：
+- 曾尝试「点击运行/停止项后菜单不关闭（`StaysOpenOnClick`）」，用户体验不佳，**已全部回退**为点击即关闭（恢复运行后 `RebuildTrayMenu()`）。
+
+合并脚本升级为「带跨行状态的流式函数」（2026-07-21）：
+- 新增输入（`MergeScriptGlobals`）：`PreviousResult`（上一行返回的完整 `MergeResult`）、`PreviousWasCollapsed`、`InCollapseGroup`。
+- 新增输出（`MergeResult`）：`State`（`Dictionary<string, object?>`），本行返回后作为下一行 `PreviousResult.State`，可做累计/去重/条件折叠。
+- 约束：仅运行期、不落盘、重建 tab 不恢复；只存简单类型（string/int/double/bool，因脚本跑在可回收 ALC）；每 tab 独立（`LogTabState.LastResult`）。
+- 落地点：`MergeScriptGlobals.cs`、`MergeResult.cs`、`LogMergeService.BuildSource`（注入新局部变量，`UserBodyStartLine` 16→19）、`LogWindow.ApplyMerge`、`ServiceCommandProcessor.MergeScriptTestAsync`（CLI test 同样携带状态）；编辑框预填注释、AI 帮助（中英）、AGENTS 均已同步。
+
+## 更早改动：日志合并折叠修复（2026-07-20）
+
+修复了「设置了 `LogMergeScript` 但日志窗口进度行不折叠」的问题。两个真实根因：
+
+1. `LogWindow` 从未消费 `MergeResult.Collapse`：只替换了文本和颜色，没有实现折叠渲染。（本轮已进一步演进为真实 AvalonEdit 折叠，见上。）
+2. `LogMergeService.BuildReferences` 缺少 `System.Text.RegularExpressions` 等引用，导致任何用 `Regex` 的脚本运行时编译失败并被静默吞掉（用户脚本正是用了 `Regex`）。现已补齐引用，并在 `BuildSource` 预置 `using System.Text.RegularExpressions;` / `using System.Globalization;`（同步更新了 `UserBodyStartLine`）。
+
+配套改动：
+- `merge-script set` 现在会先编译校验，失败拒绝保存（`--skip-validate` 强制）；运行时编译失败会在服务日志里以 `MergeScriptCompileError` 提示一次，不再静默。
+- 新增 `merge-script test SERVICE STEP --file lines.txt [--json]`：逐行喂入 CurrentLine，输出命中/MergedMessage/Color/Collapse 及最终渲染结果，无需真实跑服务即可验证。已用真实脚本+日志离线验证 8 行→3 行、单文件发布版同样通过。
+- 契约明确并写入 AGENTS.md / AI 帮助：`PreviousLine`/`CurrentLine` 是完整整行 `"HH:mm:ss [Level] message"`；合并脚本每行实时读取当前配置（`UpdateService` 更新 `RuntimeState.Config`），改后下一行即生效无需重启；`Color` 支持任意 WPF 颜色；`Children` 预留未渲染。
 
 ## 当前状态
 
 ServicePilot 是一个 .NET 8 Windows 托盘优先的开发服务管理器。当前产品方向是托盘菜单、WPF 管理窗口、日志窗口和 CLI，不再提供桌面悬浮模式。
 
-当前主线版本为 ServicePilot 2.3.0：
+当前发布版本为 ServicePilot 3.0.0：
 
-- 项目版本属性当前为 `2.3.0`（`ServicePilot/ServicePilot.csproj`）。
+- 项目版本属性当前为 `3.0.0`（`ServicePilot/ServicePilot.csproj`）。上述「日志合并/折叠」两批改动尚未 bump 版本、尚未提交，提交时需决定新版本号并同步 CHANGELOG。
 - 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
 - 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
 - `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
 - 运行配置、私有服务名、本机路径、备份文件名、客户项目名、数据库/API 地址等机器专属信息不得写入可提交文档。
 - 本机私有交接信息放在仓库根目录的 `LOCAL_NOTES.private.md`；该文件已由 `.gitignore` 忽略，不应提交。
-- v2.3.0 新增：step set-members/add-member/remove-member（service 和 template 两端）、template import --on-conflict、--json UTF-8 编码且错误走 stdout、service/step edit 无变更返回提示、service get/status 标注 DefaultStartStep、托盘数字缩小。
-- 上一个已发布版本为 v2.2.0（tag `v2.2.0`，commit `aa6bdf6`）。
 
 ## 2.0 模型
 
@@ -58,14 +105,13 @@ ServicePilot 2.0 使用 `Action` / `Composite` 模型：
 
 ## 打包与发布
 
-- 正常构建检查：`rtk dotnet build ServicePilot.sln`。
-- 单文件发布命令：`rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist`。
+- 正常构建检查：`dotnet build ServicePilot.sln`。
+- 单文件发布命令：`dotnet publish ./ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist`。
 - `Release` publish 默认应产出单个 `ServicePilot.exe`。
 - 如果运行中的 exe 锁定 `dist`，先发布到 `dist-staged`。
 - 每次成功产出 exe 后，如果 `LOCAL_NOTES.private.md` 存在，按其中的本机私有复制目标处理；不要把目标路径写入可提交文档。
+- 覆盖本机安装目标前，先自行检测目标 exe 是否被进程占用（如 `Get-Process ServicePilot`），仅在被锁时才请用户关闭，不要默认要求用户关闭。
 - 当前阶段用户要求：先产出 exe 给用户测试，不提交、不打 tag、不发 GitHub Release，除非用户明确要求。
-- v2.1.0 已发布（tag `v2.1.0`），v2.1.1 已提交并打 tag（tag `v2.1.1`，commit `6b49baa`），但尚未 push 到 remote 或发布 GitHub Release。
-- 发布说明草稿位于 `docs/release-notes-v2.1.0.md` / `docs/release-notes-v2.1.0-en.md`；v2.1.1 的可选发布说明待定。
 - GitHub Release 页面已有标题，发布 notes body 不要再额外加重复一级标题。
 
 ## 文档规则
@@ -81,7 +127,7 @@ ServicePilot 2.0 使用 `Action` / `Composite` 模型：
 每次功能修改至少执行：
 
 ```text
-rtk dotnet build ServicePilot.sln
+dotnet build ServicePilot.sln
 ```
 
 涉及配置迁移或 CLI 时，使用隔离目录验证：

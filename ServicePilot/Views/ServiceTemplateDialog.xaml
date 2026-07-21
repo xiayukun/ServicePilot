@@ -4,8 +4,9 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:avalonedit="http://icsharpcode.net/sharpdevelop/avalonedit"
         xmlns:converters="clr-namespace:ServicePilot.Converters"
-        Title="Template" Height="700" Width="1160"
+        Title="Template" Height="700" Width="1400"
         WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
+        Icon="pack://application:,,,/Resources/Icons/app.ico"
         ExtendsContentIntoTitleBar="True">
     <Window.Resources>
         <converters:StepKindDisplayConverter x:Key="StepKindDisplay"/>
@@ -18,7 +19,11 @@
 
         <ui:TitleBar Title="Template"
                      ShowMaximize="True"
-                     ShowMinimize="True" />
+                     ShowMinimize="True">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Source="pack://application:,,,/Resources/Icons/app.png" Width="18" Height="18" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <Grid Grid.Row="1" Margin="16">
             <Grid.RowDefinitions>
@@ -144,12 +149,39 @@
                             <ListBox x:Name="MembersList" Grid.Row="1"
                                      DisplayMemberPath="Name"/>
                         </Grid>
-                        <TextBlock x:Name="ScriptContentLabel" Grid.Row="2" Text="Script content" FontSize="11" Margin="0,0,0,4"/>
-                        <avalonedit:TextEditor x:Name="ScriptEditor" Grid.Row="3"
-                                               FontFamily="Consolas" FontSize="13"
-                                               ShowLineNumbers="True"
-                                               Background="#FF1E1E2E"
-                                               Foreground="#FFD4D4D4"/>
+                        <Grid Grid.Row="2" Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="ScriptContentLabel" Text="Script content" FontSize="11" />
+                            <TextBlock Grid.Column="1" Text="Log merge function" FontSize="11" Margin="12,0,0,0" />
+                        </Grid>
+                        <Grid Grid.Row="3">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*"/>
+                                <ColumnDefinition Width="1*"/>
+                            </Grid.ColumnDefinitions>
+                            <avalonedit:TextEditor Grid.Column="0" x:Name="ScriptEditor"
+                                                   FontFamily="Consolas" FontSize="13"
+                                                   ShowLineNumbers="True"
+                                                   Background="#FF1E1E2E"
+                                                   Foreground="#FFD4D4D4"/>
+                            <Border Grid.Column="1" CornerRadius="6" Padding="12" Margin="12,0,0,0">
+                                <Grid x:Name="MergeScriptPanel" Visibility="Collapsed">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" x:Name="MergeFunctionLabel" Text="Merge function" FontSize="11" Margin="0,0,0,4"/>
+                                    <avalonedit:TextEditor Grid.Row="1" x:Name="MergeScriptEditor"
+                                                           FontFamily="Consolas" FontSize="13"
+                                                           ShowLineNumbers="True"
+                                                           Background="#FF1E1E2E"
+                                                           Foreground="#FFD4D4D4"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
                     </Grid>
                 </Border>
             </Grid>
