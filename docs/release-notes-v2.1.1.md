@@ -1,5 +1,3 @@
-中文发布说明：当前文件 | 英文：[release-notes-v2.1.1-en.md](release-notes-v2.1.1-en.md)
-
 ServicePilot 2.1.1 修正 AI 提示语（`ai-help` 和托盘右键菜单「复制给 AI 的帮助」），强调通过托盘管道修改配置后**即时生效、无需重启**，减少 AI 猜测和误操作。
 
 ## 亮点

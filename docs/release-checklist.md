@@ -7,7 +7,7 @@ English: [release-checklist-en.md](release-checklist-en.md)
 发布到 `dist` 前先退出正在运行的 `dist\ServicePilot.exe`。如果只是验证发布命令，可以输出到 `dist-staged`。
 
 ```powershell
-rtk dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
+dotnet publish .\ServicePilot\ServicePilot.csproj -t:Rebuild -c Release -o .\dist
 ```
 
 `ServicePilot.csproj` 的 `Release` 配置默认使用 `win-x64`、自包含、单文件、压缩发布；`dist` 应只保留 `ServicePilot.exe`。
@@ -35,10 +35,22 @@ dist\ServicePilot.exe
 
 ## GitHub 发布
 
-- 标签：`v3.0.0`
-- 标题：`ServicePilot 3.0.0`
-- 制品：`ServicePilot.exe`
-- 使用 `docs/release-notes-v3.0.0.md` 的发布说明。
+- 标签：`vX.Y.Z`（如 `v4.0.0`）。
+- 标题：`ServicePilot X.Y.Z`（可加简短副标题，如 `ServicePilot 4.0.0 — 日志合并与折叠`）。
+- 制品：把 `ServicePilot.exe` 上传到发布页的 **Assets**。
+- 发布说明使用 `docs/release-notes-vX.Y.Z.md`，正文格式遵循 `docs/release-notes-template.md` 里的「GitHub Release 正文规范」。
 - 发布前更新 `CHANGELOG.md` 和 `CHANGELOG-en.md`。
 - 确认 `.github/workflows/build.yml` 在标签或手动触发时通过，并上传 `ServicePilot.exe`。
 - 按 `docs/screenshot-guide.md` 更新中文和英文截图。
+
+### 发布说明（Release notes）规范
+
+- 只维护中文发布说明（`docs/release-notes-vX.Y.Z.md`）与中英 `CHANGELOG`。不再维护每版英文发布说明（`docs/release-notes-vX.Y.Z-en.md` 已废弃删除）。
+- GitHub Release 正文不要重复 `# ServicePilot X.Y.Z` 标题，也不要写「下载 / Download」小节——下载统一走 Assets。
+- 正文底部固定英文入口，仅链接 Changelog：
+
+  ```text
+  ---
+
+  🌐 English: [Changelog](https://github.com/xiayukun/ServicePilot/blob/main/CHANGELOG-en.md)
+  ```

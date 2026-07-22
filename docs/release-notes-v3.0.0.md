@@ -1,5 +1,3 @@
-中文发布说明：当前文件 | 英文：[release-notes-v3.0.0-en.md](https://github.com/xiayukun/ServicePilot/blob/main/docs/release-notes-v3.0.0-en.md)
-
 ServicePilot 3.0.0 带来 **FluentWindow 现代界面全面升级**：所有管理窗口迁移为 WPF-UI FluentWindow，支持 TitleBar 标题栏、系统主题色选中效果和统一的深色主题。
 
 ## 亮点

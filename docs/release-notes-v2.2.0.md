@@ -1,5 +1,3 @@
-中文发布说明：当前文件 | 英文：[release-notes-v2.2.0-en.md](release-notes-v2.2.0-en.md)
-
 ServicePilot 2.2.0 新增**动作级增量编辑 CLI**：AI 和脚本现在可以精确地对单个步骤执行增、改、删、排序操作，无需重新创建整个服务。
 
 ## 亮点

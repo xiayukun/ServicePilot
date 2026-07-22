@@ -1,5 +1,3 @@
-中文发布说明：当前文件 | 英文：[release-notes-v4.0.0-en.md](https://github.com/xiayukun/ServicePilot/blob/main/docs/release-notes-v4.0.0-en.md)
-
 ServicePilot 4.0.0 是一次重大功能版本：引入可编程的**日志合并脚本引擎**与 VSCode 式日志折叠、右侧颜色概览导航、外部配置文件热加载，并全面刷新品牌图标。
 
 ## 亮点
