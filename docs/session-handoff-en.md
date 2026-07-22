@@ -1,8 +1,20 @@
 # Session Handoff
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## Fix release: ServicePilot 4.0.1 (2026-07-22)
+
+- **Symptom**: On a Java/Spring API service startup, log folding was misaligned — fold headers flattened at the top, details piled at the bottom, error start line misplaced (see user's screenshot).
+- **Investigation (analyze first, then fix)**:
+  - Used `merge-script test` on two realistic samples (startup+error+stack 16→4; request wave+SQL+error 12→4): the **merge function logic is correct**, ruling out the script.
+  - Confirmed the user runs the new exe (with `PreviousResult/InCollapseGroup/State`). Noted `dist-staged` is a pre-globals build also labeled 4.0.0 (same version, different bits — confusing).
+  - CLI folds correctly in a single full pass while the UI renders incrementally line-by-line, narrowing it to the UI; following the "a later line reaches the page first" hypothesis found the root cause.
+- **Root cause**: `ProcessRunner` pumps `stdout`/`stderr` on two concurrent `PumpOutputAsync` tasks, delivered via `ProcessManager.RunOnUiThread` (`Dispatcher.Invoke`). Under threads the enqueue order equals thread scheduling, so **a later log line could enter `LogEntries` first**, scrambling the order-dependent fold state machine (`LogWindow.ApplyMerge`).
+- **Fix**: Added an `_emitGate` lock in `ProcessRunner`; all output (stdout/stderr/system notices) now goes through a serialized `Emit(...)`. `ProcessManager` keeps the blocking `Dispatcher.Invoke` (the emit lock is held until the UI queues the line → strict order) with a comment forbidding a switch to `BeginInvoke`. The merge function is unchanged.
+- Bumped to `4.0.1` (`csproj` + `AGENTS.md`); added 4.0.1 entries to `CHANGELOG`/`CHANGELOG-en`; added `docs/release-notes-v4.0.1.md` (Chinese body + English `CHANGELOG-en` footer only, per convention).
+- Build: 0 warnings, 0 errors. Pushed to GitHub and created the Release (tag `v4.0.1`) per request; **local exe not overwritten** (user will download it).
 
 ## Release: ServicePilot 4.0.0 (2026-07-21)
 

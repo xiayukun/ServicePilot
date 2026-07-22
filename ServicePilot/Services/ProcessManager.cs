@@ -442,6 +442,11 @@ public class ProcessManager : IDisposable
     {
         executor.OutputReceived += entry =>
         {
+            // Ordering matters for the log fold state machine. ProcessRunner serializes its emits under a
+            // lock, and RunOnUiThread uses a BLOCKING Dispatcher.Invoke, so the runner's emit lock is held
+            // until the UI has queued this entry — the next line cannot be emitted (or delivered) ahead of
+            // it. Do not switch this to a non-blocking BeginInvoke: two BeginInvokes from concurrent pump
+            // threads could be enqueued out of read order and reintroduce the interleaving bug.
             RunOnUiThread(() => ServiceOutput?.Invoke(serviceId, entry));
         };
 

@@ -19,7 +19,7 @@ Current repository facts:
 - Preset variable usage cache path: `%APPDATA%\ServicePilot\variable-usage-cache.json`
 - Test-only config override: set `SERVICEPILOT_CONFIG_DIR` before launching the exe.
 - Runtime target: `net8.0-windows`
-- Public release version: `4.0.0`.
+- Public release version: `4.0.1`.
 - App icon: `ServicePilot\Resources\Icons\app.ico` is the single icon source. It backs the exe `<ApplicationIcon>`, every FluentWindow `Icon` (taskbar), and each `ui:TitleBar.Icon` (visible left-side title-bar icon). Regenerate it from the source PNG via `scripts\make_icon.py` (multi-size 16-256 ICO). The dynamic tray badge icon is generated separately in `App.CreateTrayIconWithBadge` and is intentionally NOT `app.ico`.
 - `OutputType` is `Exe` so CLI calls are synchronous and capture-friendly. No-argument tray startup calls `FreeConsole()`.
 - `Release` publish defaults are in `ServicePilot\ServicePilot.csproj`: `win-x64`, self-contained, compressed single-file, no debug symbols. The normal package command is `dotnet publish ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist`, and `dist` should contain only `ServicePilot.exe`.
@@ -125,6 +125,7 @@ Execution path:
 - `ProcessRunner` injects the selected variable as environment variable `SERVICEPILOT_VARIABLE` only for steps whose `UseVariable` is `true`.
 - Batch steps run through `cmd.exe /d /s /c` with a `chcp 65001` prefix.
 - Output is read as raw bytes per line, decoded as strict UTF-8 first, then the current OEM code page as fallback.
+- `stdout` and `stderr` are pumped by two concurrent tasks, but `ProcessRunner` serializes every emit through a single `_emitGate` lock (`Emit(...)`), and `ProcessManager.WireExecutor` delivers output via a BLOCKING `Dispatcher.Invoke`. Together these guarantee log lines reach `LogEntries` in true read order. This ordering is REQUIRED by the order-dependent log fold state machine (`LogWindow.ApplyMerge` folds a line into the group started by the PREVIOUS line). Do not emit process output off the lock, and do not switch the output delivery to a non-blocking `BeginInvoke` — either reintroduces interleaving that scrambles folding (fixed in 4.0.1).
 - Do not treat all stderr output as errors. Many dev tools write progress to stderr. `ProcessRunner` classifies known benign stderr, such as webpack progress, as `Info`; final failures still come from nonzero exit codes and explicit system error logs.
 - Do not write Batch temp files with a UTF-8 BOM; `cmd.exe` treats the BOM as part of the first command on this system.
 - PowerShell, Python, and Node steps use temporary script files.

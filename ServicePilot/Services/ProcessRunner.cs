@@ -14,6 +14,11 @@ public class ProcessRunner : IDisposable
     private Process? _process;
     private string? _tempFile;
     private WindowsJob? _job;
+    // stdout and stderr are pumped by two concurrent tasks. The log merge/fold pipeline downstream is an
+    // order-dependent state machine (it folds a line into the group started by the PREVIOUS line), so the
+    // order in which lines are emitted must match the order they were read. This lock serializes emits so
+    // one runner never interleaves a stderr line between two stdout lines (or vice versa) out of order.
+    private readonly object _emitGate = new();
 
     public ProcessRunner(ScriptStep step, string workingDirectory, string? variable = null)
     {
@@ -73,7 +78,7 @@ public class ProcessRunner : IDisposable
             }
         };
 
-        OutputReceived?.Invoke(new LogEntry(LogLevel.System, $"{fileName} {displayArguments}", "system", _step.Name));
+        Emit(new LogEntry(LogLevel.System, $"{fileName} {displayArguments}", "system", _step.Name));
 
         _job = WindowsJob.CreateKillOnClose();
         var started = false;
@@ -94,7 +99,7 @@ public class ProcessRunner : IDisposable
                 throw;
             }
 
-            OutputReceived?.Invoke(new LogEntry(LogLevel.Warning, $"进程加入 Windows Job 失败，将退回普通进程树停止: {ex.Message}", "system", _step.Name));
+            Emit(new LogEntry(LogLevel.Warning, $"进程加入 Windows Job 失败，将退回普通进程树停止: {ex.Message}", "system", _step.Name));
             _job.Dispose();
             _job = null;
         }
@@ -110,7 +115,7 @@ public class ProcessRunner : IDisposable
 
         try
         {
-            OutputReceived?.Invoke(new LogEntry(LogLevel.System, "正在停止进程组。", "system", _step.Name));
+            Emit(new LogEntry(LogLevel.System, "正在停止进程组。", "system", _step.Name));
             _job?.Dispose();
             _job = null;
 
@@ -134,15 +139,15 @@ public class ProcessRunner : IDisposable
                 // The process may have exited and detached between Kill and WaitForExitAsync.
             }
 
-            OutputReceived?.Invoke(new LogEntry(LogLevel.System, "进程已停止。", "system", _step.Name));
+            Emit(new LogEntry(LogLevel.System, "进程已停止。", "system", _step.Name));
         }
         catch (OperationCanceledException)
         {
-            OutputReceived?.Invoke(new LogEntry(LogLevel.Warning, "进程组停止后仍未退出，请检查是否存在残留子进程。", "system", _step.Name));
+            Emit(new LogEntry(LogLevel.Warning, "进程组停止后仍未退出，请检查是否存在残留子进程。", "system", _step.Name));
         }
         catch (Exception ex)
         {
-            OutputReceived?.Invoke(new LogEntry(LogLevel.Warning, $"停止进程失败: {ex.Message}", "system", _step.Name));
+            Emit(new LogEntry(LogLevel.Warning, $"停止进程失败: {ex.Message}", "system", _step.Name));
         }
     }
 
@@ -311,7 +316,21 @@ public class ProcessRunner : IDisposable
             bytes = bytes[..^1];
 
         var message = DecodeOutputLine(bytes);
-        OutputReceived?.Invoke(new LogEntry(ClassifyOutputLevel(source, message), message, source, _step.Name));
+        Emit(new LogEntry(ClassifyOutputLevel(source, message), message, source, _step.Name));
+    }
+
+    /// <summary>
+    /// Serialized emit. All process output (stdout, stderr, and runner system/warning notices) goes through
+    /// here so downstream ordering is deterministic: the concurrent stdout/stderr pumps cannot deliver lines
+    /// out of the order in which they were read, which is what the order-dependent log fold state machine
+    /// relies on.
+    /// </summary>
+    private void Emit(LogEntry entry)
+    {
+        lock (_emitGate)
+        {
+            OutputReceived?.Invoke(entry);
+        }
     }
 
     private static LogLevel ClassifyOutputLevel(string source, string message)

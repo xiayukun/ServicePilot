@@ -4,6 +4,10 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.0.1 - 2026-07-22
+
+- **Fix: misaligned log folding (multithreaded ordering)**: A process's `stdout` and `stderr` are pumped by two concurrent threads, which could let a later log line reach the log view first. Feeding the order-dependent merge/fold state machine out of order caused "fold headers flattened at the top, details piled at the bottom, error start line misplaced." Output for the same step is now committed serially in true read order, restoring correct folding and log order. The merge function itself needs no changes.
+
 ## 4.0.0 - 2026-07-21
 
 A major feature release: a programmable log merge script engine with VSCode-style log folding, a right-side color overview for navigation, external config-file hot-reload, and a fully refreshed brand icon.

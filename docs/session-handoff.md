@@ -1,8 +1,20 @@
 # 会话交接
 
-最后更新：2026-07-21
+最后更新：2026-07-22
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
+
+## 修复发布：ServicePilot 4.0.1（2026-07-22）
+
+- **问题**：某 Java/Spring API 服务启动时日志折叠错位——折叠组头平铺在上、明细堆在底部、错误起始行错位（见用户截图）。
+- **排查过程（先分析后改）**：
+  - 用 `merge-script test` 对两组贴近截图的真实样本(启动日志+错误+堆栈 16→4；请求波+SQL+错误 12→4)验证，**合并函数逻辑完全正确**，排除脚本问题。
+  - 确认用户运行的是新版 exe（含 `PreviousResult/InCollapseGroup/State`）。顺带发现 `dist-staged` 是加 globals 前的旧构建但版本号也是 4.0.0（同号不同内容，易混淆）。
+  - CLI 一次性全量跑折叠正确，而 UI 是逐行增量——差异定位到 UI；进一步顺着"后产生的行先进页面"的假设,查到根因。
+- **根因**：`ProcessRunner` 的 `stdout`/`stderr` 由两个并发 `PumpOutputAsync` 任务读取，经 `ProcessManager.RunOnUiThread`(`Dispatcher.Invoke`)投递。多线程下入队顺序=线程抢占顺序，导致**后产生的日志行可能先进入 `LogEntries`**，喂给依赖顺序的折叠状态机(`LogWindow.ApplyMerge`)就错乱。
+- **修复**：`ProcessRunner` 新增 `_emitGate` 锁,所有输出(stdout/stderr/系统提示)统一走 `Emit(...)` 串行提交;`ProcessManager` 保持阻塞式 `Dispatcher.Invoke`(持锁期间阻塞→严格保序),并加注释禁止改为 `BeginInvoke`。合并函数不动。
+- 版本 bump 到 `4.0.1`(`csproj` + `AGENTS.md`);`CHANGELOG`/`CHANGELOG-en` 加 4.0.1 条目;新增 `docs/release-notes-v4.0.1.md`(按新规范:中文正文 + 底部仅链 `CHANGELOG-en`)。
+- 构建 0 警告 0 错误。按用户要求推 GitHub 并建 Release(tag `v4.0.1`),**本地不覆盖**(用户自行下载)。
 
 ## 发布：ServicePilot 4.0.0（2026-07-21）
 
