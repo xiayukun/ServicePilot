@@ -4,6 +4,13 @@
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
+## 修复发布：ServicePilot 4.0.2（2026-07-22）
+
+- **问题**：日志持续输出时，手动关闭一个折叠组后，该组又有新行输出，折叠会被错误地重新弹开。
+- **根因**：增量 `RebuildFoldings` 里，活跃组的 child 增加会让 AvalonEdit 在 `UpdateFoldings` 时销毁并重建该折叠区；旧逻辑用 `_foldingInitialized`（HashSet，只在组头首次出现折叠一次）记录，重建后既不补折、又丢了用户手动折叠态，于是弹开。
+- **修复**：改用 `_foldStateByHeader`（`Dictionary<LogEntry,bool>`，按组头记录折叠意图，默认折叠）。`RebuildFoldings` 在 `UpdateFoldings` 前把当前各 section 的 `IsFolded` 采集进字典（捕获用户手动切换），之后按字典权威回写；仅在清空日志时清字典，切 tab 不清（保留每组状态）。所有手动入口（fold margin 点击、搜索展开、摘要按钮）都被"重建前采集"统一覆盖，无需各自挂钩。
+- 版本 `4.0.2`；更新 `CHANGELOG` 中英、新增 `docs/release-notes-v4.0.2.md`、`AGENTS`（折叠状态持久化约定）。构建 0 警告 0 错误。按用户要求覆盖本地部署并推 GitHub Release（tag `v4.0.2`）。
+
 ## 修复发布：ServicePilot 4.0.1（2026-07-22）
 
 - **问题**：某 Java/Spring API 服务启动时日志折叠错位——折叠组头平铺在上、明细堆在底部、错误起始行错位（见用户截图）。

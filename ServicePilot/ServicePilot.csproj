@@ -9,10 +9,10 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>ServicePilot</RootNamespace>
     <AssemblyName>ServicePilot</AssemblyName>
-    <Version>4.0.1</Version>
-            <AssemblyVersion>4.0.1.0</AssemblyVersion>
-            <FileVersion>4.0.1.0</FileVersion>
-            <InformationalVersion>4.0.1</InformationalVersion>
+    <Version>4.0.2</Version>
+            <AssemblyVersion>4.0.2.0</AssemblyVersion>
+            <FileVersion>4.0.2.0</FileVersion>
+            <InformationalVersion>4.0.2</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <ApplicationIcon>Resources\Icons\app.ico</ApplicationIcon>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>

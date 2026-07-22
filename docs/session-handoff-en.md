@@ -4,6 +4,13 @@ Last updated: 2026-07-22
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
 
+## Fix release: ServicePilot 4.0.2 (2026-07-22)
+
+- **Symptom**: While logs stream, manually collapsing a fold group and then getting more lines for that group re-expanded it.
+- **Root cause**: In incremental `RebuildFoldings`, a growing active group makes AvalonEdit destroy+recreate its section during `UpdateFoldings`. The old `_foldingInitialized` HashSet (fold once on first appearance) neither refolded nor preserved the user's manual state after recreation, so it sprang open.
+- **Fix**: Replaced with `_foldStateByHeader` (`Dictionary<LogEntry,bool>`, per-header fold intent, default folded). `RebuildFoldings` captures each live section's `IsFolded` into the dict BEFORE `UpdateFoldings` (recording manual toggles), then reapplies it authoritatively AFTER; the dict is cleared only when logs are cleared, not on tab switch. All manual entry points (fold margin clicks, search-expand, summary button) are covered by the capture-before step, so no per-hook wiring is needed.
+- Version `4.0.2`; updated `CHANGELOG` (zh/en), added `docs/release-notes-v4.0.2.md`, and `AGENTS` (fold-state persistence rule). Build: 0 warnings, 0 errors. Per request, overwrote the local deployment and published the GitHub Release (tag `v4.0.2`).
+
 ## Fix release: ServicePilot 4.0.1 (2026-07-22)
 
 - **Symptom**: On a Java/Spring API service startup, log folding was misaligned — fold headers flattened at the top, details piled at the bottom, error start line misplaced (see user's screenshot).

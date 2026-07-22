@@ -46,8 +46,11 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     private bool _logUiReady;
     private int _lastSearchOffset = -1;
     private bool _summaryViewActive;
-    // Header entries whose folding has already been given its default (folded) state once.
-    private readonly HashSet<LogEntry> _foldingInitialized = new();
+    // Remembered fold intent per group header (true = folded). This is the source of truth for a group's
+    // collapsed state and survives AvalonEdit destroying/recreating a FoldingSection during incremental
+    // rebuilds. Without it, a group the user manually collapsed could pop back open when new child lines
+    // arrive and its section gets recreated. A new header defaults to folded (true).
+    private readonly Dictionary<LogEntry, bool> _foldStateByHeader = new();
 
     public ObservableCollection<LogEntry> LogEntries { get; } = new();
 
@@ -725,7 +728,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         _logTabsByKey.Clear();
         LogEntries.Clear();
         _pendingInserts.Clear();
-        _foldingInitialized.Clear();
+        _foldStateByHeader.Clear();
         _foldingManager?.Clear();
         LogEditor.Clear();
         LogTabs.SelectedItem = null;
@@ -955,9 +958,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
         EnsureLogDocument();
         LogEntries.Clear();
-        // Full rebuild recreates the document and all folding sections from scratch, so reset the
-        // "already folded once" tracking to re-apply each group's default folded state.
-        _foldingInitialized.Clear();
+        // Do NOT clear _foldStateByHeader here: it is keyed by header entry (stable object), so a tab
+        // switch / full rebuild should preserve the user's per-group collapsed state. RebuildFoldings
+        // re-applies each remembered intent and defaults brand-new headers to folded.
         // Colors and group metadata live on each LogEntry, so a rebuild (tab switch) just re-renders the
         // stored entries and re-derives foldings — no re-running of the merge script is needed.
         if (LogTabs.SelectedItem is LogTabState tab)
@@ -1073,10 +1076,16 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // UpdateFoldings keeps IsFolded for existing sections (preserving the user's manual toggle) and
-        // creates the rest. We then (a) refresh each collapsed title with the live summary, and (b) fold
-        // each group exactly once — the first time its header appears — since DefaultClosed alone is not
-        // reliably applied by UpdateFoldings.
+        // BEFORE rebuilding: capture the live IsFolded of every current section into _foldStateByHeader so
+        // any manual expand/collapse the user did since the last rebuild is recorded against its header
+        // entry. AvalonEdit may destroy/recreate sections during UpdateFoldings, which would otherwise lose
+        // that state and pop a manually-collapsed group back open when new child lines arrive.
+        foreach (var folding in _foldingManager.AllFoldings)
+        {
+            if (startOffsetToGroup.TryGetValue(folding.StartOffset, out var existing))
+                _foldStateByHeader[existing.Header] = folding.IsFolded;
+        }
+
         _foldingManager.UpdateFoldings(foldings, -1);
         _foldColorMarker?.Colors.Clear();
         foreach (var folding in _foldingManager.AllFoldings)
@@ -1084,8 +1093,14 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             if (!startOffsetToGroup.TryGetValue(folding.StartOffset, out var group))
                 continue;
             folding.Title = group.Title;
-            if (_foldingInitialized.Add(group.Header))
-                folding.IsFolded = true;
+            // Apply the remembered intent (default: folded for a brand-new header). This is authoritative,
+            // so a recreated section always restores the user's last state instead of springing open.
+            if (!_foldStateByHeader.TryGetValue(group.Header, out var wantFolded))
+            {
+                wantFolded = true;
+                _foldStateByHeader[group.Header] = true;
+            }
+            folding.IsFolded = wantFolded;
             // Record this fold's first-line content color so the overlay renderer can paint a full-width
             // underline strip below its summary line. This is what lets multiple folds show different
             // colors at the same time (AvalonEdit's own fold placeholder text is one global color).
