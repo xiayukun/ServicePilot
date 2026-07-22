@@ -272,6 +272,21 @@ ServicePilot.exe shutdown
 - Update this `AGENTS.md` after every meaningful architecture or workflow change so future AI sessions can resume safely.
 - Update session handoff docs at the end of substantial work.
 
+### Release Notes Convention (v4.0.0+)
+
+- We only maintain Chinese release notes (`docs/release-notes-vX.Y.Z.md`) + Chinese/English CHANGELOG (`CHANGELOG.md` / `CHANGELOG-en.md`). Per-version English release notes (`docs/release-notes-vX.Y.Z-en.md`) are **deprecated and removed** — do not recreate them.
+- GitHub Release **body must not**:
+  - Start with a `# ServicePilot X.Y.Z` heading (the release page already shows the title).
+  - Include a "Download" / "下载" section — downloads go through the **Assets** section.
+  - Include any hand-written `latest`/version-package links.
+- GitHub Release body ends with a single English entry line:
+  ```text
+  ---
+
+  🌐 English: [Changelog](https://github.com/xiayukun/ServicePilot/blob/main/CHANGELOG-en.md)
+  ```
+- Release artifact: only `ServicePilot.exe` uploaded to Assets, no hand-written download links.
+
 ## GitHub / CI Rules
 
 - `.github/workflows/build.yml` is the public confidence check. It should restore, build, publish the Windows exe, run CLI smoke tests with `SERVICEPILOT_CONFIG_DIR` set to a temporary directory, and upload `ServicePilot.exe`.
