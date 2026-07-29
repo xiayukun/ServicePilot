@@ -15,6 +15,7 @@ public class LogEntry
     public string Message { get; set; } = string.Empty;
     public string Source { get; set; } = "stdout";
     public string? StepName { get; set; }
+    public Guid? StepId { get; set; }
 
     // --- Transient log-merge/folding metadata (UI only, never persisted) ---
 
@@ -36,12 +37,13 @@ public class LogEntry
 
     public LogEntry() { }
 
-    public LogEntry(LogLevel level, string message, string source, string? stepName = null)
+    public LogEntry(LogLevel level, string message, string source, string? stepName = null, Guid? stepId = null)
     {
         Timestamp = DateTime.Now;
         Level = level;
         Message = message;
         Source = source;
         StepName = stepName;
+        StepId = stepId;
     }
 }

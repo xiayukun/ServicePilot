@@ -10,16 +10,16 @@ ServicePilot
 
 ## GitHub Description
 
-推荐 GitHub About 描述（v3.0.0 更新 - 突出 FluentWindow 现代界面）：
+推荐 GitHub About 描述（v4.1.0）：
 
 ```text
-ServicePilot | AI-friendly Windows tray service manager with FluentWindow modern UI / 本地开发服务启动器：manage npm, Vite, dotnet, Python, PowerShell scripts with GUI + CLI.
+AI-friendly Windows tray manager for local development services — run npm, Vite, .NET, Python, and PowerShell with GUI + CLI.
 ```
 
 如果 GitHub description 需要更短：
 
 ```text
-AI-friendly tray service manager with FluentWindow modern UI for npm, Vite, dotnet, Python, PowerShell.
+AI-friendly Windows tray manager for local development services.
 ```
 
 ## Homepage
@@ -47,14 +47,12 @@ dotnet
 wpf
 wpf-ui
 fluentwindow
-modern-ui
 vite
 npm
 powershell
-batch
-nodejs
-json
-local-dev
+log-management
+log-viewer
+logging
 ```
 
 ## 搜索关键词
@@ -84,7 +82,7 @@ process tree cleanup
 Job Object
 ```
 
-## README 首屏卖点 (v3.0.0 更新)
+## README 首屏卖点（v4.1.0 更新）
 
 - v3.0.0 全面升级为 WPF-UI FluentWindow 现代界面：所有管理窗口带 TitleBar 标题栏、系统主题色选中效果和统一深色主题。
 - 下载并启动后，用户可以从托盘右键菜单复制 `复制给 AI 的帮助`，让 AI 直接拿到当前 `ServicePilot.exe` 绝对路径和首批检查命令。
@@ -94,15 +92,17 @@ Job Object
 - 支持启动变量和手动动作变量，适合切换后端地址、环境名、配置值。
 - 不安装系统服务，不要求管理员权限，更适合本地开发。
 - Windows Job Object 清理进程组，解决 npm/Vite 停止后端口残留问题。
+- 动作日志标签按稳定动作标识区分；可关闭单个标签并清除其已保留日志，不停止仍在运行的动作。
+- 高频输出时，自动滚动与折叠/展开交互以实际布局和折叠状态为准；进程完成或停止会排空已读取的输出，减少短命令尾部日志丢失。
 
 ## 社交预览文案
 
 ```text
-ServicePilot helps developers hand local Windows dev services to AI: copy the tray AI help, inspect JSON state, then start, switch, log, and stop services safely.
+ServicePilot helps developers hand local Windows dev services to AI: copy tray AI help, inspect JSON state, then run, switch, log, and stop services safely—with dependable log completion for short-lived commands.
 ```
 
 ## 发布帖草稿
 
 ```text
-我做了 ServicePilot，一个 AI 友好的 Windows 托盘服务启动器。下载启动后，从托盘右键复制“给 AI 的帮助”，AI 就能拿到当前 exe 路径并用 JSON CLI 先读真实状态，再帮你管理 npm/Vite、dotnet、Python、Batch、PowerShell、Node.js 脚本：启动服务、切换变量、查看日志和停止进程。
+ServicePilot 4.1.0 是一个 AI 友好的 Windows 托盘本地开发服务管理器。下载启动后，从托盘右键复制“给 AI 的帮助”，AI 就能先用 JSON CLI 读取真实状态，再帮你管理 npm/Vite、dotnet、Python、Batch、PowerShell、Node.js 脚本。这个版本让动作日志可独立关闭和清空，并改善高频日志滚动、折叠操作和短命令尾部日志的可靠性。
 ```

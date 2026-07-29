@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Runtime.ExceptionServices;
 using System.Windows;
 using ServicePilot.Models;
 
@@ -215,10 +216,13 @@ public class ProcessManager : IDisposable
                 RunOnUiThread(() =>
                 {
                     MarkRunningSteps(runtimeState, StepRunState.Cancelled);
-                    runtimeState.State = ProcessState.Stopped;
-                    runtimeState.StartTime = null;
-                    runtimeState.ActiveVariable = null;
-                    ServiceStateChanged?.Invoke(serviceId, ProcessState.Stopped);
+                    if (runtimeState.State is not (ProcessState.Stopping or ProcessState.Stopped or ProcessState.Error or ProcessState.StartFailed or ProcessState.Completed))
+                    {
+                        runtimeState.State = ProcessState.Stopped;
+                        runtimeState.StartTime = null;
+                        runtimeState.ActiveVariable = null;
+                        ServiceStateChanged?.Invoke(serviceId, ProcessState.Stopped);
+                    }
                 });
             }
             catch (Exception ex)
@@ -281,23 +285,51 @@ public class ProcessManager : IDisposable
         foreach (var token in stepTokens)
             SafeCancel(token.Value);
 
+        Exception? stopError = null;
         if (executor != null)
-            await executor.StopAsync();
+        {
+            try
+            {
+                await executor.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                stopError = ex;
+            }
+        }
 
         foreach (var stepExecutor in stepExecutors)
-            await stepExecutor.Value.StopAsync();
+        {
+            try
+            {
+                await stepExecutor.Value.StopAsync();
+            }
+            catch (Exception ex)
+            {
+                stopError = stopError == null ? ex : new AggregateException(stopError, ex);
+            }
+        }
 
         if (state != null)
         {
             RunOnUiThread(() =>
             {
                 MarkRunningSteps(state, StepRunState.Cancelled);
-                state.State = ProcessState.Stopped;
+                var nextState = stopError == null ? ProcessState.Stopped : ProcessState.Error;
+                var publishTerminal = state.State != nextState;
+                state.State = nextState;
                 state.StartTime = null;
                 state.ActiveVariable = null;
-                ServiceStateChanged?.Invoke(serviceId, ProcessState.Stopped);
+                state.LastError = stopError?.Message;
+                if (stopError != null)
+                    ServiceOutput?.Invoke(serviceId, new LogEntry(LogLevel.Error, stopError.Message, "system"));
+                if (publishTerminal)
+                    ServiceStateChanged?.Invoke(serviceId, nextState);
             });
         }
+
+        if (stopError != null)
+            ExceptionDispatchInfo.Capture(stopError).Throw();
     }
 
     public bool RunComposite(Guid serviceId, Guid compositeStepId, string? variable = null) =>
@@ -390,7 +422,7 @@ public class ProcessManager : IDisposable
                         Error = ex.Message,
                         EndedAt = DateTime.Now
                     });
-                    ServiceOutput?.Invoke(serviceId, new LogEntry(LogLevel.Error, ex.Message, "system", step?.Name));
+                    ServiceOutput?.Invoke(serviceId, new LogEntry(LogLevel.Error, ex.Message, "system", step?.Name, step?.Id));
                 });
             }
             finally
@@ -442,11 +474,8 @@ public class ProcessManager : IDisposable
     {
         executor.OutputReceived += entry =>
         {
-            // Ordering matters for the log fold state machine. ProcessRunner serializes its emits under a
-            // lock, and RunOnUiThread uses a BLOCKING Dispatcher.Invoke, so the runner's emit lock is held
-            // until the UI has queued this entry — the next line cannot be emitted (or delivered) ahead of
-            // it. Do not switch this to a non-blocking BeginInvoke: two BeginInvokes from concurrent pump
-            // threads could be enqueued out of read order and reintroduce the interleaving bug.
+            // ProcessRunner's single dispatch worker preserves its program-observed enqueue order without
+            // holding the runner's internal ordering lock across this external callback/Dispatcher.Invoke.
             RunOnUiThread(() => ServiceOutput?.Invoke(serviceId, entry));
         };
 
@@ -526,6 +555,10 @@ public class ProcessManager : IDisposable
         }
 
         if (hasMainExecutor || hasStepExecutor)
+            return;
+
+        // StopServiceAsync owns the sole terminal publication after every runner has completed its drain.
+        if (state.State == ProcessState.Stopping)
             return;
 
         if (state.StepStates.Values.Any(step => step.State == StepRunState.Running))

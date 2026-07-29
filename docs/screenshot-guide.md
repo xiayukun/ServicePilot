@@ -25,7 +25,7 @@
    展示服务名称、工作目录、多动作脚本、`使用变量`、`启动执行`、预设变量/手动动作变量，以及应用模板按钮。
 
 4. 日志窗口  
-   展示实时日志、动作页签、搜索框、复制菜单、横向滚动长行、webpack 进度合并效果，以及运行动作/停止/编辑按钮。
+   展示实时日志、可关闭的动作页签、搜索框、复制菜单、横向滚动长行、合并折叠后的高频日志，以及运行动作/停止/编辑按钮。
 
 5. 管理模板窗口  
    展示完整服务模板列表、说明、动作数量、变量数量和模板预览。
@@ -50,7 +50,8 @@
 - `Assets/screenshots/tray-menu-zh.png`：托盘右键主菜单。
 - `Assets/screenshots/service-manager-zh.png`：管理服务窗口。
 - `Assets/screenshots/service-editor-zh.png`：编辑服务和脚本动作。
-- `Assets/screenshots/log-window-zh.png`：实时日志窗口。
+- `Assets/screenshots/log-window-action-tabs-zh.png`：4.1.0 对外日志窗口图；展示可关闭动作页签、`展开` 折叠控制和合并后的公开构建演示日志。README 使用此图。
+- `Assets/screenshots/log-window-zh.png`：旧实时日志窗口历史资源；不得作为新的公开日志图引用，重新发布前需逐帧脱敏复查。
 - `Assets/screenshots/ai-help-cli-zh.png`：`ai-help` 命令。
 - `Assets/screenshots/status-doctor-cli-zh.png`：`status all` 和 `doctor --json`。
 

@@ -25,7 +25,7 @@ Use this checklist before the first public release to prepare README, GitHub Rel
    Show service name, working directory, multi-step scripts, `Use variable`, `Run on start`, preset/manual step variables, and apply-template button.
 
 4. Log window  
-   Show live logs, action tabs, search, copy menu, horizontal scrolling for long lines, webpack progress coalescing, and run-action/stop/edit buttons.
+   Show live logs, closable action tabs, search, copy menu, horizontal scrolling for long lines, folded busy output, and run-action/stop/edit buttons.
 
 5. Template manager window  
    Show full service templates, descriptions, step counts, variable counts, and template preview.
@@ -50,7 +50,8 @@ Use this checklist before the first public release to prepare README, GitHub Rel
 - `Assets/screenshots/tray-menu-zh.png`: tray context menu.
 - `Assets/screenshots/service-manager-zh.png`: service manager window.
 - `Assets/screenshots/service-editor-zh.png`: service editor and script actions.
-- `Assets/screenshots/log-window-zh.png`: live log window.
+- `Assets/screenshots/log-window-action-tabs-zh.png`: public 4.1.0 log-window image showing a closable action tab, the `Expand` fold control, and folded public build-demo output. The README uses this image.
+- `Assets/screenshots/log-window-zh.png`: historical live-log asset; do not reference it as the new public log image without a frame-by-frame sanitization review.
 - `Assets/screenshots/ai-help-cli-zh.png`: `ai-help` command.
 - `Assets/screenshots/status-doctor-cli-zh.png`: `status all` and `doctor --json`.
 

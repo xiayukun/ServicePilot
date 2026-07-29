@@ -1,8 +1,39 @@
 # 会话交接
 
-最后更新：2026-07-22
+最后更新：2026-07-29
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
+
+## 4.1.0 对外截图：可关闭动作日志页签
+
+- 新增公开资源 `Assets/screenshots/log-window-action-tabs-zh.png`，使用隔离的“公开演示服务”和合成构建输出拍摄；画面展示动作页签关闭 `×`、`展开` 折叠控制、自动滚动以及折叠后的构建摘要。
+- README 中英文均已改用新截图；`docs/screenshot-guide.md` 与英文版同步标记旧 `log-window-zh.png` 为历史资源，重新公开引用前必须复查脱敏。
+- 脱敏范围：截图不含真实工作目录、内网地址、令牌、客户名或家庭/个人信息；演示日志仅使用公开通用文本。
+
+## 4.1.0 发布内容：自动滚动绑定日志布局
+
+- **根因**：旧逻辑在当前 Tab 的批量日志写入后启动固定 120ms `DispatcherTimer`，随后用 `ScrollToLine` 定位。固定延迟与 `TextDocument` 插入、折叠区重建及 AvalonEdit/WPF 生成最新滚动范围没有因果关系；高频输出或复杂折叠布局下，计时器可能在最新 extent 生效前触发，导致视口停在旧末尾。
+- **修复**：每个当前可见 Tab 的渲染批次只合并记录一次滚动意图，并且只在 Document 插入、折叠重建和 redraw 之后提出。`LogEditor.LayoutUpdated` 在真实布局完成后消费意图并调用 `ScrollToEnd`；消费标志先清除，避免滚动自身触发循环。关闭自动滚动、清空日志和关闭窗口都会取消待处理意图；重新开启开关会主动触发一次布局并立即到当前末尾。非当前 Tab 的日志仍只写入历史，不请求滚动。
+- **验证**：专项源代码时序检查 7/7 通过；`dotnet build ServicePilot.sln --nologo` 成功，0 警告、0 错误。
+
+## 4.1.0 发布内容：折叠意图与摘要/展开按钮同步
+
+- **根因**：日志工具栏原有 `_summaryViewActive` 是脱离真实 `FoldingSection.IsFolded` 的第二份状态；单组折叠按钮、搜索展开、Tab 切换和 section 重建后它会陈旧，导致按钮文字与点击动作相反。重建时若旧 section 与新 Tab 文档 offset 混用，也可能把折叠意图关联到错误组头。
+- **修复**：按钮现在只从当前 `FoldingManager.AllFoldings` 派生；单组点击由 `VisualLinesChanged` 即时保存以 `LogEntry` 组头为稳定键的意图，搜索展开和聚合点击也显式同步。增量重建先捕获真实状态、再在受保护的重建阶段恢复；Tab 全量重建则在替换旧文档前捕获，避免跨 Tab offset 串联。新组仍默认折叠，已不可达组头会从状态字典清理。
+- **验证**：隔离状态机 harness 的 4 个场景通过；`dotnet build ServicePilot.sln` 为 0 警告、0 错误。
+
+## 4.1.0 发布内容：可关闭动作日志页签与真清空
+
+- **页签身份**：`LogEntry` 现在携带稳定 `StepId`，动作日志页签按 ID 而不是名称分组；同名但不同 ID 的动作不会串页签或误清。服务日志和没有稳定 ID 的历史兼容日志不显示关闭叉号。
+- **关闭页签**：动作页签头提供可键盘聚焦的叉号及中英文本地化辅助名称。关闭只移除目标动作的应用级日志缓冲、待投递日志、页签集合、文档渲染、搜索续点、合并续态和折叠状态；若关闭当前页签则选择右侧（否则左侧）相邻页签，不停止动作或服务。关闭后产生的新日志仍可懒创建新页签，但旧日志不会恢复。
+- **清空范围**：工具栏“清空”保持原有全局语义，即清空当前服务的全部应用级权威日志缓冲和窗口派生状态。关闭并重开日志窗口后，清空前内容不会恢复；清空后新日志仍正常追加。
+- **验证**：静态专项检查 11/11 通过；Debug/Release 构建均为 0 警告、0 错误。关闭页签的 × 按钮已改为透明背景；4.1.0 的最终单文件包和本机覆盖由下游发布卡处理。
+
+## 4.1.0 发布内容：进程退出、停止接管与尾部日志排空
+
+- **问题与证据**：除短进程 `Process.Exited` 早于 stdout/stderr pump 排空外，审查还确认三个并发阻断项：取消检查到 runner 发布/启动之间存在 Stop 可漏接窗口；五秒 drain 超时被吞掉后仍发布 `Stopped`；`_emitGate` 持锁调用外部订阅者并同步进入 `Dispatcher.Invoke`。聚焦 harness 在修复前稳定得到 3/4 失败：发布窗口进程会在 Stop 返回后启动、drain 超时伪装成功、正常 Stop 重复发布两次终态。
+- **修复**：`ScriptExecutor._runnerGate` 把取消复检、runner 发布/启动、Stop 接管、清理和释放串成同一边界。`ProcessRunner` 以单读者 channel 保存程序观测到的入队顺序，锁只保护入队/抑制状态，外部订阅者与 Dispatcher 均在锁外执行；不再声称还原 stdout/stderr 的绝对 OS 生成顺序。`Completion` 统一等待进程退出、双流 EOF 和已入队订阅者投递。Stop 的首轮五秒超时会再次强杀并关闭重定向流、抑制后续投递、排空已有回调后抛出 `TimeoutException`；`ProcessManager` 只发布一个 `Error`，正常停止只发布一个 `Stopped`。
+- **验证**：`scripts/ServicePilot.ConcurrencyHarness` 5/5 通过：取消命中 runner 发布窗口；慢订阅者下 stdout/stderr 各 201 行（含无换行尾部）并保留非零退出码 7；drain 超时不伪装成功且 Stop 后无新回调；Manager 超时只发布一次 `Error`；正常 Stop 只发布一次 `Stopped`。`dotnet build ServicePilot.sln --nologo` 为 0 警告、0 错误；全程使用临时 `SERVICEPILOT_CONFIG_DIR`，未触碰真实服务或部署 EXE。
 
 ## 修复发布：ServicePilot 4.0.2（2026-07-22）
 
@@ -76,9 +107,9 @@ English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
 ServicePilot 是一个 .NET 8 Windows 托盘优先的开发服务管理器。当前产品方向是托盘菜单、WPF 管理窗口、日志窗口和 CLI，不再提供桌面悬浮模式。
 
-当前发布版本为 ServicePilot 3.0.0：
+4.1.0 的版本字段、CHANGELOG 和中文 Release Notes 已整理完成；制品卡已生成最终单文件包并完成本机私有覆盖，GitHub 发布操作仍由后续流程负责：
 
-- 项目版本属性当前为 `3.0.0`（`ServicePilot/ServicePilot.csproj`）。上述「日志合并/折叠」两批改动尚未 bump 版本、尚未提交，提交时需决定新版本号并同步 CHANGELOG。
+- 项目版本属性当前为 `4.1.0`（`ServicePilot/ServicePilot.csproj`），四个版本字段统一为 `4.1.0` / `4.1.0.0`。
 - 活跃配置文件是 `%APPDATA%\ServicePilot\config.v2.json`。
 - 旧版 `%APPDATA%\ServicePilot\config.json` 只作为 v1 迁移来源读取，不删除、不覆盖。
 - `SERVICEPILOT_CONFIG_DIR` 用于隔离测试，避免碰用户真实配置。
@@ -130,7 +161,8 @@ ServicePilot 2.0 使用 `Action` / `Composite` 模型：
 - 如果运行中的 exe 锁定 `dist`，先发布到 `dist-staged`。
 - 每次成功产出 exe 后，如果 `LOCAL_NOTES.private.md` 存在，按其中的本机私有复制目标处理；不要把目标路径写入可提交文档。
 - 覆盖本机安装目标前，先自行检测目标 exe 是否被进程占用（如 `Get-Process ServicePilot`），仅在被锁时才请用户关闭，不要默认要求用户关闭。
-- 当前阶段用户要求：先产出 exe 给用户测试，不提交、不打 tag、不发 GitHub Release，除非用户明确要求。
+- 制品卡已通过 `dotnet publish ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist --nologo` 生成单文件包；`dist` 仅含 `ServicePilot.exe`，且 dist 与本机私有覆盖目标均返回版本 `4.1.0`、文件长度和 SHA-256 一致。该验证不等同于完整独立 QA；真实服务 GUI、长时运行和回归场景仍需后续验证。
+- 本次文档整理不执行提交、打 tag 或创建 GitHub Release。
 - GitHub Release 页面已有标题，发布 notes body 不要再额外加重复一级标题。
 
 ## 文档规则

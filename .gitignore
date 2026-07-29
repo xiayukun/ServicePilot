@@ -16,3 +16,4 @@ Assets/screenshots/pending/
 *.nupkg
 *.snupkg
 publish-dist/
+.screenshot-demo/

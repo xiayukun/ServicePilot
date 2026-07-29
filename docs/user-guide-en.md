@@ -71,8 +71,9 @@ The log window supports:
 
 - Run actions/composites and stop the service.
 - Variable-aware action and composite execution.
-- Per-action log tabs created lazily. When an action starts running, the matching action tab is selected.
-- Display-layer coalescing for non-error webpack progress logs to reduce UI stalls from noisy build output.
+- Per-action log tabs created lazily by stable action identity. When an action starts running, the matching action tab is selected; actions with identical names do not share a tab.
+- Close one action tab and clear its retained history, or use toolbar Clear to remove all logs for the current service. Neither action stops a running action.
+- Auto-scroll moves to the end after log content and fold layout complete; the Fold/Expand control stays synchronized with the real fold state.
 - Editing the current service.
 - Search, previous/next match.
 - Copy selected logs and copy all logs.
@@ -80,6 +81,8 @@ The log window supports:
 - Bounded in-memory history.
 
 Startup failures, step failures, and system errors are written to the log and also try to show a tray balloon. Notifications are best-effort and do not depend on Windows notification center being enabled.
+
+On process completion or stop, ServicePilot waits for stdout, stderr, and queued log delivery to drain, reducing tail-loss risk for short-lived commands. A drain timeout is reported as an error rather than a successful stop.
 
 ## CLI / AI Workflow
 

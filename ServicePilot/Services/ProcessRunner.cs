@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading.Channels;
 using ServicePilot.Models;
 
 namespace ServicePilot.Services;
@@ -14,23 +15,26 @@ public class ProcessRunner : IDisposable
     private Process? _process;
     private string? _tempFile;
     private WindowsJob? _job;
-    // stdout and stderr are pumped by two concurrent tasks. The log merge/fold pipeline downstream is an
-    // order-dependent state machine (it folds a line into the group started by the PREVIOUS line), so the
-    // order in which lines are emitted must match the order they were read. This lock serializes emits so
-    // one runner never interleaves a stderr line between two stdout lines (or vice versa) out of order.
+    private Task<int>? _completionTask;
+    private readonly Channel<OutputDispatchItem> _outputQueue = Channel.CreateUnbounded<OutputDispatchItem>(
+        new UnboundedChannelOptions { SingleReader = true, AllowSynchronousContinuations = false });
     private readonly object _emitGate = new();
+    private Exception? _outputDispatchError;
+    private bool _suppressOutputDelivery;
 
     public ProcessRunner(ScriptStep step, string workingDirectory, string? variable = null)
     {
         _step = step;
         _workingDirectory = workingDirectory;
         _variable = variable;
+        _ = Task.Run(DispatchOutputAsync);
     }
 
     public event Action<LogEntry>? OutputReceived;
-    public event Action<int>? Exited;
 
     public bool IsRunning => _process != null && !HasExitedSafe(_process);
+    public Task<int> Completion => _completionTask ??
+        throw new InvalidOperationException("进程尚未启动。");
 
     public void Start()
     {
@@ -66,18 +70,6 @@ public class ProcessRunner : IDisposable
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 
-        _process.Exited += (_, _) =>
-        {
-            try
-            {
-                Exited?.Invoke(_process.ExitCode);
-            }
-            catch
-            {
-                Exited?.Invoke(-1);
-            }
-        };
-
         Emit(new LogEntry(LogLevel.System, $"{fileName} {displayArguments}", "system", _step.Name));
 
         _job = WindowsJob.CreateKillOnClose();
@@ -104,51 +96,48 @@ public class ProcessRunner : IDisposable
             _job = null;
         }
 
-        _ = Task.Run(() => PumpOutputAsync(_process.StandardOutput.BaseStream, "stdout"));
-        _ = Task.Run(() => PumpOutputAsync(_process.StandardError.BaseStream, "stderr"));
+        var stdoutPump = Task.Run(() => PumpOutputAsync(_process.StandardOutput.BaseStream, "stdout"));
+        var stderrPump = Task.Run(() => PumpOutputAsync(_process.StandardError.BaseStream, "stderr"));
+        _completionTask = CompleteAfterExitAndDrainAsync(_process, stdoutPump, stderrPump);
     }
 
     public async Task StopAsync()
     {
-        if (_process == null || HasExitedSafe(_process))
+        if (_process == null)
             return;
+
+        Emit(new LogEntry(LogLevel.System, "正在停止进程组。", "system", _step.Name));
+        _job?.Dispose();
+        _job = null;
+        TryKillProcessTree();
 
         try
         {
-            Emit(new LogEntry(LogLevel.System, "正在停止进程组。", "system", _step.Name));
-            _job?.Dispose();
-            _job = null;
-
-            try
-            {
-                if (!HasExitedSafe(_process))
-                    _process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // The job may have already terminated and detached the process.
-            }
-
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            try
-            {
-                await _process.WaitForExitAsync(cts.Token);
-            }
-            catch (InvalidOperationException)
-            {
-                // The process may have exited and detached between Kill and WaitForExitAsync.
-            }
-
-            Emit(new LogEntry(LogLevel.System, "进程已停止。", "system", _step.Name));
+            await Completion.WaitAsync(cts.Token);
         }
         catch (OperationCanceledException)
         {
-            Emit(new LogEntry(LogLevel.Warning, "进程组停止后仍未退出，请检查是否存在残留子进程。", "system", _step.Name));
+            SuppressFutureOutputDelivery();
+            TryKillProcessTree();
+            TryCloseRedirectedStreams();
+
+            try
+            {
+                await Completion.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch
+            {
+                // Stop still reports failure below. Delivery remains suppressed, so a lingering pump cannot
+                // begin new subscriber callbacks after StopAsync returns.
+            }
+
+            await DrainOutputAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            throw new TimeoutException("进程终止后未能在限定时间内排空输出。");
         }
-        catch (Exception ex)
-        {
-            Emit(new LogEntry(LogLevel.Warning, $"停止进程失败: {ex.Message}", "system", _step.Name));
-        }
+
+        Emit(new LogEntry(LogLevel.System, "进程已停止。", "system", _step.Name));
+        await DrainOutputAsync();
     }
 
     public void Dispose()
@@ -184,6 +173,8 @@ public class ProcessRunner : IDisposable
                 // Temporary script cleanup is best-effort.
             }
         }
+
+        _outputQueue.Writer.TryComplete();
     }
 
     private static bool HasExitedSafe(Process process)
@@ -199,6 +190,29 @@ public class ProcessRunner : IDisposable
         catch (System.ComponentModel.Win32Exception)
         {
             return true;
+        }
+    }
+
+    private async Task<int> CompleteAfterExitAndDrainAsync(
+        Process process,
+        Task stdoutPump,
+        Task stderrPump)
+    {
+        await process.WaitForExitAsync().ConfigureAwait(false);
+        await Task.WhenAll(stdoutPump, stderrPump).ConfigureAwait(false);
+        await DrainOutputAsync().ConfigureAwait(false);
+
+        try
+        {
+            return process.ExitCode;
+        }
+        catch (InvalidOperationException)
+        {
+            return -1;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            return -1;
         }
     }
 
@@ -320,18 +334,105 @@ public class ProcessRunner : IDisposable
     }
 
     /// <summary>
-    /// Serialized emit. All process output (stdout, stderr, and runner system/warning notices) goes through
-    /// here so downstream ordering is deterministic: the concurrent stdout/stderr pumps cannot deliver lines
-    /// out of the order in which they were read, which is what the order-dependent log fold state machine
-    /// relies on.
+    /// Serializes the program-observed enqueue order from the concurrent stdout/stderr pumps. The lock only
+    /// protects queue state; subscribers are invoked by the single dispatch worker after the lock is released.
+    /// This does not claim to reconstruct the streams' absolute OS generation order.
     /// </summary>
     private void Emit(LogEntry entry)
     {
+        entry.StepId ??= _step.Id;
         lock (_emitGate)
         {
-            OutputReceived?.Invoke(entry);
+            if (_suppressOutputDelivery)
+                return;
+
+            if (!_outputQueue.Writer.TryWrite(new OutputDispatchItem(entry, null)))
+                throw new InvalidOperationException("日志投递队列已关闭。");
         }
     }
+
+    private async Task DispatchOutputAsync()
+    {
+        await foreach (var item in _outputQueue.Reader.ReadAllAsync().ConfigureAwait(false))
+        {
+            if (item.Barrier != null)
+            {
+                item.Barrier.TrySetResult();
+                continue;
+            }
+
+            bool suppress;
+            lock (_emitGate)
+                suppress = _suppressOutputDelivery;
+
+            if (suppress || item.Entry == null)
+                continue;
+
+            try
+            {
+                OutputReceived?.Invoke(item.Entry);
+            }
+            catch (Exception ex)
+            {
+                lock (_emitGate)
+                    _outputDispatchError ??= ex;
+            }
+        }
+    }
+
+    private async Task DrainOutputAsync()
+    {
+        var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_emitGate)
+        {
+            if (!_outputQueue.Writer.TryWrite(new OutputDispatchItem(null, barrier)))
+                throw new InvalidOperationException("日志投递队列已关闭。");
+        }
+
+        await barrier.Task.ConfigureAwait(false);
+
+        Exception? dispatchError;
+        lock (_emitGate)
+            dispatchError = _outputDispatchError;
+        if (dispatchError != null)
+            throw new InvalidOperationException("日志订阅者处理失败。", dispatchError);
+    }
+
+    private void SuppressFutureOutputDelivery()
+    {
+        lock (_emitGate)
+            _suppressOutputDelivery = true;
+    }
+
+    private void TryKillProcessTree()
+    {
+        if (_process == null || HasExitedSafe(_process))
+            return;
+
+        try
+        {
+            _process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The job may have already terminated and detached the process.
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // A second forced attempt and the timeout result handle an inaccessible process.
+        }
+    }
+
+    private void TryCloseRedirectedStreams()
+    {
+        if (_process == null)
+            return;
+
+        try { _process.StandardOutput.Close(); } catch { }
+        try { _process.StandardError.Close(); } catch { }
+    }
+
+    private sealed record OutputDispatchItem(LogEntry? Entry, TaskCompletionSource? Barrier);
 
     private static LogLevel ClassifyOutputLevel(string source, string message)
     {

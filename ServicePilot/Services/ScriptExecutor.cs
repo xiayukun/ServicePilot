@@ -9,6 +9,7 @@ public class ScriptExecutor : IDisposable
     private readonly ServiceConfig _config;
     private readonly CancellationToken _cancellationToken;
     private readonly ServiceStartOptions _options;
+    private readonly SemaphoreSlim _runnerGate = new(1, 1);
     private ProcessRunner? _currentRunner;
     private ScriptStep? _currentStep;
 
@@ -62,14 +63,15 @@ public class ScriptExecutor : IDisposable
                     LogLevel.Error,
                     $"{runnableStep.Name} 失败，退出码: {exitCode}",
                     "system",
-                    runnableStep.Name));
+                    runnableStep.Name,
+                    step.Id));
                 PublishStepState(step, StepRunState.Failed, exitCode, $"退出码: {exitCode}", GetStepVariable(step, _options.Variable));
                 StateChanged?.Invoke(ProcessState.StartFailed);
                 return;
             }
 
             PublishStepState(step, StepRunState.Succeeded, exitCode, variable: GetStepVariable(step, _options.Variable));
-            OutputReceived?.Invoke(new LogEntry(LogLevel.System, $"{step.Name} 完成。", "system", step.Name));
+            OutputReceived?.Invoke(new LogEntry(LogLevel.System, $"{step.Name} 完成。", "system", step.Name, step.Id));
         }
 
         StateChanged?.Invoke(ProcessState.Completed);
@@ -94,9 +96,9 @@ public class ScriptExecutor : IDisposable
             GetStepVariable(step, variable));
 
         if (exitCode == 0)
-            OutputReceived?.Invoke(new LogEntry(LogLevel.System, $"{step.Name} 完成。", "system", step.Name));
+            OutputReceived?.Invoke(new LogEntry(LogLevel.System, $"{step.Name} 完成。", "system", step.Name, step.Id));
         else
-            OutputReceived?.Invoke(new LogEntry(LogLevel.Error, $"{step.Name} 失败，退出码: {exitCode}", "system", step.Name));
+            OutputReceived?.Invoke(new LogEntry(LogLevel.Error, $"{step.Name} 失败，退出码: {exitCode}", "system", step.Name, step.Id));
 
         return exitCode;
     }
@@ -113,42 +115,80 @@ public class ScriptExecutor : IDisposable
                 LogLevel.System,
                 $"--- 动作 {index + 1}/{total}: {runnableStep.Name} ---",
                 "system",
-                runnableStep.Name));
+                runnableStep.Name,
+                step.Id));
 
             var sawVoltaError = false;
-            using var runner = new ProcessRunner(runnableStep, _config.WorkingDirectory, effectiveVariable);
-            _currentRunner = runner;
-
-            runner.OutputReceived += entry =>
+            ProcessRunner? runner = null;
+            await _runnerGate.WaitAsync();
+            try
             {
-                if (IsVoltaError(entry.Message))
-                    sawVoltaError = true;
-                OutputReceived?.Invoke(entry);
-            };
+                _cancellationToken.ThrowIfCancellationRequested();
+                runner = new ProcessRunner(runnableStep, _config.WorkingDirectory, effectiveVariable);
+                _currentRunner = runner;
 
-            var exitTcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-            runner.Exited += code => exitTcs.TrySetResult(code);
+                runner.OutputReceived += entry =>
+                {
+                    if (IsVoltaError(entry.Message))
+                        sawVoltaError = true;
+                    OutputReceived?.Invoke(entry);
+                };
 
-            runner.Start();
-
-            if (!_options.OnlyStepId.HasValue)
-                StateChanged?.Invoke(ProcessState.Running);
-
-            var exitCode = await exitTcs.Task.WaitAsync(_cancellationToken);
-            _currentRunner = null;
-
-            if (exitCode == 126 && sawVoltaError && attempt < MaxVoltaRetries)
+                runner.Start();
+            }
+            catch
             {
-                OutputReceived?.Invoke(new LogEntry(
-                    LogLevel.Warning,
-                    $"检测到 Volta 126 临时启动错误，准备重试 {attempt + 1}/{MaxVoltaRetries}。",
-                    "system",
-                    runnableStep.Name));
-                await Task.Delay(800, _cancellationToken);
-                continue;
+                if (ReferenceEquals(_currentRunner, runner))
+                    _currentRunner = null;
+                runner?.Dispose();
+                throw;
+            }
+            finally
+            {
+                _runnerGate.Release();
             }
 
-            return exitCode;
+            using (runner)
+            {
+                if (!_options.OnlyStepId.HasValue)
+                    StateChanged?.Invoke(ProcessState.Running);
+
+                // Completion is published only after process exit, stream EOF, and ordered subscriber drain.
+                // StopAsync uses the same gate, so it cannot race runner publication or disposal.
+                int exitCode;
+                try
+                {
+                    exitCode = await runner.Completion;
+                }
+                finally
+                {
+                    await _runnerGate.WaitAsync();
+                    try
+                    {
+                        if (ReferenceEquals(_currentRunner, runner))
+                            _currentRunner = null;
+                    }
+                    finally
+                    {
+                        _runnerGate.Release();
+                    }
+                }
+                _cancellationToken.ThrowIfCancellationRequested();
+
+                if (exitCode == 126 && sawVoltaError && attempt < MaxVoltaRetries)
+                {
+                    OutputReceived?.Invoke(new LogEntry(
+                        LogLevel.Warning,
+                        $"检测到 Volta 126 临时启动错误，准备重试 {attempt + 1}/{MaxVoltaRetries}。",
+                        "system",
+                        runnableStep.Name,
+                        step.Id));
+                    await Task.Delay(800, _cancellationToken);
+                    continue;
+                }
+
+                return exitCode;
+            }
         }
 
         return 126;
@@ -156,8 +196,16 @@ public class ScriptExecutor : IDisposable
 
     public async Task StopAsync()
     {
-        if (_currentRunner != null)
-            await _currentRunner.StopAsync();
+        await _runnerGate.WaitAsync();
+        try
+        {
+            if (_currentRunner != null)
+                await _currentRunner.StopAsync();
+        }
+        finally
+        {
+            _runnerGate.Release();
+        }
 
         if (_currentStep != null)
             PublishStepState(_currentStep, StepRunState.Cancelled, variable: GetStepVariable(_currentStep, _options.Variable));

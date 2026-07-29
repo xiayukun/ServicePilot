@@ -69,11 +69,46 @@
             </DockPanel>
 
             <TabControl x:Name="LogTabs" Grid.Row="1"
-                                Height="30"
-                                DisplayMemberPath="Header"
+                                Height="32"
                                 Background="Transparent"
                         SelectionChanged="LogTabs_SelectionChanged"
-                        Margin="0,0,0,6"/>
+                        Margin="0,0,0,6">
+                <TabControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Header}" VerticalAlignment="Center" />
+                            <Button Content="×" Width="24" Height="24" Margin="6,0,0,0" Padding="0"
+                                    Tag="{Binding}" Click="CloseLogTab_Click"
+                                    ToolTip="{Binding CloseLabel}"
+                                    AutomationProperties.Name="{Binding CloseLabel}">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="BorderBrush" Value="Transparent" />
+                                        <Setter Property="BorderThickness" Value="0" />
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="Transparent">
+                                                        <ContentPresenter HorizontalAlignment="Center"
+                                                                          VerticalAlignment="Center" />
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsClosable}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.ItemTemplate>
+            </TabControl>
 
             <!-- 日志查看器 + 右侧概览 minimap -->
             <Grid Grid.Row="2" Background="#FF1E1E2E">

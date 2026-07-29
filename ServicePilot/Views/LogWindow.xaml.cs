@@ -25,8 +25,8 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     private readonly PresetVariableUsageStore _variableUsageStore;
     private readonly Func<ServiceConfig, ScriptStep, string?, bool, Task> _rememberVariableForStepAsync;
     private readonly Func<ServiceItemViewModel, Window?, Task> _editServiceAsync;
+    private readonly Action<Guid?> _clearBufferedLogs;
     private readonly LogMergeService _logMergeService;
-    private readonly DispatcherTimer _scrollTimer;
     private readonly DispatcherTimer _renderTimer;
     private readonly ObservableCollection<LogTabState> _logTabs = new();
     private readonly Dictionary<string, LogTabState> _logTabsByKey = new(StringComparer.OrdinalIgnoreCase);
@@ -43,9 +43,10 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     private bool _activeTabDirty;
     private bool _searchStatusDirty;
     private bool _pendingAutoScroll;
+    private bool _autoScrollRequested;
     private bool _logUiReady;
     private int _lastSearchOffset = -1;
-    private bool _summaryViewActive;
+    private bool _rebuildingFoldings;
     // Remembered fold intent per group header (true = folded). This is the source of truth for a group's
     // collapsed state and survives AvalonEdit destroying/recreating a FoldingSection during incremental
     // rebuilds. Without it, a group the user manually collapsed could pop back open when new child lines
@@ -59,13 +60,15 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         ProcessManager processManager,
         PresetVariableUsageStore variableUsageStore,
         Func<ServiceConfig, ScriptStep, string?, bool, Task> rememberVariableForStepAsync,
-        Func<ServiceItemViewModel, Window?, Task> editServiceAsync)
+        Func<ServiceItemViewModel, Window?, Task> editServiceAsync,
+        Action<Guid?> clearBufferedLogs)
     {
         _service = service;
         _processManager = processManager;
         _variableUsageStore = variableUsageStore;
         _rememberVariableForStepAsync = rememberVariableForStepAsync;
         _editServiceAsync = editServiceAsync;
+        _clearBufferedLogs = clearBufferedLogs;
         _logMergeService = new LogMergeService();
 
         InitializeComponent();
@@ -92,7 +95,17 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         OverviewHost.Child = _overviewMargin;
         // VisualLinesChanged fires when foldings expand/collapse (or content changes), so the overview
         // rebuilds to reflect which lines are currently visible. This is throttled by AvalonEdit itself.
-        LogEditor.TextArea.TextView.VisualLinesChanged += (_, _) => _overviewMargin?.InvalidateVisualCache();
+        LogEditor.TextArea.TextView.VisualLinesChanged += (_, _) =>
+        {
+            _overviewMargin?.InvalidateVisualCache();
+            if (_rebuildingFoldings)
+                return;
+
+            // AvalonEdit raises this event when the user clicks an individual fold marker. Capture that
+            // intent immediately; a later incremental rebuild must restore it rather than a default state.
+            CaptureCurrentFoldStates();
+            UpdateSummaryButton();
+        };
         LogEditor.TextArea.TextView.LineTransformers.Add(new LogLineColorizer(LogEntries));
 
         ApplyLocalization();
@@ -100,16 +113,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         UpdateActionButtons();
         _logUiReady = true;
 
-        _scrollTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
-        {
-            Interval = TimeSpan.FromMilliseconds(120)
-        };
-        _scrollTimer.Tick += (_, _) =>
-        {
-            _scrollTimer.Stop();
-            if (AutoScrollCheck.IsChecked == true && LogEntries.Count > 0)
-                LogEditor.ScrollToLine(LogEntries.Count);
-        };
+        LogEditor.LayoutUpdated += LogEditor_LayoutUpdated;
+        AutoScrollCheck.Checked += AutoScrollCheck_Checked;
+        AutoScrollCheck.Unchecked += AutoScrollCheck_Unchecked;
 
         _renderTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -122,8 +128,11 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         LocalizationService.Current.LanguageChanged += OnLanguageChanged;
         Closed += (_, _) =>
         {
-            _scrollTimer.Stop();
+            _autoScrollRequested = false;
             _renderTimer.Stop();
+            LogEditor.LayoutUpdated -= LogEditor_LayoutUpdated;
+            AutoScrollCheck.Checked -= AutoScrollCheck_Checked;
+            AutoScrollCheck.Unchecked -= AutoScrollCheck_Unchecked;
             _logMergeService.Dispose();
             _processManager.ServiceStateChanged -= OnServiceStateChanged;
             _processManager.StepStateChanged -= OnStepStateChanged;
@@ -368,27 +377,25 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             LogLevel.Error,
             LocalizationService.Current.F("MergeScriptCompileError", step.Name, error),
             "system",
-            step.Name);
+            step.Name,
+            step.Id);
         Dispatcher.BeginInvoke(() => AddLog(entry), DispatcherPriority.Background);
     }
 
     private ScriptStep? FindStepForTab(LogTabState tab)
     {
-        if (tab.Key == ServiceLogsKey)
+        if (!tab.StepId.HasValue)
             return null;
-
-        if (!tab.Key.StartsWith("step:"))
-            return null;
-
-        var stepName = tab.Key["step:".Length..];
         return _service.Config.ScriptSteps
-            .FirstOrDefault(s => s.Name.Trim() == stepName);
+            .FirstOrDefault(step => step.Id == tab.StepId.Value);
     }
 
     private void RefreshServiceTabHeader()
     {
         if (_logTabsByKey.TryGetValue(ServiceLogsKey, out var service))
             service.Header = LocalizationService.Current.T("ServiceLogs");
+        foreach (var tab in _logTabs)
+            tab.RefreshCloseLabel();
         LogTabs.Items.Refresh();
     }
 
@@ -396,15 +403,17 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     {
         return string.IsNullOrWhiteSpace(entry.StepName)
             ? EnsureLogTab(ServiceLogsKey, LocalizationService.Current.T("ServiceLogs"))
-            : EnsureLogTab(StepLogKey(entry.StepName), entry.StepName.Trim());
+            : entry.StepId.HasValue
+                ? EnsureLogTab(StepLogKey(entry.StepId.Value), entry.StepName.Trim(), entry.StepId)
+                : EnsureLogTab(LegacyStepLogKey(entry.StepName), entry.StepName.Trim());
     }
 
-    private LogTabState EnsureLogTab(string key, string header)
+    private LogTabState EnsureLogTab(string key, string header, Guid? stepId = null)
     {
         if (_logTabsByKey.TryGetValue(key, out var existing))
             return existing;
 
-        var tab = new LogTabState(key, header);
+        var tab = new LogTabState(key, header, stepId);
         _logTabsByKey[key] = tab;
         _logTabs.Add(tab);
         return tab;
@@ -471,7 +480,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         _pendingAutoScroll = false;
     }
 
-    private static string StepLogKey(string stepName) => "step:" + stepName.Trim();
+    private static string StepLogKey(Guid stepId) => "step:" + stepId.ToString("N");
+
+    private static string LegacyStepLogKey(string stepName) => "legacy-step:" + stepName.Trim();
 
     private void LogTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -657,13 +668,13 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         {
             UpdateActionButtons();
             if (state.State == StepRunState.Running && !string.IsNullOrWhiteSpace(state.StepName))
-                ActivateStepTab(state.StepName);
+                ActivateStepTab(state.StepId, state.StepName);
         });
     }
 
-    private void ActivateStepTab(string stepName)
+    private void ActivateStepTab(Guid stepId, string stepName)
     {
-        var tab = EnsureLogTab(StepLogKey(stepName), stepName.Trim());
+        var tab = EnsureLogTab(StepLogKey(stepId), stepName.Trim(), stepId);
         if (!ReferenceEquals(LogTabs.SelectedItem, tab))
             LogTabs.SelectedItem = tab;
     }
@@ -722,17 +733,76 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
     private void Clear_Click(object sender, RoutedEventArgs e)
     {
+        _clearBufferedLogs(null);
+        ClearPendingLogs(null);
+        ResetLogViewState();
+    }
+
+    private void CloseLogTab_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not System.Windows.Controls.Button { Tag: LogTabState tab } ||
+            !tab.StepId.HasValue || !_logTabs.Contains(tab))
+            return;
+
+        var stepId = tab.StepId.Value;
+        _clearBufferedLogs(stepId);
+        ClearPendingLogs(stepId);
+
+        var wasSelected = ReferenceEquals(LogTabs.SelectedItem, tab);
+        var removedIndex = _logTabs.IndexOf(tab);
+        _logTabsByKey.Remove(tab.Key);
+        _logTabs.Remove(tab);
+        _pendingInserts.RemoveAll(op => op.Entry.StepId == stepId);
+        _reportedMergeErrors.Remove(stepId);
+        foreach (var entry in tab.Entries)
+            _foldStateByHeader.Remove(entry);
+
+        if (!wasSelected)
+            return;
+
+        _lastSearchOffset = -1;
+        LogTabs.SelectedItem = _logTabs.Count == 0
+            ? null
+            : _logTabs[Math.Min(removedIndex, _logTabs.Count - 1)];
+        RebuildActiveLogText();
+        UpdateSearchStatus();
+        ScheduleAutoScroll();
+    }
+
+    private void ClearPendingLogs(Guid? stepId)
+    {
+        lock (_pendingLogLock)
+        {
+            if (stepId.HasValue)
+                _pendingCrossThreadLogs.RemoveAll(entry => entry.StepId == stepId);
+            else
+                _pendingCrossThreadLogs.Clear();
+        }
+    }
+
+    private void ResetLogViewState()
+    {
+        _renderTimer.Stop();
+        _autoScrollRequested = false;
         foreach (var tab in _logTabs)
             tab.Entries.Clear();
         _logTabs.Clear();
         _logTabsByKey.Clear();
         LogEntries.Clear();
         _pendingInserts.Clear();
+        _reportedMergeErrors.Clear();
+        _activeTabDirty = false;
+        _searchStatusDirty = false;
+        _pendingAutoScroll = false;
+        _lastSearchOffset = -1;
         _foldStateByHeader.Clear();
         _foldingManager?.Clear();
+        _foldColorMarker?.Colors.Clear();
         LogEditor.Clear();
         LogTabs.SelectedItem = null;
-        SearchStatusText.Text = string.Empty;
+        UpdateSearchStatus();
+        UpdateSummaryButton();
         _overviewMargin?.InvalidateVisualCache();
     }
 
@@ -754,19 +824,22 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         foreach (var folding in foldings)
             folding.IsFolded = shouldFold;
 
-        _summaryViewActive = shouldFold;
+        CaptureCurrentFoldStates();
         UpdateSummaryButton();
         LogEditor.TextArea.TextView.Redraw();
     }
 
     private void UpdateSummaryButton()
     {
-        SummaryButton.Content = _summaryViewActive
-            ? LocalizationService.Current.T("LogExpandAll")
-            : LocalizationService.Current.T("LogFoldAll");
-        SummaryButton.ToolTip = _summaryViewActive
-            ? LocalizationService.Current.T("LogExpandAllTip")
-            : LocalizationService.Current.T("LogFoldAllTip");
+        var foldings = _foldingManager?.AllFoldings.ToList() ?? new List<FoldingSection>();
+        var anyExpanded = foldings.Any(folding => !folding.IsFolded);
+        SummaryButton.IsEnabled = foldings.Count > 0;
+        SummaryButton.Content = anyExpanded
+            ? LocalizationService.Current.T("LogFoldAll")
+            : LocalizationService.Current.T("LogExpandAll");
+        SummaryButton.ToolTip = anyExpanded
+            ? LocalizationService.Current.T("LogFoldAllTip")
+            : LocalizationService.Current.T("LogExpandAllTip");
     }
 
     private async void Edit_Click(object sender, RoutedEventArgs e)
@@ -784,8 +857,37 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
     private void ScheduleAutoScroll()
     {
-        if (AutoScrollCheck.IsChecked == true && !_scrollTimer.IsEnabled)
-            _scrollTimer.Start();
+        if (AutoScrollCheck.IsChecked != true)
+            return;
+
+        // Coalesce every rendered batch into one request. Document insertion, folding rebuild, and redraw
+        // have already completed when this is called; LayoutUpdated is the causal boundary at which
+        // AvalonEdit's latest scroll extent is available.
+        _autoScrollRequested = true;
+    }
+
+    private void LogEditor_LayoutUpdated(object? sender, EventArgs e)
+    {
+        if (!_autoScrollRequested)
+            return;
+
+        // Consume before scrolling because ScrollToEnd can itself trigger another layout pass.
+        _autoScrollRequested = false;
+        if (AutoScrollCheck.IsChecked == true && LogEditor.Document?.TextLength > 0)
+            LogEditor.ScrollToEnd();
+    }
+
+    private void AutoScrollCheck_Checked(object sender, RoutedEventArgs e)
+    {
+        ScheduleAutoScroll();
+        // Enabling auto-scroll must also move an already stable document immediately. Request one real
+        // layout pass instead of relying on a fixed delay or an unbounded dispatcher retry loop.
+        LogEditor.InvalidateMeasure();
+    }
+
+    private void AutoScrollCheck_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _autoScrollRequested = false;
     }
 
     private void CopySelected_Click(object sender, RoutedEventArgs e) => CopySelectedLogs();
@@ -934,6 +1036,8 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             return;
         foreach (var folding in _foldingManager.GetFoldingsContaining(offset))
             folding.IsFolded = false;
+        CaptureCurrentFoldStates();
+        UpdateSummaryButton();
     }
 
     private static int CountMatchesBefore(string text, string query, int offset)
@@ -957,6 +1061,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             return;
 
         EnsureLogDocument();
+        // Capture against the old document/LogEntries before replacing either on a tab switch. Capturing
+        // after replacement would associate old FoldingSection offsets with unrelated headers in the new tab.
+        CaptureCurrentFoldStates();
         LogEntries.Clear();
         // Do NOT clear _foldStateByHeader here: it is keyed by header entry (stable object), so a tab
         // switch / full rebuild should preserve the user's per-group collapsed state. RebuildFoldings
@@ -978,7 +1085,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         }
 
         LogEditor.Text = builder.ToString();
-        RebuildFoldings();
+        RebuildFoldings(captureLiveState: false);
         LogEditor.TextArea.TextView.Redraw();
         _overviewMargin?.InvalidateVisualCache();
     }
@@ -1022,7 +1129,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     /// child lines. Each group folds from the end of the header line through the last child; folded by
     /// default so a busy group shows a single summary line with a left-side > toggle to expand it.
     /// </summary>
-    private void RebuildFoldings()
+    private void RebuildFoldings(bool captureLiveState = true)
     {
         if (_foldingManager == null)
             return;
@@ -1076,42 +1183,74 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             }
         }
 
-        // BEFORE rebuilding: capture the live IsFolded of every current section into _foldStateByHeader so
-        // any manual expand/collapse the user did since the last rebuild is recorded against its header
-        // entry. AvalonEdit may destroy/recreate sections during UpdateFoldings, which would otherwise lose
-        // that state and pop a manually-collapsed group back open when new child lines arrive.
-        foreach (var folding in _foldingManager.AllFoldings)
-        {
-            if (startOffsetToGroup.TryGetValue(folding.StartOffset, out var existing))
-                _foldStateByHeader[existing.Header] = folding.IsFolded;
-        }
+        // Incremental rebuilds capture the current document before AvalonEdit can replace a growing section.
+        // Full tab rebuilds capture earlier, while the old document still matches the old visible entries.
+        if (captureLiveState)
+            CaptureCurrentFoldStates();
 
-        _foldingManager.UpdateFoldings(foldings, -1);
-        _foldColorMarker?.Colors.Clear();
-        foreach (var folding in _foldingManager.AllFoldings)
+        _rebuildingFoldings = true;
+        try
         {
-            if (!startOffsetToGroup.TryGetValue(folding.StartOffset, out var group))
-                continue;
-            folding.Title = group.Title;
-            // Apply the remembered intent (default: folded for a brand-new header). This is authoritative,
-            // so a recreated section always restores the user's last state instead of springing open.
-            if (!_foldStateByHeader.TryGetValue(group.Header, out var wantFolded))
+            _foldingManager.UpdateFoldings(foldings, -1);
+            _foldColorMarker?.Colors.Clear();
+            foreach (var folding in _foldingManager.AllFoldings)
             {
-                wantFolded = true;
-                _foldStateByHeader[group.Header] = true;
-            }
-            folding.IsFolded = wantFolded;
-            // Record this fold's first-line content color so the overlay renderer can paint a full-width
-            // underline strip below its summary line. This is what lets multiple folds show different
-            // colors at the same time (AvalonEdit's own fold placeholder text is one global color).
-            if (_foldColorMarker != null)
-            {
-                var stripBrush = LogLineColorizer.TryParseBrush(group.Color);
-                if (stripBrush != null)
-                    _foldColorMarker.Colors[folding.StartOffset] = stripBrush;
+                if (!startOffsetToGroup.TryGetValue(folding.StartOffset, out var group))
+                    continue;
+                folding.Title = group.Title;
+                // Apply the remembered intent (default: folded for a brand-new header). This is authoritative,
+                // so a recreated section always restores the user's last state instead of springing open.
+                if (!_foldStateByHeader.TryGetValue(group.Header, out var wantFolded))
+                {
+                    wantFolded = true;
+                    _foldStateByHeader[group.Header] = true;
+                }
+                folding.IsFolded = wantFolded;
+                // Record this fold's first-line content color so the overlay renderer can paint a full-width
+                // underline strip below its summary line. This is what lets multiple folds show different
+                // colors at the same time (AvalonEdit's own fold placeholder text is one global color).
+                if (_foldColorMarker != null)
+                {
+                    var stripBrush = LogLineColorizer.TryParseBrush(group.Color);
+                    if (stripBrush != null)
+                        _foldColorMarker.Colors[folding.StartOffset] = stripBrush;
+                }
             }
         }
+        finally
+        {
+            _rebuildingFoldings = false;
+        }
+        PruneFoldStates();
+        UpdateSummaryButton();
         LogEditor.TextArea.TextView.Redraw();
+    }
+
+    private void CaptureCurrentFoldStates()
+    {
+        if (_foldingManager == null || LogEditor.Document == null)
+            return;
+
+        foreach (var folding in _foldingManager.AllFoldings)
+        {
+            var line = LogEditor.Document.GetLineByOffset(folding.StartOffset);
+            var headerIndex = line.LineNumber - 1;
+            if (headerIndex >= 0 && headerIndex < LogEntries.Count)
+                _foldStateByHeader[LogEntries[headerIndex]] = folding.IsFolded;
+        }
+    }
+
+    private void PruneFoldStates()
+    {
+        if (_foldStateByHeader.Count == 0)
+            return;
+
+        var reachableEntries = _logTabs.SelectMany(tab => tab.Entries).ToHashSet();
+        // The active incremental view can briefly contain entries that have just fallen out of its bounded
+        // tab snapshot. Keep their intent until the next full rebuild removes them from the visible document.
+        reachableEntries.UnionWith(LogEntries);
+        foreach (var removedHeader in _foldStateByHeader.Keys.Where(header => !reachableEntries.Contains(header)).ToList())
+            _foldStateByHeader.Remove(removedHeader);
     }
 
     /// <summary>
@@ -1190,15 +1329,25 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
     private sealed class LogTabState
     {
-        public LogTabState(string key, string header)
+        public LogTabState(string key, string header, Guid? stepId)
         {
             Key = key;
             Header = header;
+            StepId = stepId;
+            RefreshCloseLabel();
         }
 
         public string Key { get; }
         public string Header { get; set; }
+        public Guid? StepId { get; }
+        public bool IsClosable => StepId.HasValue;
+        public string CloseLabel { get; private set; } = string.Empty;
         public List<LogEntry> Entries { get; } = new();
+
+        public void RefreshCloseLabel()
+        {
+            CloseLabel = LocalizationService.Current.F("CloseActionLogTab", Header);
+        }
 
         /// <summary>
         /// The current collapse-group header entry (the most recent non-collapsed line). Subsequent

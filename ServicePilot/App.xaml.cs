@@ -1235,7 +1235,8 @@ public partial class App : Application
             _processManager,
             _variableUsageStore,
             RememberVariableForStepAsync,
-            OnEditServiceRequested);
+            OnEditServiceRequested,
+            stepId => ClearBufferedLogs(vm.Config.Id, stepId));
 
         void OnOutput(Guid id, LogEntry entry)
         {
@@ -1276,6 +1277,17 @@ public partial class App : Application
         return _logBuffers.TryGetValue(serviceId, out var buffer)
             ? buffer.ToList()
             : Array.Empty<LogEntry>();
+    }
+
+    private void ClearBufferedLogs(Guid serviceId, Guid? stepId)
+    {
+        if (!_logBuffers.TryGetValue(serviceId, out var buffer))
+            return;
+
+        if (stepId.HasValue)
+            buffer.RemoveAll(entry => entry.StepId == stepId);
+        else
+            buffer.Clear();
     }
 
     private static bool ShouldShowErrorNotification(LogEntry entry)

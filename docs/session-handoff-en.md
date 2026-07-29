@@ -1,8 +1,39 @@
 # Session Handoff
 
-Last updated: 2026-07-22
+Last updated: 2026-07-29
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## 4.1.0 public screenshot: closable action-log tab
+
+- Added public asset `Assets/screenshots/log-window-action-tabs-zh.png`, captured with an isolated "Public demo service" and synthetic build output. It shows the action-tab close `×`, the `Expand` fold control, auto-scroll, and folded build summaries.
+- Both READMEs now use the new image. The Chinese and English screenshot guides mark the old `log-window-zh.png` as a historical resource that needs a fresh sanitization review before any public reuse.
+- Sanitization scope: the image contains no real working directory, private-network address, token, customer name, or household/personal information; the demo log uses only generic public text.
+
+## 4.1.0 release content: bind auto-scroll to completed log layout
+
+- **Root cause**: The previous path started a fixed 120 ms `DispatcherTimer` after a visible-tab log batch and then called `ScrollToLine`. That delay had no causal relationship with `TextDocument` insertion, folding reconstruction, or AvalonEdit/WPF publishing the latest scroll extent. Under high-frequency output or complex folding layout, it could fire against the previous extent and leave the viewport short of the real end.
+- **Fix**: Each render batch for the visible tab now coalesces at most one scroll request, issued only after document insertion, folding rebuild, and redraw. `LogEditor.LayoutUpdated` consumes the request after the real layout pass and calls `ScrollToEnd`; the flag is cleared first so scrolling cannot create a layout loop. Disabling auto-scroll, clearing logs, and closing the window cancel pending intent, while enabling it invalidates layout and immediately moves the existing document to its end. Output for non-visible tabs still updates history without requesting a scroll.
+- **Verification**: All 7 focused source-order checks passed; `dotnet build ServicePilot.sln --nologo` succeeded with 0 warnings and 0 errors.
+
+## 4.1.0 release content: synchronize fold intent and Summary/Expand button
+
+- **Root cause**: The log toolbar's `_summaryViewActive` was a second state detached from the real `FoldingSection.IsFolded` values. It became stale after individual fold-margin clicks, search expansion, tab changes, and section rebuilds, making the label disagree with the next click. Capturing old sections against a new tab's document offsets could also associate intent with the wrong header.
+- **Fix**: The button is now derived only from the current `FoldingManager.AllFoldings`. Individual marker clicks save header-keyed (`LogEntry`) intent immediately through `VisualLinesChanged`; search expansion and aggregate clicks synchronize explicitly. Incremental rebuilds capture live state before restoring it inside a guarded rebuild phase, while full tab rebuilds capture before replacing the old document to avoid cross-tab offset association. New groups still default to folded, and unreachable headers are pruned from the intent dictionary.
+- **Verification**: All four isolated state-machine harness scenarios passed; `dotnet build ServicePilot.sln` completed with 0 warnings and 0 errors.
+
+## 4.1.0 release content: closable action log tabs and authoritative clearing
+
+- **Tab identity**: `LogEntry` now carries a stable `StepId`, and action log tabs are grouped by ID rather than display name. Actions with identical names but different IDs no longer share a tab or clear one another. Service logs and legacy entries without a stable ID do not expose a close button.
+- **Closing a tab**: Action tab headers expose a keyboard-focusable close button with localized accessibility text. Closing removes only that action's application-level buffered history, pending deliveries, tab collection, rendered document, search continuation, merge continuation, and fold state. Closing the active tab selects the right neighbour when available (otherwise the left); it never stops the action or service. New output may lazily recreate the tab, but cleared history cannot return.
+- **Clear scope**: The toolbar Clear command keeps its existing global scope: it clears all authoritative buffered logs and derived window state for the current service. Reopening the log window cannot restore pre-clear content, while later output still appends normally.
+- **Verification**: The focused static check passed 11/11; Debug and Release builds both completed with 0 warnings and 0 errors. The tab close × button has a transparent background; the final 4.1.0 single-file package and local overwrite are handled by the downstream release card.
+
+## 4.1.0 release content: process completion, stop takeover, and tail-output drain
+
+- **Problem and evidence**: Beyond short-process `Process.Exited` racing ahead of stdout/stderr drain, review confirmed three blocking concurrency defects: Stop could miss the window between cancellation checking and runner publication/start; a five-second drain timeout was swallowed and still published `Stopped`; and `_emitGate` invoked external subscribers while held, synchronously entering `Dispatcher.Invoke`. Before remediation, the focused harness failed 3/4 scenarios: a process started after Stop returned, drain timeout looked successful, and a normal stop published two terminal states.
+- **Fix**: `ScriptExecutor._runnerGate` now makes cancellation recheck, runner publication/start, Stop takeover, clearing, and disposal one boundary. `ProcessRunner` uses a single-reader channel for program-observed enqueue order; its lock protects only enqueue/suppression state, while subscribers and Dispatcher run outside the lock. It explicitly does not claim absolute OS generation order across stdout/stderr. `Completion` waits for process exit, both stream EOFs, and delivery of already-enqueued subscriber work. After the initial five-second Stop timeout, the runner force-kills again, closes redirected streams, suppresses future delivery, drains existing callbacks, and throws `TimeoutException`; `ProcessManager` publishes one `Error`, while a normal stop publishes one `Stopped`.
+- **Verification**: All 5 `scripts/ServicePilot.ConcurrencyHarness` scenarios pass: cancellation in the runner-publication window; a slow subscriber receiving 201 stdout and 201 stderr lines including unterminated tails while retaining exit code 7; drain timeout not masquerading as success with no callbacks starting after Stop; one Manager `Error` on timeout; and one `Stopped` on a normal Stop. `dotnet build ServicePilot.sln --nologo` completed with 0 warnings and 0 errors. Tests used a temporary `SERVICEPILOT_CONFIG_DIR` and did not touch real services or the deployed executable.
 
 ## Fix release: ServicePilot 4.0.2 (2026-07-22)
 
@@ -76,9 +107,9 @@ Supporting changes:
 
 ServicePilot is a .NET 8 Windows tray-first developer service manager. The current product direction is tray menus, WPF management windows, log windows, and CLI automation. The desktop floating mode is intentionally removed.
 
-The current released version is ServicePilot 3.0.0:
+4.1.0 version fields, CHANGELOG entries, and the Chinese Release Notes are prepared; the artifact card has produced the final single-file package and completed the private local overwrite, while GitHub publication remains a downstream operation:
 
-- Project version properties are currently `3.0.0` (ServicePilot/ServicePilot.csproj). The log merge/collapse batches above are not yet version-bumped or committed; pick a new version and sync the CHANGELOG when committing.
+- Project version properties are now `4.1.0` (ServicePilot/ServicePilot.csproj), with all four version fields normalized to `4.1.0` / `4.1.0.0`.
 - Active config file: `%APPDATA%\ServicePilot\config.v2.json`.
 - Legacy `%APPDATA%\ServicePilot\config.json` is read only as the v1 migration source. Do not delete or overwrite it.
 - `SERVICEPILOT_CONFIG_DIR` is used for isolated tests so real user config is not touched.
@@ -130,7 +161,8 @@ ServicePilot 2.0 uses the `Action` / `Composite` model:
 - If the running exe locks `dist`, publish to `dist-staged` first.
 - After successfully producing an exe, follow the local private copy target in `LOCAL_NOTES.private.md` when that file exists. Do not copy that target path into committed docs.
 - Before overwriting the local install target, detect whether the target exe is locked by a running process yourself (e.g. `Get-Process ServicePilot`) and only ask the user to close it when it is actually locked; do not ask by default.
-- Current user instruction: produce local exe builds for testing only. Do not commit, tag, or publish a GitHub Release unless explicitly asked.
+- The artifact card ran `dotnet publish ServicePilot/ServicePilot.csproj -t:Rebuild -c Release -o ./dist --nologo`; `dist` contains only `ServicePilot.exe`, and both it and the private local overwrite target return version `4.1.0` with matching length and SHA-256. This verification is not a full independent QA pass; real-service GUI, long-running, and regression scenarios still require follow-up validation.
+- This documentation-normalization task does not commit, tag, or create a GitHub Release.
 - GitHub Release pages already show the title, so the notes body should not add a duplicate top-level heading.
 
 ## Documentation Rules

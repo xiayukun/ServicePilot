@@ -4,6 +4,12 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.1.0 - 2026-07-29
+
+- **Closable action log tabs and reliable clearing**: Action log tabs now use stable action identities, so actions with the same name no longer share a tab. A single action tab can be closed together with its retained history, while the toolbar Clear command removes all logs for the current service; neither operation stops a running action. The tab close × button now has a transparent background for a cleaner appearance.
+- **More stable log scrolling and fold interaction**: Auto-scroll now moves to the end after log content and fold layout have actually completed, preventing high-frequency output from leaving the view at an older end position. The Fold/Expand control remains synchronized with each fold's real state across streaming output, searches, and tab changes.
+- **More reliable process stop and tail logs**: Process completion and stopping now wait for stdout, stderr, and queued log delivery, preventing tail loss from short-lived commands. A drain timeout is reported as a failure instead of being shown as a successful stop.
+
 ## 4.0.2 - 2026-07-22
 
 - **Fix: collapsed group springs open on log refresh**: While logs keep streaming, manually collapsing a fold group and then receiving more lines for that group could wrongly re-expand it. During incremental fold rebuilds AvalonEdit may destroy and recreate a fold section, losing the user's collapsed state. Fold intent is now tracked per group header and reapplied after every rebuild, so manual collapse/expand stays stable across streaming output and tab switches.
