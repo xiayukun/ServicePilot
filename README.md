@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。v4.1.0 改进了动作日志标签关闭与清空、高频日志下的自动滚动和折叠交互，以及短命令尾部日志和停止结果的可靠性。
+ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。v4.2.0 新增合并函数 Windows 通知与托盘服务即时筛选，并修复模板交换丢失合并脚本、日志末尾折叠区和透明图标边缘问题。
 
 **交给 AI 的推荐方式：** 下载并启动 ServicePilot 后，在托盘数字图标上右键选择 `复制给 AI 的帮助`。AI 就能先用 `ai-help`、`doctor --json`、`list --json`、`status all --json` 读取真实状态，再帮你新增个性化服务、模板、动作和变量。只要命令行能做，就可以包装成 ServicePilot 动作：切换 API 地址、拉取分支、安装依赖、打开 IDE。ServicePilot 内置了“默认开发动作模板”，也推荐让 AI 直接生成适合当前项目的服务和模板。
 
@@ -47,7 +47,8 @@ ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的
 - **模板分享**：模板可导出为 JSON 文件，也可从别人分享的文件导入。
 - **内置通用模板**：首次启动自动提供“默认开发动作模板”，内含 Git、npm、常用 IDE/终端打开等可编辑动作。
 - **实时日志**：支持按动作分 Tab、搜索、复制、横向滚动和有限缓存；同名动作按稳定标识独立分 Tab，单个动作 Tab 可关闭并清除已保留日志，完整标题显示在窗口标题栏。
-- **日志合并与折叠**：动作可配置自定义 C# 合并脚本，把多行日志折叠成一行带色摘要（VSCode 式展开/折叠），搜索命中自动展开，右侧提供按优先级聚合的颜色概览便于快速定位错误。
+- **日志合并、折叠与通知**：动作可配置自定义 C# 合并脚本，把多行日志折叠成一行带色摘要（VSCode 式展开/折叠），搜索命中自动展开，右侧颜色概览便于定位错误；也可调用 `Notify("文字")` 在启动完成等实时节点发送 Windows 通知，前端同一轮启动即使热更新再次到 `100%` 也只提醒一次。
+- **托盘服务即时筛选**：右键打开托盘菜单后可直接输入服务名过滤长列表，搜索框与底部管理入口固定可见。
 - **外部配置热加载**：直接编辑 `%APPDATA%\ServicePilot\config.v2.json` 会被托盘自动检测并热加载，不覆盖外部改动，保留运行中服务状态。
 - **AI/脚本 CLI**：`list/status/service/step/template/logs` 支持 JSON 输出；`--json` 错误也走 stdout 且强制 UTF-8 编码，管道消费无乱码；托盘提供 `复制给 AI 的帮助`，CLI 配置变更会刷新已打开的管理/日志窗口。
 - **动作级增量编辑**：`step add/edit/remove/move` 可精确增、改、删、排序单个动作步骤；`step set-members/add-member/remove-member` 可直接维护组合动作成员；`template import --on-conflict` 控制同名冲突策略；变更通过托盘管道即时刷新托盘菜单和管理/日志窗口。

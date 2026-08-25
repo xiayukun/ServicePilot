@@ -67,6 +67,8 @@ public static class AiHelpContentService
                            PreviousResult.State to carry state forward. Runtime only; NOT restored on tab rebuild.
                        - PreviousWasCollapsed (bool): was the previous line folded?
                        - InCollapseGroup (bool): is a fold group currently open (a header exists to fold into)?
+                       - Notify(string message): request a Windows notification for this LIVE line. It works even when the log
+                           window is closed. Historical replay and merge-script test only record/preview the request and never pop it.
                      Return MergeResult, or null to keep the original line untouched:
                        - MergedMessage (string?): on a group header (Collapse=false) this is the summary shown on the folded
                            one line; on a collapsed line (Collapse=true) it refreshes the header's live summary (e.g. "compiling 67%").
@@ -87,7 +89,9 @@ public static class AiHelpContentService
                        A runtime compile failure is surfaced once in the service log as an error, never silently swallowed.
                      Preview without running a service: merge-script test SERVICE STEP --file lines.txt [--json]
                        feeds each line as CurrentLine and prints hit/MergedMessage/Color/Collapse plus the final rendered view.
-                     Typical use: collapse repeated webpack/vite build progress lines, fold duplicate warnings.
+                     Typical use: collapse repeated webpack/vite build progress lines, fold duplicate warnings, or call
+                       Notify("Startup complete") when a completion line is detected. Identical text from the same Action is
+                       de-duplicated for five seconds to prevent accidental notification bursts.
 
                    ── Full CLI reference ──
                    {BuildCliHelp()}
@@ -120,6 +124,8 @@ public static class AiHelpContentService
                    - PreviousResult (MergeResult?)：上一行返回的结果（无则 null）。读 PreviousResult.State 可把状态传给下一行。仅运行期，重建 tab 不恢复。
                    - PreviousWasCollapsed (bool)：上一行是否被折叠。
                    - InCollapseGroup (bool)：当前是否已有打开的折叠组（存在可折叠进的组头）。
+                   - Notify(string message)：为本条【实时日志】请求 Windows 系统通知；日志窗口关闭时也有效。
+                       历史日志回放和 merge-script test 只记录/预览通知请求，不会真的弹出。
                  返回 MergeResult，或返回 null 表示保留原文不处理：
                    - MergedMessage (string?)：作为组头行（Collapse=false）时，是折叠后单行显示的摘要；作为被折叠行（Collapse=true）时，
                        会刷新组头的实时摘要（如"编译中 67%"）。原始行【始终保留】、不会被覆盖，因此折叠组可再次展开。
@@ -137,7 +143,8 @@ public static class AiHelpContentService
                    运行时若编译失败，会在服务日志里以错误形式提示一次，绝不静默吞掉。
                  不跑服务即可预览：merge-script test SERVICE STEP --file lines.txt [--json]
                    逐行以 CurrentLine 喂入，输出命中/MergedMessage/Color/Collapse 及最终渲染结果。
-                 典型用例：webpack/vite 编译进度行（重复行合并为单条实时进度）、大量重复告警折叠。
+                  典型用例：webpack/vite 编译进度行（重复行合并为单条实时进度）、大量重复告警折叠，或识别完成行后调用
+                    Notify("启动完成")。同一动作五秒内完全相同的通知文字会去重，避免误写脚本造成通知连发。
 
                ── 完整 CLI 命令参考 ──
                {BuildCliHelp()}
@@ -206,7 +213,8 @@ public static class AiHelpContentService
                     ServicePilot.exe step move "SERVICE" "STEP" --position end
                  - 日志合并脚本（Log Merge Script）:
                    合并脚本用 Roslyn C# 对日志行做实时合并、折叠、着色。全局变量：CurrentLine/PreviousLine（均为【完整整行】"HH:mm:ss [Level] message"）、
-                   PreviousResult (MergeResult?)、PreviousWasCollapsed (bool)、InCollapseGroup (bool)；返回 MergeResult（MergedMessage?, Color?, Collapse, State?, Children?）或 null。
+                   PreviousResult (MergeResult?)、PreviousWasCollapsed (bool)、InCollapseGroup (bool)，并可调用 Notify("通知文字")；
+                   返回 MergeResult（MergedMessage?, Color?, Collapse, State?, Children?）或 null。Notify 只在实时日志中弹出，test 仅预览。
                    Collapse=true 折叠进上一组，组内第一行须 Collapse=false；State 传状态给下一行（仅运行期、只存简单类型）。
                     脚本每行实时读取，改后下一行即生效，无需重启。set 会编译校验，出错拒绝保存（--skip-validate 强制）。
                     ServicePilot.exe merge-script list [--json]

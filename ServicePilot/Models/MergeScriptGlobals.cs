@@ -6,6 +6,11 @@ namespace ServicePilot.Models;
 /// </summary>
 public class MergeScriptGlobals
 {
+    private const int MaxNotificationsPerLine = 4;
+    private const int MaxNotificationLength = 1000;
+    private readonly object _notificationGate = new();
+    private readonly List<string> _notifications = new();
+
     /// <summary>
     /// The log line immediately before the current line (null if this is the first line).
     /// </summary>
@@ -36,4 +41,38 @@ public class MergeScriptGlobals
     /// no effect and the line becomes a new group header instead.
     /// </summary>
     public bool InCollapseGroup { get; set; }
+
+    /// <summary>
+    /// Notifications requested by the script while evaluating this line. The host decides whether to
+    /// display them; validation, CLI previews, and historical log replay never produce system popups.
+    /// </summary>
+    public IReadOnlyList<string> Notifications
+    {
+        get
+        {
+            lock (_notificationGate)
+                return _notifications.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Records a best-effort Windows notification request. Generated scripts receive this method as the
+    /// local <c>Notify(string message)</c> delegate. Empty messages are ignored and per-line requests are
+    /// bounded so an accidental loop cannot grow host memory without limit.
+    /// </summary>
+    public void RequestNotification(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var normalized = message.Trim();
+        if (normalized.Length > MaxNotificationLength)
+            normalized = normalized[..MaxNotificationLength];
+
+        lock (_notificationGate)
+        {
+            if (_notifications.Count < MaxNotificationsPerLine)
+                _notifications.Add(normalized);
+        }
+    }
 }

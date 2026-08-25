@@ -7,7 +7,7 @@
         Title="日志" Height="560" Width="1040"
         Background="{ui:ThemeResource ApplicationBackgroundBrush}"
         WindowStartupLocation="CenterScreen"
-        Icon="pack://application:,,,/Resources/Icons/app.ico"
+        Icon="pack://application:,,,/Resources/Icons/app.png"
         ExtendsContentIntoTitleBar="True">
 
     <Window.Resources>

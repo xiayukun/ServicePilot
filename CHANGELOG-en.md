@@ -4,6 +4,15 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.2.0 - 2026-08-25
+
+- **System notifications from merge scripts**: Merge scripts can call `Notify("message")` when a live line indicates startup completion or another milestone. It works while the log window is closed; historical replay and `merge-script test` never show a real popup. Identical text from the same action is de-duplicated for five seconds; frontend startup completion now notifies only once per startup Action, so later HMR `100%` lines stay quiet.
+- **Instant service filtering in the tray menu**: The tray menu now focuses a pinned search box as soon as it opens, so typing immediately filters long service lists by name. The management footer stays available, and Down Arrow moves to the first matching service.
+- **Template exchange preserves log merge scripts**: Exporting and importing service templates now retains every Action's `LogMergeScript`, so shared templates keep their log folding, progress summaries, and startup notifications.
+- **Transparent icon edge fix**: The generator now uses the RGBA source artwork on a full square canvas with transparent corners. Window title bars and taskbar icons load the transparent PNG directly, avoiding a residual bright fringe from WPF rescaling an ICO frame while preserving the previous subject size.
+- **Fix UI-thread error in log windows**: Disabled AvalonEdit's optional hide-mouse-cursor-while-typing feature, preventing the single-file runtime from reaching the WinForms cursor API and showing a `System.Windows.Forms` not-found error when the mouse enters a log or script editor.
+- **Fix trailing log lines escaping their fold during streaming output**: Every incremental folding update now verifies the actual AvalonEdit section count and start/end ranges against the current log groups. Any mismatch triggers an immediate section rebuild followed by restoration of the user's fold intent. Fold/Expand also reconciles sections before toggling, so a few trailing lines cannot remain outside the command's scope.
+
 ## 4.1.0 - 2026-07-29
 
 - **Closable action log tabs and reliable clearing**: Action log tabs now use stable action identities, so actions with the same name no longer share a tab. A single action tab can be closed together with its retained history, while the toolbar Clear command removes all logs for the current service; neither operation stops a running action. The tab close × button now has a transparent background for a cleaner appearance.

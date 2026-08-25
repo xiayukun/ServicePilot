@@ -72,6 +72,10 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         _logMergeService = new LogMergeService();
 
         InitializeComponent();
+        // AvalonEdit's default cursor-hiding feature calls System.Windows.Forms.Cursor from its
+        // mouse event handlers. Disable that optional path because it can fail in the published
+        // single-file runtime when the log editor receives keyboard/mouse input.
+        LogEditor.Options.HideCursorWhileTyping = false;
         DataContext = service;
         LogEditor.Document ??= new TextDocument();
         LogTabs.ItemsSource = _logTabs;
@@ -304,7 +308,19 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
             tab.GroupHeader = null;
             tab.LastLine = currentLine;
             tab.LastResult = null;
+            tab.LastMergeScript = null;
             return;
+        }
+
+        if (!string.Equals(tab.LastMergeScript, step.LogMergeScript, StringComparison.Ordinal))
+        {
+            // A live script edit starts a new stream state. This keeps the window aligned with the
+            // application-level evaluator used by Notify-capable scripts and prevents a new script from
+            // folding into a header/state produced by the previous script text.
+            tab.GroupHeader = null;
+            tab.LastLine = null;
+            tab.LastResult = null;
+            tab.LastMergeScript = step.LogMergeScript;
         }
 
         var globals = new MergeScriptGlobals
@@ -319,9 +335,21 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         MergeResult? result = null;
         try
         {
-            // Synchronous evaluation on the UI hot path; must not block on an async method that captures
-            // the UI SynchronizationContext (that deadlocks when a burst of lines arrives).
-            result = _logMergeService.Evaluate(step.LogMergeScript, globals);
+            if (entry.HasPrecomputedMergeResult &&
+                string.Equals(entry.PrecomputedMergeScript, step.LogMergeScript, StringComparison.Ordinal))
+            {
+                // Notify-capable scripts are evaluated once against the live stream by App, including
+                // while this window is closed. Reuse that result so opening a window cannot duplicate a
+                // notification or any other script side effect.
+                result = entry.PrecomputedMergeResult;
+            }
+            else
+            {
+                // Synchronous evaluation on the UI hot path; must not block on an async method that captures
+                // the UI SynchronizationContext (that deadlocks when a burst of lines arrives).
+                // Notification requests collected during historical replay are intentionally ignored.
+                result = _logMergeService.Evaluate(step.LogMergeScript, globals);
+            }
         }
         catch
         {
@@ -815,6 +843,10 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         if (_foldingManager == null)
             return;
 
+        // Reconcile the manager with the latest document before toggling. If an incremental refresh ever
+        // left a trailing group outside all FoldingSections, the user's explicit Fold/Expand action must
+        // repair that stale range instead of merely toggling the older sections.
+        RebuildFoldings();
         var foldings = _foldingManager.AllFoldings.ToList();
         if (foldings.Count == 0)
             return;
@@ -1192,6 +1224,15 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         try
         {
             _foldingManager.UpdateFoldings(foldings, -1);
+            // UpdateFoldings normally reconciles every range, but the live WPF path can occasionally leave
+            // the newest EOF group outside the manager even though the entries are already marked as folded
+            // children. Verify the postcondition and rebuild only on that exceptional path. The remembered
+            // header-keyed intent below is then reapplied to the recreated sections.
+            if (!FoldingRangesMatch(_foldingManager.AllFoldings, foldings))
+            {
+                _foldingManager.Clear();
+                _foldingManager.UpdateFoldings(foldings, -1);
+            }
             _foldColorMarker?.Colors.Clear();
             foreach (var folding in _foldingManager.AllFoldings)
             {
@@ -1224,6 +1265,27 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         PruneFoldStates();
         UpdateSummaryButton();
         LogEditor.TextArea.TextView.Redraw();
+    }
+
+    private static bool FoldingRangesMatch(
+        IEnumerable<FoldingSection> actualFoldings,
+        IReadOnlyList<NewFolding> expectedFoldings)
+    {
+        using var actual = actualFoldings.GetEnumerator();
+        for (var index = 0; index < expectedFoldings.Count; index++)
+        {
+            if (!actual.MoveNext())
+                return false;
+
+            var expected = expectedFoldings[index];
+            if (actual.Current.StartOffset != expected.StartOffset ||
+                actual.Current.EndOffset != expected.EndOffset)
+            {
+                return false;
+            }
+        }
+
+        return !actual.MoveNext();
     }
 
     private void CaptureCurrentFoldStates()
@@ -1364,6 +1426,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         /// is absent. Not restored on rebuild.
         /// </summary>
         public MergeResult? LastResult { get; set; }
+
+        /// <summary>The script text that produced the current stream state; a live edit resets the state.</summary>
+        public string? LastMergeScript { get; set; }
     }
 
 

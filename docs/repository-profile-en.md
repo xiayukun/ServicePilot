@@ -10,7 +10,7 @@ ServicePilot
 
 ## GitHub Description
 
-Recommended (v4.1.0):
+Recommended (v4.2.0):
 
 ```text
 AI-friendly Windows tray manager for local development services — run npm, Vite, .NET, Python, and PowerShell with GUI + CLI.
@@ -82,7 +82,7 @@ process tree cleanup
 Job Object
 ```
 
-## README Above-The-Fold Points (v4.1.0 update)
+## README Above-The-Fold Points (v4.2.0 update)
 
 - v3.0.0 brings a FluentWindow UI overhaul: all management windows modernized with TitleBar, system accent color effects, and unified dark theme.
 - After download and launch, users can copy `Copy help for AI` from the tray context menu so agents get the current absolute `ServicePilot.exe` path and first inspection commands.
@@ -92,17 +92,19 @@ Job Object
 - Action variables make API/environment switching fast for both startup flows and manual actions.
 - It does not install Windows services or require admin rights.
 - Windows Job Object cleanup prevents orphan npm/Vite child processes and port leaks.
+- Merge scripts can send Windows notifications at live milestones such as startup completion, even with the log window closed.
+- Opening the tray menu focuses an instant service-name filter for fast access in long lists.
 - Action log tabs use stable identities; a single tab and its retained history can be closed without stopping its running action.
 - Under busy output, auto-scroll and Fold/Expand follow completed layout and real fold state; process completion and stop drain already-read output to reduce tail loss from short-lived commands.
 
 ## Social Preview Text
 
 ```text
-ServicePilot helps developers hand local Windows dev services to AI: copy tray AI help, inspect JSON state, then run, switch, log, and stop services safely—with dependable log completion for short-lived commands.
+ServicePilot helps developers hand local Windows dev services to AI: copy tray AI help, inspect JSON state, filter services instantly, and receive startup notifications from programmable log rules.
 ```
 
 ## Launch Post Draft
 
 ```text
-ServicePilot 4.1.0 is an AI-friendly Windows tray manager for local development services. After download and launch, copy “help for AI” from the tray so an agent can inspect JSON state before managing npm/Vite, .NET, Python, Batch, PowerShell, and Node.js scripts. This release adds independently closable action-log tabs and improves busy-log scrolling, folding interaction, and tail-log reliability for short-lived commands.
+ServicePilot 4.2.0 is an AI-friendly Windows tray manager for local development services. After download and launch, copy “help for AI” from the tray so an agent can inspect JSON state before managing npm/Vite, .NET, Python, Batch, PowerShell, and Node.js scripts. This release adds startup-completion notifications from merge scripts and instant service filtering in the tray menu.
 ```

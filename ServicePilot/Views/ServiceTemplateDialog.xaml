@@ -6,7 +6,7 @@
         xmlns:converters="clr-namespace:ServicePilot.Converters"
         Title="Template" Height="700" Width="1400"
         WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
-        Icon="pack://application:,,,/Resources/Icons/app.ico"
+        Icon="pack://application:,,,/Resources/Icons/app.png"
         ExtendsContentIntoTitleBar="True">
     <Window.Resources>
         <converters:StepKindDisplayConverter x:Key="StepKindDisplay"/>

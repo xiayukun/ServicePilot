@@ -16,6 +16,8 @@ ServicePilot 是一个 Windows 托盘优先的本地开发服务管理器。它�
 
 托盘数字显示当前处于 `Running` 或 `Starting` 的服务数量。没有活动服务时显示 `0`。
 
+右键打开托盘菜单后，顶部筛选框会自动获得键盘焦点，可以直接输入服务名过滤列表。按向下键可进入第一个匹配服务；输入内容后按 `Esc` 会先清空筛选，底部的新增、管理、状态和退出入口不受过滤影响。
+
 ## 服务模型
 
 每个服务包含：
@@ -84,6 +86,19 @@ ServicePilot 是一个 Windows 托盘优先的本地开发服务管理器。它�
 启动失败、动作失败或系统错误会记录在日志中，并尽量弹出托盘冒泡提示。通知是最佳努力，不依赖 Windows 通知中心开启。
 
 进程完成或停止时，ServicePilot 会等待标准输出、标准错误和已排队日志完成投递，以减少短命令尾部日志丢失；排空超时会报告错误，不会显示为成功停止。
+
+## 日志合并函数与系统通知
+
+动作的 `LogMergeScript` 是逐行执行的 C# 函数体，可以使用 `CurrentLine`、`PreviousLine`、`PreviousResult`、`PreviousWasCollapsed` 和 `InCollapseGroup` 做折叠、摘要与着色。现在还可以在识别到实时完成日志时调用：
+
+```csharp
+if (CurrentLine?.Contains("Started") == true)
+    Notify("启动完成");
+
+return new MergeResult { MergedMessage = CurrentLine };
+```
+
+`Notify("通知文字")` 在日志窗口关闭时仍然有效。它只响应实时日志：重新打开历史日志、切换页签或运行 `merge-script test` 都不会真的弹出系统通知，测试命令只会预览请求的文字。同一服务动作五秒内完全相同的文字会自动去重，避免条件误写后连续弹窗。需要“一次启动只提醒一次”时，应把标志放进 `MergeResult.State`，并让中间普通日志也继续返回带标志的结果，不能在状态已建立后直接返回 `null`；动作下一次进入 `Running` 时，ServicePilot 会清理这段实时状态并重新允许一次通知。因此前端热更新再次到 `100%` 不会重复提醒，但重新启动前端动作仍会提醒一次。
 
 ## CLI / AI 工作流
 

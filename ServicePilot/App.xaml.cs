@@ -30,12 +30,14 @@ public partial class App : Application
     private readonly Dictionary<Guid, LogWindow> _logWindows = new();
     private readonly Dictionary<Guid, List<LogEntry>> _logBuffers = new();
     private readonly Dictionary<Guid, DateTime> _lastErrorNotificationAt = new();
+    private readonly Dictionary<(Guid ServiceId, Guid? StepId, string Message), DateTime> _lastScriptNotificationAt = new();
     private readonly List<ServiceManagerWindow> _serviceManagerWindows = new();
     private readonly List<TemplateManagerWindow> _templateManagerWindows = new();
 
     private TaskbarIcon? _trayIcon;
     private MainViewModel? _mainViewModel;
     private ProcessManager? _processManager;
+    private LiveLogMergeProcessor? _liveLogMergeProcessor;
     private ConfigService _configService = null!;
     private AppConfig _appConfig = null!;
     private PresetVariableUsageStore _variableUsageStore = null!;
@@ -102,6 +104,7 @@ public partial class App : Application
 
             _processManager = new ProcessManager();
             _processManager.LoadConfigs(_appConfig.Services);
+            _liveLogMergeProcessor = new LiveLogMergeProcessor();
             _processManager.ServiceOutput += OnServiceOutput;
             _processManager.ServiceStateChanged += (_, _) => Dispatcher.BeginInvoke(RebuildTrayMenu);
             _processManager.StepStateChanged += OnProcessStepStateChanged;
@@ -440,6 +443,7 @@ public partial class App : Application
         menu.HorizontalOffset = -8;
         ApplyScrollableMenu(menu);
 
+        var serviceItems = new List<(WpfMenuItem Item, string Name)>();
         foreach (var service in GetSortedServicesForDisplay())
         {
             var state = service.RuntimeState.State;
@@ -497,7 +501,46 @@ public partial class App : Application
             serviceMenu.Items.Add(saveAsTemplate);
 
             menu.Items.Add(serviceMenu);
+            serviceItems.Add((serviceMenu, service.Name));
         }
+
+        var filterBox = new Wpf.Ui.Controls.TextBox
+        {
+            PlaceholderText = LocalizationService.Current.T("FilterServices"),
+            ClearButtonEnabled = true,
+            MinWidth = 260,
+            Height = 32,
+            Margin = new Thickness(8, 5, 8, 5),
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        filterBox.TextChanged += (_, _) => ApplyTrayServiceFilter(filterBox.Text, serviceItems);
+        filterBox.PreviewKeyDown += (_, args) =>
+        {
+            if (args.Key == System.Windows.Input.Key.Escape && filterBox.Text.Length > 0)
+            {
+                filterBox.Clear();
+                args.Handled = true;
+                return;
+            }
+
+            if (args.Key != System.Windows.Input.Key.Down)
+                return;
+
+            var firstVisible = serviceItems.FirstOrDefault(item => item.Item.Visibility == Visibility.Visible).Item;
+            if (firstVisible != null)
+            {
+                firstVisible.Focus();
+                args.Handled = true;
+            }
+        };
+
+        TrayContextMenu.SetHeader(menu, filterBox);
+        menu.Opened += (_, _) => menu.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            filterBox.Clear();
+            filterBox.Focus();
+            System.Windows.Input.Keyboard.Focus(filterBox);
+        }), System.Windows.Threading.DispatcherPriority.Input);
 
         // Fixed action items live in a PINNED footer (see ScrollableContextMenuStyle). Only the service
         // list above scrolls; add/manage/status/exit stay visible no matter how many services exist.
@@ -509,8 +552,24 @@ public partial class App : Application
         UpdateTrayIconBadge();
     }
 
+    private static void ApplyTrayServiceFilter(
+        string? query,
+        IEnumerable<(WpfMenuItem Item, string Name)> serviceItems)
+    {
+        var filter = query?.Trim();
+        foreach (var (item, name) in serviceItems)
+        {
+            item.Visibility = string.IsNullOrEmpty(filter) || name.Contains(filter, StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+    }
+
     private void OnProcessStepStateChanged(Guid serviceId, StepRuntimeState stepState)
     {
+        if (stepState.State == StepRunState.Running)
+            _liveLogMergeProcessor?.Clear(serviceId, stepState.StepId);
+
         Dispatcher.BeginInvoke(() =>
         {
             RebuildTrayMenu();
@@ -1213,6 +1272,7 @@ public partial class App : Application
             logWindow.Close();
 
         _logBuffers.Remove(serviceId);
+        _liveLogMergeProcessor?.Clear(serviceId);
         RebuildTrayMenu();
     }
 
@@ -1258,6 +1318,15 @@ public partial class App : Application
 
     private void OnServiceOutput(Guid serviceId, LogEntry entry)
     {
+        var service = _processManager?.Services
+            .FirstOrDefault(runtime => runtime.Config.Id == serviceId)
+            ?.Config;
+        if (service != null && _liveLogMergeProcessor != null)
+        {
+            foreach (var message in _liveLogMergeProcessor.Process(service, entry))
+                ShowScriptNotification(serviceId, entry, message);
+        }
+
         if (!_logBuffers.TryGetValue(serviceId, out var buffer))
         {
             buffer = new List<LogEntry>();
@@ -1288,6 +1357,8 @@ public partial class App : Application
             buffer.RemoveAll(entry => entry.StepId == stepId);
         else
             buffer.Clear();
+
+        _liveLogMergeProcessor?.Clear(serviceId, stepId);
     }
 
     private static bool ShouldShowErrorNotification(LogEntry entry)
@@ -1332,6 +1403,44 @@ public partial class App : Application
         catch
         {
             // Notifications are best-effort and must never break service control.
+        }
+    }
+
+    private void ShowScriptNotification(Guid serviceId, LogEntry entry, string message)
+    {
+        if (_isExiting || _trayIcon == null || string.IsNullOrWhiteSpace(message))
+            return;
+
+        var now = DateTime.Now;
+        var key = (serviceId, entry.StepId, message);
+        if (_lastScriptNotificationAt.TryGetValue(key, out var last) &&
+            now - last < TimeSpan.FromSeconds(5))
+        {
+            return;
+        }
+
+        _lastScriptNotificationAt[key] = now;
+        if (_lastScriptNotificationAt.Count > 200)
+        {
+            var cutoff = now - TimeSpan.FromMinutes(10);
+            foreach (var stale in _lastScriptNotificationAt.Where(pair => pair.Value < cutoff).Select(pair => pair.Key).ToList())
+                _lastScriptNotificationAt.Remove(stale);
+        }
+
+        var serviceName = _mainViewModel?.Services
+            .FirstOrDefault(service => service.Config.Id == serviceId)
+            ?.Name ?? serviceId.ToString();
+
+        try
+        {
+            _trayIcon.ShowBalloonTip(
+                ShortBalloonText(serviceName, 63),
+                ShortBalloonText(CompactBalloonMessage(message), 220),
+                BalloonIcon.Info);
+        }
+        catch
+        {
+            // Script notifications are best-effort and must never interrupt log delivery or service control.
         }
     }
 
@@ -1534,6 +1643,7 @@ public partial class App : Application
         }
 
         _commandPipeServer?.Dispose();
+        _liveLogMergeProcessor?.Dispose();
 
         if (_trayIcon != null)
         {
@@ -1560,6 +1670,7 @@ public partial class App : Application
         }
 
         _commandPipeServer?.Dispose();
+        _liveLogMergeProcessor?.Dispose();
 
         if (_trayIcon != null)
         {
@@ -1583,18 +1694,31 @@ public partial class App : Application
 }
 
 /// <summary>
-/// Attached property carrying a pinned footer element for the tray ContextMenu template.
-/// The scrollable ContextMenu template scrolls only its items host (the service list) and keeps
-/// this footer (add/manage/status/exit) fixed at the bottom, always visible regardless of scroll.
+/// Attached properties carrying pinned header/footer elements for the tray ContextMenu template.
+/// The scrollable template keeps the service filter at the top and add/manage/status/exit at the bottom,
+/// while only the service item list scrolls.
 /// </summary>
 public static class TrayContextMenu
 {
+    public static readonly DependencyProperty HeaderProperty =
+        DependencyProperty.RegisterAttached(
+            "Header",
+            typeof(object),
+            typeof(TrayContextMenu),
+            new PropertyMetadata(null));
+
     public static readonly DependencyProperty FooterProperty =
         DependencyProperty.RegisterAttached(
             "Footer",
             typeof(object),
             typeof(TrayContextMenu),
             new PropertyMetadata(null));
+
+    public static void SetHeader(DependencyObject element, object? value) =>
+        element.SetValue(HeaderProperty, value);
+
+    public static object? GetHeader(DependencyObject element) =>
+        element.GetValue(HeaderProperty);
 
     public static void SetFooter(DependencyObject element, object? value) =>
         element.SetValue(FooterProperty, value);

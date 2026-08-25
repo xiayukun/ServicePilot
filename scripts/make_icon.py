@@ -1,77 +1,113 @@
-"""Build clean transparent icons (app.ico + app.png) from the V1 source.
+"""Build square-canvas transparent icons (app.ico + app.png).
 
-The V1 source has a WHITE (opaque) background around the teal squircle, which
-shows up as a white halo in the title bar and taskbar. We detect the teal
-squircle bounds, cut everything outside a rounded-rect mask to transparent, and
-re-export a centered square with a small transparent margin.
+The preferred source already has an alpha channel, but its artwork still
+contains an opaque white plate and a thin white matte around the teal squircle.
+Keep a full square canvas, isolate the teal artwork with an alpha mask, and
+scale the visible artwork back to its previous size inside that canvas. This
+keeps the four corners as transparent pixels instead of relying on a cropped
+bounding box. The old opaque V1 source remains a fallback.
+
+Each output size is resized independently with premultiplied alpha so hidden
+source background pixels cannot bleed into the transparent edge.
 """
-from PIL import Image, ImageDraw
+import os
 
-SRC = r"C:\Users\11467\.cursor\projects\c-git-ServicePilot\assets\servicepilot_icon_v1.png"
+from PIL import Image, ImageChops, ImageDraw
+
+SRC = r"C:\Users\11467\.cursor\projects\c-git-ServicePilot\assets\servicepilot_icon_final.png"
+LEGACY_SRC = r"C:\Users\11467\.cursor\projects\c-git-ServicePilot\assets\servicepilot_icon_v1.png"
 ICO = r"C:\git\家里\ServicePilot\ServicePilot\Resources\Icons\app.ico"
 PNG = r"C:\git\家里\ServicePilot\ServicePilot\Resources\Icons\app.png"
-
-img = Image.open(SRC).convert("RGBA")
-w, h = img.size
-px = img.load()
 
 
 def is_teal(r, g, b):
     return g > 120 and b > 120 and r < 160 and (g + b) - 2 * r > 60
 
 
-# Detect teal squircle bounds robustly across several scan lines.
-lefts, rights, tops, bottoms = [], [], [], []
-for frac in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
-    y = int(h * frac)
-    row = [i for i in range(w) if is_teal(*px[(i, y)][:3])]
-    if row:
-        lefts.append(row[0]); rights.append(row[-1])
-    x = int(w * frac)
-    col = [i for i in range(h) if is_teal(*px[(x, i)][:3])]
-    if col:
-        tops.append(col[0]); bottoms.append(col[-1])
+def find_teal_bounds(image):
+    """Find the teal squircle bounds without including the white plate."""
+    width, height = image.size
+    pixels = image.load()
+    lefts, rights, tops, bottoms = [], [], [], []
+    for fraction in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        y = int(height * fraction)
+        row = [x for x in range(width) if is_teal(*pixels[x, y][:3])]
+        if row:
+            lefts.append(row[0]); rights.append(row[-1])
+        x = int(width * fraction)
+        column = [y for y in range(height) if is_teal(*pixels[x, y][:3])]
+        if column:
+            tops.append(column[0]); bottoms.append(column[-1])
+    if not lefts or not tops:
+        raise RuntimeError(f"could not find teal artwork bounds in {image.size}")
+    return min(lefts), max(rights), min(tops), max(bottoms)
 
-left, right = min(lefts), max(rights)
-top, bottom = min(tops), max(bottoms)
 
-# Crop to the squircle bounding box (tiny outward pad to keep the teal edge).
-pad = 2
-left = max(0, left - pad); top = max(0, top - pad)
-right = min(w - 1, right + pad); bottom = min(h - 1, bottom + pad)
-box = img.crop((left, top, right + 1, bottom + 1))
-bw, bh = box.size
+def resize_rgba(image, size):
+    """Resize through premultiplied-alpha pixels to prevent edge color bleed."""
+    return image.convert("RGBa").resize(size, Image.Resampling.LANCZOS).convert("RGBA")
 
-# Build a rounded-rectangle (squircle-ish) alpha mask and apply it so the white
-# corners/halo become fully transparent.
-radius = int(min(bw, bh) * 0.22)
-mask = Image.new("L", (bw, bh), 0)
-d = ImageDraw.Draw(mask)
-d.rounded_rectangle([0, 0, bw - 1, bh - 1], radius=radius, fill=255)
 
-# Combine with the existing alpha (in case some was already transparent).
-r, g, b, a = box.split()
-from PIL import ImageChops
-new_alpha = ImageChops.multiply(a, mask)
-box = Image.merge("RGBA", (r, g, b, new_alpha))
+def build_square_canvas(image, edge_fraction, content_fraction):
+    """Keep a full source-sized canvas with a transparent outer border."""
+    left, right, top, bottom = find_teal_bounds(image)
+    left = max(0, left); top = max(0, top)
+    right = min(image.width - 1, right); bottom = min(image.height - 1, bottom)
+    box = image.crop((left, top, right + 1, bottom + 1))
+    box_width, box_height = box.size
 
-# Center on a square canvas with a small transparent margin.
-side = max(bw, bh)
-margin = int(side * 0.05)
-canvas = side + margin * 2
-square = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
-square.paste(box, ((canvas - bw) // 2, (canvas - bh) // 2), box)
+    edge_trim = max(1, int(min(box_width, box_height) * edge_fraction))
+    radius = max(1, int(min(box_width, box_height) * 0.22) - edge_trim)
+    mask = Image.new("L", (box_width, box_height), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        [edge_trim, edge_trim, box_width - 1 - edge_trim, box_height - 1 - edge_trim],
+        radius=radius,
+        fill=255,
+    )
+    red, green, blue, alpha = box.split()
+    box = Image.merge("RGBA", (red, green, blue, ImageChops.multiply(alpha, mask)))
 
-# Export multi-size ICO (exe + taskbar) and a single clean PNG (title bar).
-master = square.resize((256, 256), Image.LANCZOS)
+    # Normalize the nearly-square artwork, then place it on the original
+    # square canvas. The visible subject remains about 91% of the canvas, as
+    # in the previous cropped output, while all four canvas corners are alpha 0.
+    artwork_side = max(box_width, box_height)
+    artwork = Image.new("RGBA", (artwork_side, artwork_side), (0, 0, 0, 0))
+    artwork.alpha_composite(
+        box,
+        dest=((artwork_side - box_width) // 2, (artwork_side - box_height) // 2),
+    )
+    target_side = max(1, int(round(image.width * content_fraction)))
+    artwork = resize_rgba(artwork, (target_side, target_side))
+    square = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    square.alpha_composite(
+        artwork,
+        dest=((image.width - target_side) // 2, (image.height - target_side) // 2),
+    )
+    return square, edge_trim, target_side
+
+
+source_path = SRC if os.path.exists(SRC) else LEGACY_SRC
+source = Image.open(source_path).convert("RGBA")
+square, edge_trim, target_side = build_square_canvas(
+    source,
+    0.02 if source_path == SRC else 0.08,
+    0.91,
+)
+
+
+# Export multi-size ICO (exe + taskbar) and a clean PNG (title bar).
 sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-master.save(ICO, format="ICO", sizes=sizes)
-square.resize((128, 128), Image.LANCZOS).save(PNG)
+frames = [resize_rgba(square, size) for size in sizes]
+frames[-1].save(ICO, format="ICO", sizes=sizes, append_images=frames[:-1])
+frames[sizes.index((128, 128))].save(PNG)
+print("source", source_path)
+print("edge trim", edge_trim)
+print("canvas", square.size, "visible target", target_side)
 print("wrote", ICO)
 print("wrote", PNG)
 
-# Report corner alpha to confirm no white halo remains.
-chk = square.resize((32, 32), Image.LANCZOS)
+# Report corner alpha to confirm no opaque halo remains.
+chk = frames[sizes.index((32, 32))]
 print("corner (0,0):", chk.getpixel((0, 0)))
 print("corner (2,2):", chk.getpixel((2, 2)))
 print("center      :", chk.getpixel((16, 16)))

@@ -5,7 +5,7 @@
         Title="ServicePilot" Height="200" Width="420"
         WindowStartupLocation="CenterOwner" Background="#FF1E1E2E"
         ResizeMode="NoResize"
-        Icon="pack://application:,,,/Resources/Icons/app.ico"
+        Icon="pack://application:,,,/Resources/Icons/app.png"
         ExtendsContentIntoTitleBar="True">
     <Grid>
         <Grid.RowDefinitions>

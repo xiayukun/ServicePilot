@@ -34,6 +34,8 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
         _saveTemplateAsync = saveTemplateAsync;
         _editingConfig = config;
         InitializeComponent();
+        ScriptEditor.Options.HideCursorWhileTyping = false;
+        MergeScriptEditor.Options.HideCursorWhileTyping = false;
         ApplyLocalization();
         StepsList.ItemsSource = _steps;
         ScriptTypeCombo.SelectedIndex = 0;
@@ -538,6 +540,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
               //   PreviousResult        (MergeResult?) the result returned for the previous line
               //   PreviousWasCollapsed  (bool) was the previous line folded?
               //   InCollapseGroup       (bool) is a fold group currently open?
+              //   Notify("message")                 show a Windows notification for a LIVE line
               // Return a MergeResult, or null to keep the line unchanged.
               // Multi-line logic: use a variable then return it.
               //   MergeResult? result; if (...) result = ...; return result;
@@ -549,6 +552,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
               // Carry state to the next line via State (runtime only, simple values only):
               //   var count = (PreviousResult?.State? ["count"] as int?) ?? 0;
               //   return new MergeResult { State = new() { ["count"] = count + 1 } };
+              // Example: if (CurrentLine?.Contains("Started") == true) Notify("Startup complete");
               new MergeResult
               {
                   MergedMessage = CurrentLine,
@@ -564,6 +568,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
               //   PreviousResult        (MergeResult?) 上一行返回的结果
               //   PreviousWasCollapsed  (bool) 上一行是否被折叠
               //   InCollapseGroup       (bool) 当前是否已有打开的折叠组
+              //   Notify("通知文字")                 为实时日志发送 Windows 系统通知
               // 返回 MergeResult，或返回 null 保持原行不变。
               // 多行逻辑：用变量再返回。
               //   MergeResult? result; if (...) result = ...; return result;
@@ -574,6 +579,7 @@ public partial class ServiceConfigDialog : Wpf.Ui.Controls.FluentWindow
               // 通过 State 把状态传给下一行（仅运行期、只存简单类型）：
               //   var count = (PreviousResult?.State? ["count"] as int?) ?? 0;
               //   return new MergeResult { State = new() { ["count"] = count + 1 } };
+              // 示例：if (CurrentLine?.Contains("Started") == true) Notify("启动完成");
               new MergeResult
               {
                   MergedMessage = CurrentLine,

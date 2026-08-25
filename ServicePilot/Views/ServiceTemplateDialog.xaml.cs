@@ -20,6 +20,8 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
         _sourceService = sourceService;
         _editingTemplate = editingTemplate;
         InitializeComponent();
+        ScriptEditor.Options.HideCursorWhileTyping = false;
+        MergeScriptEditor.Options.HideCursorWhileTyping = false;
         ApplyLocalization();
         StepsList.ItemsSource = _steps;
         ScriptTypeCombo.SelectedIndex = 0;
@@ -475,6 +477,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
               //   PreviousResult        (MergeResult?) result returned for the previous line
               //   PreviousWasCollapsed  (bool) was the previous line folded?
               //   InCollapseGroup       (bool) is a fold group currently open?
+              //   Notify("message")                 show a Windows notification for a LIVE line
               // Return a MergeResult, or null to keep the line unchanged.
               // Fold: first line of a group returns Collapse = false (header/summary);
               // following lines return Collapse = true. Header MergedMessage = collapsed text.
@@ -488,6 +491,7 @@ public partial class ServiceTemplateDialog : Wpf.Ui.Controls.FluentWindow
               //   PreviousResult        (MergeResult?) 上一行返回的结果
               //   PreviousWasCollapsed  (bool) 上一行是否被折叠
               //   InCollapseGroup       (bool) 当前是否已有打开的折叠组
+              //   Notify("通知文字")                 为实时日志发送 Windows 系统通知
               // 返回 MergeResult，或返回 null 保持原行不变。
               // 折叠：一组第一行返回 Collapse = false（组头/摘要）；后续行返回 Collapse = true。
               // 组头的 MergedMessage 就是折叠成一行时显示的文字。

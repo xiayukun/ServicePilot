@@ -1,8 +1,68 @@
 # Session Handoff
 
-Last updated: 2026-07-29
+Last updated: 2026-08-25
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## 4.2.0 release candidate (2026-08-25)
+
+- This accumulated work is prepared as minor release `4.2.0`: live merge-script `Notify("message")`, instant tray service-name filtering, template exchange preserving `LogMergeScript`, trailing-fold self-repair during streaming, the AvalonEdit mouse exception workaround, and the transparent icon-edge fix.
+- Pre-release verification: `dotnet build ServicePilot.sln --nologo` completed with 0 warnings and 0 errors; the concurrency harness passed 5/5, and the template-exchange/live-notification release checks passed 2/2. All PNG corner alpha values are zero. Release publishing produced only `ServicePilot.exe` in `dist`; it reports `4.2.0`, file version `4.2.0.0`, isolated `doctor --json` reports 0 errors and 0 warnings, and AI help documents the `Notify` contract. Candidate SHA-256: `84fdadecb429b6aee40d1b967699df48c8b3bcf7b8d5af5fc42d2303cf681d4f`.
+- A live pre-release status read found two managed services running. Per the private deployment rule, they were not stopped and the locally synchronized EXE was not overwritten. GitHub push, CI, and Release results will be added after publication completes.
+
+## Merge-script system notifications and instant tray filtering (2026-08-20)
+
+- **Live notification contract**: Merge scripts now expose `Notify("message")`. `LiveLogMergeProcessor` uses Roslyn syntax to recognize only real invocations, so comments and string literals do not enable background evaluation. Notification-capable scripts run on the application-level live stream and therefore work with no log window open. Their transient result is attached to `LogEntry` and reused by the window, avoiding a second execution and duplicate side effects. Historical replay and `merge-script test` only collect/preview requests; identical text from the same service Action is de-duplicated for five seconds.
+- **Tray filtering**: The root tray menu now pins a search box above the service list. It clears and focuses on open, performs case-insensitive name containment filtering, moves Down Arrow to the first visible service, and lets `Esc` clear an existing query first. The add/manage/status/exit footer stays pinned and is never filtered.
+- **Current verification and local update**: The final project Debug build completed with 0 warnings and 0 errors. A notification harness passed state carry, real invocation, comment/string exclusion, clear reset, and preview-without-popup cases; an isolated real CLI `merge-script set/test` also confirmed that notification calls compile and are only previewed in test output. A tray-filter harness passed Chinese/English case-insensitive matching and clear reset. Because a WPF `ContextMenu` enters its popup message loop, automatic focus and immediate typing still require acceptance in the deployed real tray. Release single-file publish succeeded with only `ServicePilot.exe` in the output, version 4.1.0, and isolated `doctor --json` reported zero errors and zero warnings. The user then explicitly requested overwrite and restoration of the two previously running services. On the new check both the tray instance and all managed services had stopped, and the recent-use cache identified the two targets unambiguously. The private copy was replaced, source and target SHA-256 matched, and the new tray started hidden as a single process. Both exact startup Actions were sent concurrently; one status read showed both targets `Running`.
+
+## API/frontend startup completion notifications (2026-08-20)
+
+- Audited the active configuration of 36 services and 6 templates: all 11 `启动 API` service Actions, all 21 `启动服务` frontend Actions, and all 4 corresponding template Actions now contain notification scripts. Frontend Actions that previously had no merge script were populated as well.
+- API Actions notify `API 启动完成` only when the exact completion marker `所有启动任务执行完成` appears. Frontend Actions notify `前端启动成功（100%）` only when `[webpack.Progress] 100%` appears. Both script families carry a `PreviousResult.State` flag so one startup/compile group cannot notify repeatedly; ordinary progress, stderr, and historical replay do not produce system notifications.
+- `merge-script test` previewed the real conditions and produced one matching notification request for each representative API/frontend script; preview mode never shows a system popup. `doctor --json` remains at 0 errors and 15 existing warnings; no business service was started, stopped, or restarted.
+- Fixed `TemplateExchangeService` import/export cloning so template Action `LogMergeScript` values survive template exchange. `dotnet build ServicePilot.sln --nologo` passed with 0 warnings and 0 errors. The older running tray process was not restarted: notification scripts are persisted in the active config, and the in-memory template cache will refresh when the updated ServicePilot starts next time.
+
+## Frontend startup notification is once per Action run (2026-08-20)
+
+- **Root cause**: The frontend script originally returned `frontendNotified=true` only on a `webpack.Progress 100%` line. An ordinary line or `[WARNING]` returned `null`, discarding the previous `State`, so a later HMR `100%` notified again.
+- **Fix**: The 21 frontend service Actions and 3 frontend template Actions now keep carrying `State` through ordinary, warning, and unmatched progress lines after the guard is set; the first `100%` notifies once. `App.OnProcessStepStateChanged` clears live merge state when an Action enters `Running`, so the next startup run is armed for one new notification.
+- **Verification**: `merge-script test` used a five-line sample with “first 100% → ordinary WARNING → two HMR 100% lines”; it produced exactly one notification request and rendered 3 lines. Both `web` and `screen` passed. Active-config read-back confirmed identical scripts across 21 frontend services and 3 frontend templates; the 11 API scripts were unchanged.
+- No business service was started, stopped, or restarted in this turn. Status read-back showed `leniu-tengyun` already `Running`; it was not touched. The source lifecycle fix takes effect with a newly built/deployed ServicePilot; the current older tray process was not restarted.
+
+## Self-repair for trailing fold sections during streaming output (2026-08-20)
+
+- **Symptom and evidence**: While a standard API kept streaming, roughly three raw lines could occasionally remain visible at the bottom. Clicking Fold changed the button to Expand but did not hide them. Live `logs --json` read-back confirmed those entries were already marked as collapsed children, ruling out the merge script; the ineffective toggle showed that the rows were outside the current `FoldingManager` ranges.
+- **Fix**: After every `UpdateFoldings`, `RebuildFoldings` now verifies the actual section count and every start/end range against the groups calculated from the current log entries. Only a mismatch triggers clearing and recreating sections, after which `_foldStateByHeader` restores the user's intent. The toolbar Fold/Expand command also reconciles sections before toggling, so a missing trailing section is repaired before the requested action runs.
+- **Verification and local update**: Passed focused tests for a growing EOF fold, a newly appended group, the real 5,000-entry log shape, and real WPF rendering. The project's own `LogWindow` also passed 50 consecutive batches of `header + 2 children` with no stranded render queue. After deliberately removing the final section to reproduce the three uncontrolled tail rows, two Fold/Expand actions restored the exact EOF range and folded it again. `dotnet build ServicePilot.sln --nologo` completed with 0 warnings and 0 errors; the Release publish directory contains only the single EXE, and isolated `doctor --json` reports zero errors. A pre-copy check found no active services, so the local private copy was updated, source/target SHA-256 equality was verified, and the tray was restarted hidden; the restarted process is unique and still has no active services.
+
+## New-version menu-upgrade log folding (2026-08-18)
+
+- Based on the current standard API's actual new-version menu-authorization logs, removed the legacy audit/thread-pool recognition and now recognize only the new authorization request and its same-thread SQL flow.
+- The fold summary now shows menu and language query totals, batched Updates counts, percentages, and final completion; later role-menu cleanup in the same request is not counted as language progress.
+- Verified with merge-script test against real log samples and with a project build; the API was not stopped or restarted in this turn.
+
+## Full copy of new-version menu-upgrade folding (2026-08-18)
+
+- Copied the verified new-version menu-upgrade folding script to the 11 API-service actions named “启动 API” in the active configuration and to the same action in the “Java Maven API” template.
+- Service actions were individually compile-checked and runtime-refreshed through merge-script set; the template was applied through the official config apply command. Final read-back confirmed all 12 target scripts are byte-for-byte identical and contain only the new recognition.
+- A representative sample in the new log format verified progress from preparation to menu 2510/2510 and language 1835/1835 completion; no business service was started, stopped, or restarted.
+
+## Active configuration action fix (2026-08-13)
+
+- Audited the active local configuration: 36 services and 6 templates; 11 service actions and 1 template action were creating an extra backup file while changing database addresses.
+- Updated all 12 actions to write directly to the target configuration file while preserving the existing database URL validation, master/slave updates, and success output. Legacy read-only migration data and historical configuration snapshots were left unchanged.
+- Verified that the active configuration still parses, `doctor --json` reports zero errors, and the target actions no longer contain the backup-generation logic. No business service was started, stopped, or restarted in this turn.
+
+## Current working-tree fixes (2026-08-13)
+
+- **Icon corner halo**: The project assets include `servicepilot_icon_final.png`, a transparent RGBA source whose boundary still carried a white matte. The generator now keeps a full square canvas, makes the four corners transparent, removes the outer matte with an alpha mask, preserves the previous visible subject size at about 91% of the canvas, and resizes PNG and ICO entries through premultiplied alpha. On-device testing confirmed that the title-bar PNG was clean while the taskbar still showed a faint fringe when it loaded the ICO, so every FluentWindow `Icon` now loads the same PNG directly; the ICO remains for the exe's Windows Shell icon.
+- **Log folding**: No log-folding code was changed in this pass. Version 4.1.0 already contains serialized output ordering, process-output draining, fold-state capture/restore, and layout-driven scrolling fixes; the issue has not reappeared after moving from 4.0.2 to 4.1.0.
+
+## Current working-tree fix (2026-08-17)
+
+- **AvalonEdit UI-thread exception**: After a service failed, moving the mouse in its log window produced `FileNotFoundException: System.Windows.Forms`; the stack landed in AvalonEdit `TextArea.ShowMouseCursor()`. The upstream implementation confirms that this optional feature calls `System.Windows.Forms.Cursor.Show/Hide`, so `HideCursorWhileTyping` is disabled on every AvalonEdit control in the log, service-edit, and template-edit windows. Log folding, search, copy, and script editing are unaffected.
+- **Verification and release preparation**: `dotnet build ServicePilot.sln --nologo` passed with 0 warnings and 0 errors; publishing and overwriting the local sync-software executable follow the service-state check in this turn.
 
 ## 4.1.0 public screenshot: closable action-log tab
 

@@ -297,7 +297,7 @@ public sealed class LogMergeService : IDisposable
 
     // 0-based line index at which the user's body begins in BuildSource (see the layout below).
     // Must stay in sync with the number of prefix lines emitted by BuildSource.
-    private const int UserBodyStartLine = 19;
+    private const int UserBodyStartLine = 20;
 
     private static string BuildSource(string userBody)
     {
@@ -323,6 +323,7 @@ public sealed class LogMergeService : IDisposable
                              MergeResult? PreviousResult = __globals.PreviousResult;
                              bool PreviousWasCollapsed = __globals.PreviousWasCollapsed;
                              bool InCollapseGroup = __globals.InCollapseGroup;
+                             Action<string> Notify = __globals.RequestNotification;
                  {{userBody}}
                          }
                      }

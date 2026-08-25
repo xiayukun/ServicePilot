@@ -35,6 +35,13 @@ public class LogEntry
     /// <summary>Custom foreground color (from MergeResult.Color) for this line, if any.</summary>
     public string? MergeColor { get; set; }
 
+    // A live notification-capable merge script is evaluated once at application level so it can notify
+    // even when no log window is open. The log window reuses this transient result instead of running
+    // the same script (and its side effects) a second time. Internal properties are excluded from CLI JSON.
+    internal bool HasPrecomputedMergeResult { get; set; }
+    internal string? PrecomputedMergeScript { get; set; }
+    internal MergeResult? PrecomputedMergeResult { get; set; }
+
     public LogEntry() { }
 
     public LogEntry(LogLevel level, string message, string source, string? stepName = null, Guid? stepId = null)

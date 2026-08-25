@@ -16,6 +16,8 @@ It is not only for "starting services". Anything the command line can do can usu
 
 The tray number shows services in `Running` or `Starting` state. It shows `0` when nothing is active.
 
+When the tray menu opens, its pinned filter receives keyboard focus immediately, so typing filters services by name. Down Arrow moves to the first match; `Esc` clears a non-empty query first. The pinned add/manage/status/exit footer is never filtered.
+
 ## Service Model
 
 Each service contains:
@@ -83,6 +85,19 @@ The log window supports:
 Startup failures, step failures, and system errors are written to the log and also try to show a tray balloon. Notifications are best-effort and do not depend on Windows notification center being enabled.
 
 On process completion or stop, ServicePilot waits for stdout, stderr, and queued log delivery to drain, reducing tail-loss risk for short-lived commands. A drain timeout is reported as an error rather than a successful stop.
+
+## Log Merge Scripts and System Notifications
+
+An Action's `LogMergeScript` is a per-line C# method body. It can use `CurrentLine`, `PreviousLine`, `PreviousResult`, `PreviousWasCollapsed`, and `InCollapseGroup` for folding, summaries, and colors. It can now request a notification when a live completion line is recognized:
+
+```csharp
+if (CurrentLine?.Contains("Started") == true)
+    Notify("Startup complete");
+
+return new MergeResult { MergedMessage = CurrentLine };
+```
+
+`Notify("message")` works while the log window is closed. Only live lines can produce a real popup: reopening history, switching tabs, and `merge-script test` never show one; the test command only previews requested text. Identical text from the same service Action is de-duplicated for five seconds to prevent accidental bursts. For a “once per startup” notification, keep the guard in `MergeResult.State` and return that state through ordinary intermediate lines instead of returning `null` after the guard is set. ServicePilot clears this live state when the Action enters `Running` again, so a later HMR `100%` does not notify again while a new frontend run can notify once.
 
 ## CLI / AI Workflow
 

@@ -258,6 +258,7 @@ public static class TemplateExchangeService
                 OpenLogOnRun = step.OpenLogOnRun,
                 StepVariables = step.StepVariables.ToList(),
                 Content = step.Content,
+                LogMergeScript = step.LogMergeScript,
                 MemberStepIds = step.MemberStepIds.ToList(),
                 Order = step.Order
             })
@@ -287,6 +288,7 @@ public static class TemplateExchangeService
                 OpenLogOnRun = kind == StepKind.Action && step.OpenLogOnRun,
                 StepVariables = kind == StepKind.Action ? DistinctStrings(step.StepVariables) : [],
                 Content = kind == StepKind.Action ? step.Content ?? string.Empty : string.Empty,
+                LogMergeScript = kind == StepKind.Action ? step.LogMergeScript : null,
                 MemberStepIds = kind == StepKind.Composite
                     ? step.MemberStepIds.Where(idMap.ContainsKey).Select(id => idMap[id]).ToList()
                     : [],

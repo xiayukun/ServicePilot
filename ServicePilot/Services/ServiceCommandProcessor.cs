@@ -2674,6 +2674,7 @@ public class ServiceCommandProcessor
                 Color = color,
                 Collapse = collapseFlag,
                 CollapsedIntoPrevious = collapsedIntoPrevious,
+                Notifications = globals.Notifications,
                 Children = result?.Children
             });
 
@@ -2684,6 +2685,8 @@ public class ServiceCommandProcessor
                 textLines.Add($"    原文 : {raw}");
                 if (hit)
                     textLines.Add($"    渲染 : {displayText}  (Color={color ?? "-"}, Collapse={collapseFlag})");
+                foreach (var notification in globals.Notifications)
+                    textLines.Add($"    通知 : {notification}（仅预览，不发送）");
             }
 
             // Mirror the window: a hit with Collapse=false opens/refreshes the group header; a null result
