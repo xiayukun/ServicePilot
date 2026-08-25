@@ -4,11 +4,11 @@
 
 English counterpart: [session-handoff-en.md](session-handoff-en.md)
 
-## 4.2.0 发布候选（2026-08-25）
+## 4.2.0 发布完成（2026-08-25）
 
 - 本轮累积功能以中版本 `4.2.0` 发布：合并函数实时 `Notify("通知文字")`、托盘服务名即时筛选、模板交换保留 `LogMergeScript`，并包含持续输出末尾折叠区自修复、AvalonEdit 鼠标异常规避和透明图标边缘修复。
 - 发布前验证：`dotnet build ServicePilot.sln --nologo` 为 0 警告、0 错误；并发回归 harness 5/5，通过模板脚本交换与实时通知专项 2/2；图标 PNG 四角 alpha 均为 0。Release 单文件发布成功，`dist` 仅有 `ServicePilot.exe`，版本输出 `4.2.0`，文件版本 `4.2.0.0`，隔离 `doctor --json` 为 0 错误、0 警告，AI 帮助已包含 `Notify` 契约；候选包 SHA-256 为 `84fdadecb429b6aee40d1b967699df48c8b3bcf7b8d5af5fc42d2303cf681d4f`。
-- 发布前真实状态回读有 2 个受管服务处于运行状态，因此遵守私有部署规则，不停止服务、不覆盖本机同步软件中的 EXE；GitHub 推送、CI 和 Release 结果将在发布完成后回填。
+- GitHub `main` 已推送发布提交 `01348f60c52d60970eb67d558a2c48d80a8e2a9e`；对应 build 工作流的 Restore、Build、单文件 Publish、CLI smoke test 和制品上传全部通过。正式 `v4.2.0` Release 已发布为 latest，标签指向该提交，只含一个 `ServicePilot.exe`，GitHub 资产 digest 与候选包 SHA-256 一致。发布后再次回读仍有 2 个受管服务处于 `Running`，因此遵守私有部署规则，不停止服务，也不覆盖本机同步软件中仍为 4.1.0 的 EXE。
 
 ## 合并函数系统通知与托盘即时筛选（2026-08-20）
 

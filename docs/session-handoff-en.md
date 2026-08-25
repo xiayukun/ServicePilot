@@ -4,11 +4,11 @@ Last updated: 2026-08-25
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
 
-## 4.2.0 release candidate (2026-08-25)
+## 4.2.0 release completed (2026-08-25)
 
 - This accumulated work is prepared as minor release `4.2.0`: live merge-script `Notify("message")`, instant tray service-name filtering, template exchange preserving `LogMergeScript`, trailing-fold self-repair during streaming, the AvalonEdit mouse exception workaround, and the transparent icon-edge fix.
 - Pre-release verification: `dotnet build ServicePilot.sln --nologo` completed with 0 warnings and 0 errors; the concurrency harness passed 5/5, and the template-exchange/live-notification release checks passed 2/2. All PNG corner alpha values are zero. Release publishing produced only `ServicePilot.exe` in `dist`; it reports `4.2.0`, file version `4.2.0.0`, isolated `doctor --json` reports 0 errors and 0 warnings, and AI help documents the `Notify` contract. Candidate SHA-256: `84fdadecb429b6aee40d1b967699df48c8b3bcf7b8d5af5fc42d2303cf681d4f`.
-- A live pre-release status read found two managed services running. Per the private deployment rule, they were not stopped and the locally synchronized EXE was not overwritten. GitHub push, CI, and Release results will be added after publication completes.
+- GitHub `main` now contains release commit `01348f60c52d60970eb67d558a2c48d80a8e2a9e`; its build workflow passed Restore, Build, single-file Publish, CLI smoke test, and artifact upload. The formal `v4.2.0` Release is published as latest, its tag targets that commit, and its only asset is `ServicePilot.exe` with a GitHub digest matching the candidate SHA-256. A post-release status read still found two managed services `Running`, so the private deployment rule was followed: no service was stopped, and the locally synchronized EXE remains at 4.1.0 rather than being overwritten.
 
 ## Merge-script system notifications and instant tray filtering (2026-08-20)
 
