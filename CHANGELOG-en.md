@@ -4,6 +4,11 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.2.1 - 2026-09-02
+
+- **Fold/Expand mode now applies to new log groups**: After choosing Expand, newly arriving merge groups stay expanded; after choosing Fold, new groups stay folded. Expanding one group manually or through search still affects only that group.
+- **Search horizontally reveals matches in long log lines**: Previous/next search now scrolls both axes, so a match far to the right no longer requires manually dragging the bottom scrollbar.
+
 ## 4.2.0 - 2026-08-25
 
 - **System notifications from merge scripts**: Merge scripts can call `Notify("message")` when a live line indicates startup completion or another milestone. It works while the log window is closed; historical replay and `merge-script test` never show a real popup. Identical text from the same action is de-duplicated for five seconds; frontend startup completion now notifies only once per startup Action, so later HMR `100%` lines stay quiet.

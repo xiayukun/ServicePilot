@@ -61,7 +61,7 @@
                               VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ui:Button x:Name="SummaryButton" Content="摘要" Width="58" Height="32" VerticalAlignment="Center"
                             Margin="0,0,6,0" Click="Summary_Click"
-                            ToolTip="折叠全部合并组，只看摘要一行；再次点击展开全部"/>
+                            ToolTip="折叠或展开全部合并组，并让后续新日志组保持该模式"/>
                     <ui:Button x:Name="EditButton" Content="编辑" Width="58" Height="32" VerticalAlignment="Center"
                             Margin="0,0,6,0" Click="Edit_Click"/>
                     <ui:Button x:Name="ClearButton" Content="清空" Width="58" Height="32" VerticalAlignment="Center" Click="Clear_Click"/>

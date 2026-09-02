@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. It starts, monitors, and stops local development services from the tray and CLI, bringing frontend, backend, script actions, variables, and logs into one dependable surface for people and AI. v4.2.0 adds Windows notifications from merge scripts and instant tray filtering, while fixing merge-script loss during template exchange, trailing fold ranges, and transparent icon edges.
+ServicePilot is a **tray-first, AI-friendly Windows launcher for local development services with a modern FluentWindow UI**. It starts, monitors, and stops local development services from the tray and CLI, bringing frontend, backend, script actions, variables, and logs into one dependable surface for people and AI. v4.2.1 keeps the selected Fold/Expand mode for newly arriving log groups and horizontally reveals matches in long lines, while retaining v4.2.0 merge-script notifications and instant tray filtering.
 
 **Recommended AI handoff:** after downloading and launching ServicePilot, right-click the tray number and choose `Copy help for AI`. Your AI can then inspect real state with `ai-help`, `doctor --json`, `list --json`, and `status all --json`, then help create personalized services, templates, actions, and variables. Anything the command line can do can become a ServicePilot action: switch API URLs, pull a branch, install dependencies, or open an IDE. ServicePilot includes a built-in "Default developer actions" template, and AI agents can generate project-specific services and templates directly.
 

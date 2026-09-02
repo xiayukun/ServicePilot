@@ -1,8 +1,15 @@
 # Session Handoff
 
-Last updated: 2026-08-25
+Last updated: 2026-09-02
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## 4.2.1 global log-fold mode and horizontal search positioning (2026-09-02)
+
+- **New log groups inherit the aggregate mode**: The log window now keeps a window-level `_foldNewGroupsByDefault`. Toolbar Expand opens every current merge group and makes future groups start expanded; Fold closes every current group and makes future groups start folded. The existing `_foldStateByHeader` remains the per-group authority, so an individual marker click or search-triggered expansion does not overwrite the global mode, and clearing logs does not reset the mode selected for that window.
+- **Search positions both axes**: After selecting a match, search calls AvalonEdit `Caret.BringCaretToView()`. A target far to the right in an unwrapped long log line now moves the horizontal scrollbar to the selection instead of positioning only the line.
+- **Verification**: A temporary real-WPF harness passed 2/2: a second group appended after aggregate Expand remained expanded, a third group appended after returning to Fold remained folded, and a match at the end of a 600-character line was selected correctly while `HorizontalOffset` moved from 0 to about 3491 pixels. The temporary harness was removed and is not part of the product files.
+- **Acceptance, build, and local state**: The user confirmed that this round passed validation. The final Debug build completed with 0 warnings and 0 errors. The 4.2.1 Release single-file publish succeeded with only `ServicePilot.exe` in `dist`; the CLI reports version 4.2.1, isolated `doctor --json` reports 0 errors and 0 warnings, and the candidate SHA-256 is `075adc02e338fe27bf51a0b09a6b90b545cc92192cf1bc4d465a668634785bbb`. All 42 managed services were idle before deployment, so the 4.2.0 tray exited normally, was replaced with 4.2.1, and restarted hidden; source and target hashes match, exactly one tray process remains, and the configuration still contains 42 services.
 
 ## 4.2.0 release completed (2026-08-25)
 

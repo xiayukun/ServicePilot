@@ -75,9 +75,9 @@ The log window supports:
 - Variable-aware action and composite execution.
 - Per-action log tabs created lazily by stable action identity. When an action starts running, the matching action tab is selected; actions with identical names do not share a tab.
 - Close one action tab and clear its retained history, or use toolbar Clear to remove all logs for the current service. Neither action stops a running action.
-- Auto-scroll moves to the end after log content and fold layout complete; the Fold/Expand control stays synchronized with the real fold state.
+- Auto-scroll moves to the end after log content and fold layout complete; the Fold/Expand control stays synchronized with the real fold state and keeps newly arriving groups in the last selected global mode.
 - Editing the current service.
-- Search, previous/next match.
+- Search and previous/next match; matches far along a long line also scroll horizontally into view.
 - Copy selected logs and copy all logs.
 - Horizontal scrolling for long lines.
 - Bounded in-memory history.

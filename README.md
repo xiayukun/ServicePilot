@@ -9,7 +9,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Version](https://img.shields.io/github/v/release/xiayukun/ServicePilot?color=blue)
 
-ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。v4.2.0 新增合并函数 Windows 通知与托盘服务即时筛选，并修复模板交换丢失合并脚本、日志末尾折叠区和透明图标边缘问题。
+ServicePilot 是一个 **托盘优先、AI 友好、FluentWindow 现代界面的 Windows 本地开发服务启动器**。它从托盘和 CLI 启动、监控、停止本地开发服务，把前端、后端、脚本动作、环境变量和日志收进一个托盘菜单，让人和 AI 都能可靠操作 npm、dotnet、Python 和自定义脚本。v4.2.1 让日志“摘要/展开”模式持续应用到后续新日志组，并让长行搜索自动横向定位命中；同时保留 v4.2.0 的合并函数 Windows 通知与托盘服务即时筛选。
 
 **交给 AI 的推荐方式：** 下载并启动 ServicePilot 后，在托盘数字图标上右键选择 `复制给 AI 的帮助`。AI 就能先用 `ai-help`、`doctor --json`、`list --json`、`status all --json` 读取真实状态，再帮你新增个性化服务、模板、动作和变量。只要命令行能做，就可以包装成 ServicePilot 动作：切换 API 地址、拉取分支、安装依赖、打开 IDE。ServicePilot 内置了“默认开发动作模板”，也推荐让 AI 直接生成适合当前项目的服务和模板。
 

@@ -47,6 +47,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
     private bool _logUiReady;
     private int _lastSearchOffset = -1;
     private bool _rebuildingFoldings;
+    // Window-level default chosen by the Fold/Expand toolbar action. Per-group intent remains
+    // authoritative for existing headers, while brand-new groups follow this mode.
+    private bool _foldNewGroupsByDefault = true;
     // Remembered fold intent per group header (true = folded). This is the source of truth for a group's
     // collapsed state and survives AvalonEdit destroying/recreating a FoldingSection during incremental
     // rebuilds. Without it, a group the user manually collapsed could pop back open when new child lines
@@ -853,6 +856,7 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
 
         // If any group is currently expanded, collapse everything (enter summary view); otherwise expand.
         var shouldFold = foldings.Any(f => !f.IsFolded);
+        _foldNewGroupsByDefault = shouldFold;
         foreach (var folding in foldings)
             folding.IsFolded = shouldFold;
 
@@ -1026,8 +1030,9 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
         // If the match lands inside a folded (collapsed) group, expand that group so the user can see it.
         ExpandFoldingAt(index);
         LogEditor.Select(index, query.Length);
-        var line = LogEditor.Document.GetLineByOffset(index).LineNumber;
-        LogEditor.ScrollToLine(line);
+        // Select positions AvalonEdit's caret at the end of the match. Bringing that caret rectangle into
+        // view scrolls both axes and works even when the match is far along a long, unwrapped line.
+        LogEditor.TextArea.Caret.BringCaretToView();
         UpdateSearchStatus();
     }
 
@@ -1239,12 +1244,12 @@ public partial class LogWindow : Wpf.Ui.Controls.FluentWindow
                 if (!startOffsetToGroup.TryGetValue(folding.StartOffset, out var group))
                     continue;
                 folding.Title = group.Title;
-                // Apply the remembered intent (default: folded for a brand-new header). This is authoritative,
-                // so a recreated section always restores the user's last state instead of springing open.
+                // Apply the remembered intent. Existing groups keep their individual state; a brand-new
+                // header follows the window-level mode last chosen with the Fold/Expand toolbar action.
                 if (!_foldStateByHeader.TryGetValue(group.Header, out var wantFolded))
                 {
-                    wantFolded = true;
-                    _foldStateByHeader[group.Header] = true;
+                    wantFolded = _foldNewGroupsByDefault;
+                    _foldStateByHeader[group.Header] = wantFolded;
                 }
                 folding.IsFolded = wantFolded;
                 // Record this fold's first-line content color so the overlay renderer can paint a full-width
