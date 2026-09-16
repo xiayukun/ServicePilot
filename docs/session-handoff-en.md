@@ -1,8 +1,16 @@
 # Session Handoff
 
-Last updated: 2026-09-02
+Last updated: 2026-09-16
 
 Chinese counterpart: [session-handoff.md](session-handoff.md)
+
+## 4.2.2 dependency maintenance (2026-09-16)
+
+- Patch version 4.2.2 contains Roslyn 4.8 to 5.9, checkout v7, setup-dotnet v6, and upload-artifact v7. Dependabot PRs #1, #4, #5, and #7 are merged. .NET 8, the configuration schema, and script interfaces remain unchanged.
+- Reviewed Dependabot PRs #1, #4, #5, and #7 in an isolated worktree, preserving uncommitted work in the original checkout. The combined build passed, as did 5/5 concurrency tests, compiler diagnostics/cache invalidation, live-notification syntax detection/reset, and single-file CLI progress/notification previews.
+- Three of four existing local script variants compile. The other lacks a return statement and semicolon and fails with both old and new Roslyn; it is an existing user-script issue, and runtime configuration was not changed.
+- The user subsequently authorized replacing the installed executable and restoring previously running projects. The two active startup Actions were stopped, the tray exited, and 4.2.2 was installed with matching source/target SHA-256 and an unchanged configuration file. A single new tray process was confirmed; only the original two exact Actions were started again, and one status read showed both Running with no LastError. This confirms process state, not application readiness.
+- Confirm GitHub publication against tags/releases and workflow read-back. Without similarly explicit downtime authorization, do not replace the tray while managed services are active.
 
 ## 4.2.1 global log-fold mode and horizontal search positioning (2026-09-02)
 

@@ -4,6 +4,12 @@
 
 This changelog only records user-visible changes in public releases.
 
+## 4.2.2 - 2026-09-16
+
+- Updated the log-merge compiler, Microsoft.CodeAnalysis.CSharp.Scripting, to the 5.9 series while retaining .NET 8 and the existing script API. Verified progress summaries, cross-line state, and once-per-start notifications in the single-file executable.
+- Updated GitHub build actions to checkout v7, setup-dotnet v6, and upload-artifact v7, retaining the Windows x64 self-contained single-file artifact and isolated CLI checks.
+- No changes to user services, templates, databases, or runtime configuration.
+
 ## 4.2.1 - 2026-09-02
 
 - **Fold/Expand mode now applies to new log groups**: After choosing Expand, newly arriving merge groups stay expanded; after choosing Fold, new groups stay folded. Expanding one group manually or through search still affects only that group.
